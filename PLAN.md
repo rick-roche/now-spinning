@@ -1,8 +1,8 @@
 # Now Spinning — Implementation Plan
 
-**Current milestone:** M1 (Auth)  
+**Current milestone:** M2 (Discogs browsing)  
 **Status:** ✅ Complete  
-**Last updated:** 2026-02-16
+**Last updated:** 2026-02-15
 
 ---
 
@@ -165,17 +165,39 @@
 
 ---
 
+## M2: Discogs browsing
+
+**Owners:** API/Worker Agent, Data/Normalization Agent, UI/UX Agent (see [AGENTS.md](AGENTS.md))
+
+**Goal:** Browse Discogs collection and search Discogs, then open release details with normalized tracklists.
+
+### Implementation steps
+
+- [x] 1. Discogs collection contracts in shared
+- [x] 2. Worker Discogs collection endpoint
+- [x] 3. Collection screen with local filtering + pagination
+- [x] 4. Discogs search contracts + endpoint
+- [x] 5. Release detail contract + normalization helpers
+- [x] 6. Release detail endpoint with normalized tracks
+- [x] 7. Search screen (collection + Discogs search tabs)
+- [x] 8. Release detail screen (tracklist + start session CTA)
+- [x] 9. Vitest coverage for normalization helpers
+
+### Acceptance criteria
+
+**Functionality:**
+- [x] Collection list loads from Discogs when connected
+- [x] Discogs search returns release results
+- [x] Release detail returns normalized tracks and metadata
+- [x] UI supports collection + Discogs search and release detail view
+
+**Security/quality:**
+- [x] Worker validates inputs and returns stable error shape
+- [x] Tests added for normalization edge cases
+
+---
+
 ## Next milestones
-
-### M1: Auth (after M0)
-- Last.fm OAuth end-to-end
-- Discogs OAuth end-to-end
-- Auth status screen
-
-### M2: Discogs browsing
-- Collection list + search
-- Discogs search
-- Release details + normalization
 
 ### M3: Session MVP
 - Start session

@@ -15,10 +15,9 @@
       "ignore": ["dist/**", ".wrangler/**", "coverage/**"]
     },
     "packages/shared": {
-      "entry": ["src/index.ts"],
+      "entry": ["package.json"],
       "project": ["src/**/*.ts"],
       "ignore": ["dist/**", "coverage/**", "test/**"]
     }
-  },
-  "ignoreDependencies": ["@repo/shared"]
+  }
 }

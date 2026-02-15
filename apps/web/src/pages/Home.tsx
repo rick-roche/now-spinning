@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, Flex, Heading, Text, Button } from "@radix-ui/themes";
 
 export function Home() {
@@ -35,14 +36,20 @@ export function Home() {
         </Flex>
       </Card>
 
-      <Button size="3" disabled>
-        Start Session (Coming in M3)
-      </Button>
+      <Flex gap="2" wrap="wrap">
+        <Button asChild size="3">
+          <Link to="/search">Browse Discogs</Link>
+        </Button>
+        <Button size="3" disabled>
+          Start Session (Coming in M3)
+        </Button>
+      </Flex>
 
       <Text size="2" color="gray">
-        <strong>M0 (Skeleton):</strong> Basic monorepo structure with working local dev.
+        <strong>M2 (Discogs browsing):</strong> Collection + search + release details in
+        progress.
         <br />
-        <strong>Next:</strong> M1 will add Discogs and Last.fm authentication.
+        <strong>Next:</strong> M3 adds sessions + scrobbling.
       </Text>
     </Flex>
   );

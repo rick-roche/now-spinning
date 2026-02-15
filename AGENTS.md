@@ -155,6 +155,7 @@ A task is done when:
 - Typecheck passes: `pnpm typecheck`
 - Tests pass: `pnpm test`
 - knip passes: `pnpm knip`
+- `pnpm validate` passes (or CI equivalent if validate isn't available)
 - No new lint/dead code issues introduced
 - Any new env vars are documented
 - UI changes include mobile verification evidence (notes + screenshot)
@@ -191,5 +192,6 @@ A task is done when:
 - `pnpm typecheck`
 - `pnpm knip`
 - `pnpm build`
+- `pnpm validate`
 
 If you add/modify commands, update this section.

@@ -72,6 +72,7 @@ All commands run from the **workspace root**:
 | `pnpm lint`        | Lint code with ESLint                    |
 | `pnpm lint:fix`    | Auto-fix linting issues                  |
 | `pnpm knip`        | Check for dead code/config drift         |
+| `pnpm validate`    | Run lint, typecheck, test, knip, build   |
 | `pnpm clean`       | Clean build artifacts                    |
 
 ### Per-workspace commands

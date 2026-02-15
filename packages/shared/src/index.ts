@@ -24,3 +24,13 @@ export type {
   StoredToken,
   UserSession,
 } from "./contracts/auth.js";
+export type {
+  DiscogsCollectionItem,
+  DiscogsCollectionResponse,
+  DiscogsReleaseResponse,
+  DiscogsSearchItem,
+  DiscogsSearchResponse,
+} from "./contracts/discogs.js";
+
+export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";
+export { normalizeDiscogsRelease, parseDiscogsDuration } from "./normalize/discogsRelease.js";
