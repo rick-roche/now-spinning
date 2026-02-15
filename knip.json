@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["package.json"]
+    },
+    "apps/web": {
+      "entry": ["index.html"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["dist/**", "coverage/**"]
+    },
+    "apps/worker": {
+      "entry": ["wrangler.toml"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["dist/**", ".wrangler/**", "coverage/**"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"],
+      "ignore": ["dist/**", "coverage/**", "test/**"]
+    }
+  },
+  "ignoreDependencies": ["@repo/shared"]
+}

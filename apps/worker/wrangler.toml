@@ -1,0 +1,28 @@
+name = "now-spinning-api"
+main = "src/index.ts"
+compatibility_date = "2026-02-14"
+
+# KV namespace for token/session storage
+# Local dev: automatically created
+# Production: run: wrangler kv namespace create now_spinning_kv --preview false
+kv_namespaces = [
+  { binding = "NOW_SPINNING_KV", id = "dev" }
+]
+
+[env.production]
+kv_namespaces = [
+  { binding = "NOW_SPINNING_KV", id = "REPLACE_WITH_PROD_KV_ID" }
+]
+
+[vars]
+# Non-secret configuration
+PUBLIC_APP_ORIGIN = "http://localhost:5173"
+LASTFM_CALLBACK_URL = "http://localhost:8787/api/auth/lastfm/callback"
+DISCOGS_CALLBACK_URL = "http://localhost:8787/api/auth/discogs/callback"
+
+# Secrets (set with: wrangler secret put KEY --env development)
+# Note: These are required before OAuth flows will work:
+#   - LASTFM_API_KEY
+#   - LASTFM_API_SECRET
+#   - DISCOGS_CONSUMER_KEY
+#   - DISCOGS_CONSUMER_SECRET
