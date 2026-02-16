@@ -74,7 +74,7 @@ export function Collection() {
     };
 
     void fetchStatus();
-  }, []);
+  }, [loadCollection]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

@@ -1,5 +1,15 @@
-import md5 from "js-md5";
+import md5Module from "js-md5";
 import type { CloudflareBinding } from "./types.js";
+
+// js-md5 exports a function as the default export, handle both ESM and CJS
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+const rawMd5 = (md5Module as any).default || md5Module;
+
+// Type guard and cast to ensure we have a function
+const md5 = (input: string): string => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+  return String(rawMd5(input));
+};
 
 const LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/";
 

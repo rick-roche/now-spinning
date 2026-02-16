@@ -1,8 +1,8 @@
 # Now Spinning — Implementation Plan
 
 **Current milestone:** M3 (Session MVP)  
-**Status:** 🟡 In progress  
-**Last updated:** 2026-02-15
+**Status:** � Complete  
+**Last updated:** 2026-02-16
 
 ---
 
@@ -240,3 +240,38 @@
 
 - **2026-02-15:** M0 started. Chose Hono for Worker routing, deferred linting to M1.
 - **2026-02-15:** Added ESLint 9 with flat config during M0 (TypeScript + React support, integrated into CI).
+- **2026-02-16:** M1–M3 complete. All validation passing (typecheck, lint, test, knip).
+  - Fixed js-md5 module import to handle both ESM and CommonJS
+  - Corrected Last.fm MD5 signature test expectations
+  - Fixed React hook dependency warnings in Collection.tsx
+- **2026-02-16:** M4 auto-advance started. Client-side timer advances when durations are known.
+
+---
+
+## M4: Quality & Polish
+
+**Next priority:** Auto-advance, offline resilience, and history tracking.
+
+### Implementation roadmap
+
+- [x] 1. Auto-advance when durations known
+  - Use track durations to auto-schedule next track
+  - Client-side timer management (Option A from SPEC)
+- [ ] 2. Offline queue & retry
+  - Store pending actions in localStorage
+  - Retry on reconnect and app load
+  - Handle transient network failures gracefully
+- [ ] 3. Session history (optional)
+  - Store sessions server-side in D1 (or localStorage MVP)
+  - Add "replay" + "recent sessions" UI
+- [ ] 4. Scrobble threshold settings
+  - User-configurable % of track or minimum seconds
+  - Implement conservative defaults
+
+### Definition of Done for M4
+
+- Auto-advance executes when track duration elapsed
+- Offline actions queue and retry on network recovery
+- Network errors show user-friendly banners with retry
+- Tests cover offline/retry flows
+- All validation passes (typecheck, lint, test, knip)

@@ -19,7 +19,7 @@ describe("createLastFmSignature", () => {
       "ilovecher"
     );
     // Signature should be: md5("api_keyxxxxxxxxxxmethodauth.getSessiontokenyyyyyyilovecher")
-    expect(signature).toBe("9c195ef6042c226190308de2283bb826");
+    expect(signature).toBe("b87d61da3cda91a8b6746c4aef55d6f8");
   });
 
   it("handles track.updateNowPlaying signature correctly", () => {

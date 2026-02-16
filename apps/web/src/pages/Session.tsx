@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Button,
@@ -30,6 +30,10 @@ export function SessionPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
+  const localElapsedRef = useRef(0);
+  const localStartRef = useRef<number | null>(null);
+  const lastTrackKeyRef = useRef<string | null>(null);
 
   const loadSession = async () => {
     try {
@@ -84,6 +88,70 @@ export function SessionPage() {
       setError((err as Error).message);
     }
   };
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const trackKey = `${session.id}:${session.currentIndex}`;
+    if (lastTrackKeyRef.current !== trackKey) {
+      lastTrackKeyRef.current = trackKey;
+      localElapsedRef.current = 0;
+      localStartRef.current = session.state === "running" ? Date.now() : null;
+      return;
+    }
+
+    if (session.state === "paused" && localStartRef.current !== null) {
+      localElapsedRef.current += Date.now() - localStartRef.current;
+      localStartRef.current = null;
+    }
+
+    if (session.state === "running" && localStartRef.current === null) {
+      localStartRef.current = Date.now();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+
+    if (session.state !== "running") {
+      return;
+    }
+
+    const durationSec = session.release.tracks[session.currentIndex]?.durationSec;
+    if (!durationSec || durationSec <= 0) {
+      return;
+    }
+
+    const elapsedMs =
+      localElapsedRef.current +
+      (localStartRef.current ? Date.now() - localStartRef.current : 0);
+    const remainingMs = durationSec * 1000 - elapsedMs;
+
+    if (remainingMs <= 0) {
+      void handleAction("next");
+      return;
+    }
+
+    autoAdvanceTimerRef.current = window.setTimeout(() => {
+      void handleAction("next");
+    }, remainingMs);
+
+    return () => {
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+    };
+  }, [session]);
 
   return (
     <Flex direction="column" gap="4">
