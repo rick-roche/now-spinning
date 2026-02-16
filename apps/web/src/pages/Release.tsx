@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Button,
   Card,
@@ -12,9 +12,11 @@ import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
 
 export function Release() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [release, setRelease] = useState<NormalizedRelease | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     const loadRelease = async () => {
@@ -75,6 +77,35 @@ export function Release() {
     const minutes = Math.floor(durationSec / 60);
     const seconds = durationSec % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const startSession = async () => {
+    if (!release) {
+      return;
+    }
+
+    try {
+      setStarting(true);
+      setError(null);
+      const response = await fetch("/api/session/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ releaseId: release.id }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: { message?: string } };
+        throw new Error(data.error?.message ?? "Failed to start session");
+      }
+
+      void navigate("/session");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setStarting(false);
+    }
   };
 
   return (
@@ -146,8 +177,8 @@ export function Release() {
             </Flex>
           </Card>
 
-          <Button size="3" disabled>
-            Start Session (Coming in M3)
+          <Button size="3" disabled={starting} onClick={() => void startSession()}>
+            {starting ? "Starting..." : "Start Session"}
           </Button>
         </>
       ) : null}

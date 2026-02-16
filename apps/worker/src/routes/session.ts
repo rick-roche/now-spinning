@@ -1,0 +1,363 @@
+/**
+ * Session endpoints (M3 MVP).
+ */
+
+import { Hono } from "hono";
+import type { Context } from "hono";
+import {
+  advanceSession,
+  createSession,
+  normalizeDiscogsRelease,
+  pauseSession,
+  resumeSession,
+  type DiscogsReleaseApiResponse,
+  type NormalizedRelease,
+  type Session,
+  type SessionActionResponse,
+  type SessionCurrentResponse,
+  type SessionStartResponse,
+} from "@repo/shared";
+import { fetchLastFm } from "../lastfm.js";
+import { getOrCreateSessionId, loadStoredTokens, setSessionCookie } from "../middleware/auth.js";
+import type { CloudflareBinding } from "../types.js";
+
+type HonoContext = Context<{ Bindings: CloudflareBinding }>;
+
+const DISCOGS_API_BASE = "https://api.discogs.com";
+const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
+
+const router = new Hono<{ Bindings: CloudflareBinding }>();
+
+function sessionKey(sessionId: string): string {
+  return `session:${sessionId}`;
+}
+
+function currentSessionKey(userId: string): string {
+  return `session:current:${userId}`;
+}
+
+async function storeSession(kv: KVNamespace, session: Session): Promise<void> {
+  await kv.put(sessionKey(session.id), JSON.stringify(session));
+  await kv.put(currentSessionKey(session.userId), session.id);
+}
+
+async function loadSession(kv: KVNamespace, sessionId: string): Promise<Session | null> {
+  return (await kv.get<Session>(sessionKey(sessionId), "json")) ?? null;
+}
+
+async function loadCurrentSession(
+  kv: KVNamespace,
+  userId: string
+): Promise<Session | null> {
+  const currentId = await kv.get<string>(currentSessionKey(userId));
+  if (!currentId) {
+    return null;
+  }
+
+  return loadSession(kv, currentId);
+}
+
+function getDiscogsAppCredentials(
+  c: HonoContext
+): { consumerKey: string; consumerSecret: string } | null {
+  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
+  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
+  if (!consumerKey || !consumerSecret) {
+    return null;
+  }
+
+  return { consumerKey, consumerSecret };
+}
+
+async function fetchDiscogsRelease(
+  c: HonoContext,
+  releaseId: string
+): Promise<
+  | { ok: true; release: NormalizedRelease }
+  | { ok: false; status: 400 | 502 | 500; message: string }
+> {
+  const appCredentials = getDiscogsAppCredentials(c);
+  if (!appCredentials) {
+    return { ok: false, status: 500, message: "Discogs credentials not configured" };
+  }
+
+  const releaseUrl = new URL(`${DISCOGS_API_BASE}/releases/${releaseId}`);
+  releaseUrl.searchParams.set("key", appCredentials.consumerKey);
+  releaseUrl.searchParams.set("secret", appCredentials.consumerSecret);
+
+  const response = await fetch(releaseUrl.toString(), {
+    headers: {
+      "User-Agent": DISCOGS_USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status >= 500 ? 502 : 400,
+      message: "Discogs release lookup failed",
+    };
+  }
+
+  const raw: unknown = await response.json();
+  if (!raw || typeof raw !== "object") {
+    return {
+      ok: false,
+      status: 502,
+      message: "Discogs release lookup returned invalid data",
+    };
+  }
+
+  return {
+    ok: true,
+    release: normalizeDiscogsRelease(raw as DiscogsReleaseApiResponse),
+  };
+}
+
+function buildLastFmParams(values: Record<string, string | number | null | undefined>):
+  Record<string, string> {
+  const params: Record<string, string> = {};
+  Object.entries(values).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+    params[key] = String(value);
+  });
+  return params;
+}
+
+function extractReleaseId(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as { releaseId?: unknown };
+  if (typeof candidate.releaseId !== "string") {
+    return null;
+  }
+
+  const trimmed = candidate.releaseId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function sendNowPlaying(
+  env: CloudflareBinding,
+  sessionKeyValue: string,
+  release: NormalizedRelease,
+  trackIndex: number
+): Promise<{ ok: boolean; message?: string }> {
+  const track = release.tracks[trackIndex];
+  if (!track) {
+    return { ok: false, message: "Track not found" };
+  }
+
+  const result = await fetchLastFm("track.updateNowPlaying", {
+    ...buildLastFmParams({
+      sk: sessionKeyValue,
+      artist: track.artist,
+      track: track.title,
+      album: release.title,
+      duration: track.durationSec,
+    }),
+  }, env);
+
+  if (!result.ok) {
+    console.error("[sendNowPlaying] Last.fm API error:", result.message);
+  }
+  return result;
+}
+
+async function scrobbleTrack(
+  env: CloudflareBinding,
+  sessionKeyValue: string,
+  release: NormalizedRelease,
+  trackIndex: number,
+  timestampSec: number
+): Promise<{ ok: boolean; message?: string }> {
+  const track = release.tracks[trackIndex];
+  if (!track) {
+    return { ok: false, message: "Track not found" };
+  }
+
+  const result = await fetchLastFm("track.scrobble", {
+    ...buildLastFmParams({
+      sk: sessionKeyValue,
+      artist: track.artist,
+      track: track.title,
+      album: release.title,
+      timestamp: timestampSec,
+      duration: track.durationSec,
+    }),
+  }, env);
+
+  if (!result.ok) {
+    console.error("[scrobbleTrack] Last.fm API error:", result.message);
+  }
+  return result;
+}
+
+router.post("/start", async (c: HonoContext) => {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getOrCreateSessionId(c);
+  setSessionCookie(c, userId);
+
+  const body: unknown = await c.req.json().catch(() => null);
+  const releaseId = extractReleaseId(body);
+  if (!releaseId) {
+    return c.json(
+      { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
+      400
+    );
+  }
+
+  if (!/^[0-9]+$/.test(releaseId)) {
+    return c.json(
+      { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
+      400
+    );
+  }
+
+  const tokens = await loadStoredTokens(kv, userId);
+  if (!tokens.lastfm) {
+    return c.json(
+      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
+      401
+    );
+  }
+
+  const releaseResponse = await fetchDiscogsRelease(c, releaseId);
+  if (!releaseResponse.ok) {
+    const status = releaseResponse.status;
+    return c.json(
+      { error: { code: "DISCOGS_ERROR", message: releaseResponse.message } },
+      status
+    );
+  }
+
+  const now = Date.now();
+  const session = createSession({
+    sessionId: crypto.randomUUID(),
+    userId,
+    release: releaseResponse.release,
+    startedAt: now,
+  });
+
+  await storeSession(kv, session);
+  const npResult = await sendNowPlaying(c.env, tokens.lastfm.accessToken, session.release, session.currentIndex);
+  if (!npResult.ok) {
+    console.error("[POST /start] Failed to send now playing:", npResult.message);
+  }
+
+  const response: SessionStartResponse = { session };
+  return c.json(response);
+});
+
+router.post("/:id/pause", async (c: HonoContext) => {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getOrCreateSessionId(c);
+  setSessionCookie(c, userId);
+
+  const sessionId = c.req.param("id");
+  const session = await loadSession(kv, sessionId);
+  if (!session || session.userId !== userId) {
+    return c.json(
+      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+      404
+    );
+  }
+
+  const updated = pauseSession(session);
+  await storeSession(kv, updated);
+
+  const response: SessionActionResponse = { session: updated };
+  return c.json(response);
+});
+
+router.post("/:id/resume", async (c: HonoContext) => {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getOrCreateSessionId(c);
+  setSessionCookie(c, userId);
+
+  const sessionId = c.req.param("id");
+  const session = await loadSession(kv, sessionId);
+  if (!session || session.userId !== userId) {
+    return c.json(
+      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+      404
+    );
+  }
+
+  const updated = resumeSession(session, Date.now());
+  await storeSession(kv, updated);
+
+  const response: SessionActionResponse = { session: updated };
+  return c.json(response);
+});
+
+router.post("/:id/next", async (c: HonoContext) => {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getOrCreateSessionId(c);
+  setSessionCookie(c, userId);
+
+  const sessionId = c.req.param("id");
+  const session = await loadSession(kv, sessionId);
+  if (!session || session.userId !== userId) {
+    return c.json(
+      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+      404
+    );
+  }
+
+  const tokens = await loadStoredTokens(kv, userId);
+  if (!tokens.lastfm) {
+    return c.json(
+      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
+      401
+    );
+  }
+
+  const now = Date.now();
+  const previousIndex = session.currentIndex;
+  const previousStartedAt = session.tracks[previousIndex]?.startedAt ?? now;
+  const updated = advanceSession(session, now);
+
+  await storeSession(kv, updated);
+
+  const scrobbleResult = await scrobbleTrack(
+    c.env,
+    tokens.lastfm.accessToken,
+    updated.release,
+    previousIndex,
+    Math.floor(previousStartedAt / 1000)
+  );
+  if (!scrobbleResult.ok) {
+    console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+  }
+
+  if (updated.state !== "ended") {
+    const npResult = await sendNowPlaying(
+      c.env,
+      tokens.lastfm.accessToken,
+      updated.release,
+      updated.currentIndex
+    );
+    if (!npResult.ok) {
+      console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+    }
+  }
+
+  const response: SessionActionResponse = { session: updated };
+  return c.json(response);
+});
+
+router.get("/current", async (c: HonoContext) => {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getOrCreateSessionId(c);
+  setSessionCookie(c, userId);
+
+  const session = await loadCurrentSession(kv, userId);
+  const response: SessionCurrentResponse = { session };
+  return c.json(response);
+});
+
+export const sessionRoutes = router;

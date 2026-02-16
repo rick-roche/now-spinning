@@ -12,6 +12,7 @@ import {
   storeTokens,
   storeOAuthState,
 } from "../../middleware/auth.js";
+import { fetchLastFm } from "../../lastfm.js";
 import type { CloudflareBinding } from "../../types.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
@@ -50,8 +51,29 @@ router.get("/callback", async (c: HonoContext) => {
   const sessionId = getOrCreateSessionId(c);
   setSessionCookie(c, sessionId);
 
+  const sessionResponse = await fetchLastFm<{ session: { key: string } }>(
+    "auth.getSession",
+    { token },
+    c.env
+  );
+
+  if (!sessionResponse.ok) {
+    return c.json(
+      { error: { code: "LASTFM_ERROR", message: sessionResponse.message } },
+      502
+    );
+  }
+
+  const sessionKey = sessionResponse.data.session?.key;
+  if (!sessionKey) {
+    return c.json(
+      { error: { code: "LASTFM_ERROR", message: "Last.fm session key missing" } },
+      502
+    );
+  }
+
   const tokens = await loadStoredTokens(kv, sessionId);
-  tokens.lastfm = { service: "lastfm", accessToken: token, storedAt: Date.now() };
+  tokens.lastfm = { service: "lastfm", accessToken: sessionKey, storedAt: Date.now() };
   await storeTokens(kv, sessionId, tokens);
 
   const appOrigin = c.env.PUBLIC_APP_ORIGIN;

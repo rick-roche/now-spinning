@@ -145,7 +145,7 @@ function DiscogsSearchPanel() {
       {items.length > 0 && (
         <Flex direction="column" gap="3">
           {items.map((item) => (
-            <Card key={item.releaseId}>
+            <Card key={item.instanceId}>
               <Flex gap="3" align="center">
                 {item.thumbUrl ? (
                   <img

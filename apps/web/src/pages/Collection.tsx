@@ -74,7 +74,7 @@ export function Collection() {
     };
 
     void fetchStatus();
-  }, [loadCollection]);
+  }, []);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -124,7 +124,7 @@ export function Collection() {
           ) : filteredItems.length > 0 ? (
             <Flex direction="column" gap="3">
               {filteredItems.map((item) => (
-                <Card key={item.releaseId}>
+                <Card key={item.instanceId}>
                   <Flex gap="3" align="center">
                     {item.thumbUrl ? (
                       <img
@@ -161,7 +161,7 @@ export function Collection() {
                       {item.formats.length > 0 ? (
                         <Flex gap="2" wrap="wrap">
                           {item.formats.map((format) => (
-                            <Badge key={`${item.releaseId}-${format}`} size="1">
+                            <Badge key={`${item.instanceId}-${format}`} size="1">
                               {format}
                             </Badge>
                           ))}

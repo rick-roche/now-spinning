@@ -5,6 +5,8 @@
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"],
     "jsx": "react",
+    "allowImportingTsExtensions": true,
+    "rootDir": "../..",
     "outDir": "./dist"
   },
   "include": ["src/**/*"],

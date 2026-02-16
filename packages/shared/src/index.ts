@@ -9,6 +9,12 @@ export type {
   SessionTrackState,
   SessionTrackStatus,
 } from "./domain/session.js";
+export {
+  advanceSession,
+  createSession,
+  pauseSession,
+  resumeSession,
+} from "./session/engine.js";
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
@@ -31,6 +37,12 @@ export type {
   DiscogsSearchItem,
   DiscogsSearchResponse,
 } from "./contracts/discogs.js";
+export type {
+  SessionActionResponse,
+  SessionCurrentResponse,
+  SessionStartRequest,
+  SessionStartResponse,
+} from "./contracts/session.js";
 
 export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";
 export { normalizeDiscogsRelease, parseDiscogsDuration } from "./normalize/discogsRelease.js";

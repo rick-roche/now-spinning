@@ -1,7 +1,7 @@
 # Now Spinning — Implementation Plan
 
-**Current milestone:** M2 (Discogs browsing)  
-**Status:** ✅ Complete  
+**Current milestone:** M3 (Session MVP)  
+**Status:** 🟡 In progress  
 **Last updated:** 2026-02-15
 
 ---
@@ -197,13 +197,35 @@
 
 ---
 
-## Next milestones
+## M3: Session MVP
 
-### M3: Session MVP
-- Start session
-- Now playing on start + next
-- Manual scrobble on "next"
-- Basic pause/resume
+**Owners:** Session/Scrobble Engine Agent, API/Worker Agent, UI/UX Agent (see [AGENTS.md](AGENTS.md))
+
+**Goal:** Start sessions from release detail, send now playing on start + next, and allow manual scrobble on next with pause/resume controls.
+
+### Implementation steps
+
+- [x] 1. Shared session contracts + engine transitions
+- [x] 2. Session engine tests (create/pause/resume/advance)
+- [x] 3. Worker session routes (start/pause/resume/next/current)
+- [x] 4. Last.fm now playing + scrobble integration
+- [x] 5. Session UI screen + release start CTA
+
+### Acceptance criteria
+
+**Functionality:**
+- [x] Start session from a release detail screen
+- [x] Now playing is sent on session start and track advance
+- [x] Manual scrobble occurs on “next”
+- [x] Basic pause/resume controls update session state
+
+**Quality:**
+- [x] Session engine transitions covered by tests
+- [x] No secrets exposed to the client
+
+---
+
+## Next milestones
 
 ### M4: Quality
 - Auto-advance when durations known

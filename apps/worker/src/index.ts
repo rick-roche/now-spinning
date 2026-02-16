@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { health } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { discogsRoutes } from "./routes/discogs.js";
+import { sessionRoutes } from "./routes/session.js";
 
 const app = new Hono();
 
@@ -19,5 +20,6 @@ app.use(
 app.route("/api", health);
 app.route("/api/auth", authRoutes);
 app.route("/api/discogs", discogsRoutes);
+app.route("/api/session", sessionRoutes);
 
 export default app;

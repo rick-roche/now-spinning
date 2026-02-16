@@ -40,16 +40,14 @@ export function Home() {
         <Button asChild size="3">
           <Link to="/search">Browse Discogs</Link>
         </Button>
-        <Button size="3" disabled>
-          Start Session (Coming in M3)
+        <Button asChild size="3" variant="soft">
+          <Link to="/session">Continue Session</Link>
         </Button>
       </Flex>
 
       <Text size="2" color="gray">
-        <strong>M2 (Discogs browsing):</strong> Collection + search + release details in
-        progress.
-        <br />
-        <strong>Next:</strong> M3 adds sessions + scrobbling.
+        <strong>M3 (Session MVP):</strong> Start sessions and manual scrobble on
+        track advance.
       </Text>
     </Flex>
   );

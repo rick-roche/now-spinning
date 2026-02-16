@@ -5,6 +5,7 @@ import { Settings } from "../pages/Settings";
 import { Collection } from "../pages/Collection";
 import { Search } from "../pages/Search";
 import { Release } from "../pages/Release";
+import { SessionPage } from "../pages/Session";
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
               <nav>
                 <Link to="/">Home</Link>
                 <Link to="/search">Search</Link>
+                <Link to="/session">Session</Link>
                 <Link to="/settings">Settings</Link>
               </nav>
             </Flex>
@@ -30,6 +32,7 @@ export function App() {
               <Route path="/search" element={<Search />} />
               <Route path="/collection" element={<Collection />} />
               <Route path="/release/:id" element={<Release />} />
+              <Route path="/session" element={<SessionPage />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>

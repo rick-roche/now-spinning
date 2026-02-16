@@ -3,6 +3,7 @@
  */
 
 export interface DiscogsCollectionItem {
+  instanceId: string;
   releaseId: string;
   title: string;
   artist: string;
@@ -20,6 +21,7 @@ export interface DiscogsCollectionResponse {
 }
 
 export interface DiscogsSearchItem {
+  instanceId: string;
   releaseId: string;
   title: string;
   artist: string;

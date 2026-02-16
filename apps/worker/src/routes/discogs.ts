@@ -110,21 +110,24 @@ function createOAuthHeader(params: {
 
 function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsCollectionItem | null {
   const basic = release.basic_information ?? {};
-  const releaseId = basic.id ?? release.id;
-  if (!releaseId) {
+  const instanceId = release.id;
+  const releaseId = basic.id;
+  if (!instanceId || !releaseId) {
     return null;
   }
 
   const artist = basic.artists?.[0]?.name ?? "Unknown Artist";
   const year = Number.isFinite(basic.year) ? (basic.year as number) : null;
-  const formats = (basic.formats ?? [])
+  const formatStrings = (basic.formats ?? [])
     .map((format) => {
       const parts = [format.name, ...(format.descriptions ?? [])].filter(Boolean);
       return parts.join(" ").trim();
     })
     .filter((value) => value.length > 0);
+  const formats = Array.from(new Set(formatStrings));
 
   return {
+    instanceId: String(instanceId),
     releaseId: String(releaseId),
     title: basic.title ?? "Untitled",
     artist,
@@ -152,6 +155,7 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
   }
 
   return {
+    instanceId: String(result.id),
     releaseId: String(result.id),
     title,
     artist,
