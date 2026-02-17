@@ -18,8 +18,8 @@ const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 export function getOrCreateSessionId(c: Context<{ Bindings: CloudflareBinding }>): string {
   let sessionId = getCookie(c, SESSION_COOKIE);
   if (!sessionId) {
-    // Generate a new one
-    sessionId = crypto.getRandomValues(new Uint8Array(16)).toString();
+    // Generate a cryptographically secure random UUID
+    sessionId = crypto.randomUUID();
   }
   return sessionId;
 }
@@ -108,4 +108,65 @@ export async function getAndDeleteOAuthState(
     await kv.delete(key);
   }
   return (data ?? null) as Record<string, string> | null;
+}
+
+/**
+ * Middleware to require Last.fm authentication.
+ * Returns 401 if user doesn't have a valid Last.fm token.
+ */
+export async function requireLastFm(
+  c: Context<{ Bindings: CloudflareBinding }>,
+  next: () => Promise<void>
+): Promise<Response | void> {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getCookie(c, SESSION_COOKIE);
+  
+  if (!userId) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Session required" } },
+      401
+    );
+  }
+
+  const tokens = await loadStoredTokens(kv, userId);
+  if (!tokens.lastfm) {
+    return c.json(
+      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm connection required" } },
+      401
+    );
+  }
+
+  await next();
+}
+
+/**
+ * Middleware to require Discogs authentication.
+ * Returns 401 if user doesn't have a valid Discogs token.
+ * 
+ * Used in Discogs API routes (will be integrated when those routes are validated).
+ * knip: ignore
+ */
+export async function requireDiscogs(
+  c: Context<{ Bindings: CloudflareBinding }>,
+  next: () => Promise<void>
+): Promise<Response | void> {
+  const kv = c.env.NOW_SPINNING_KV;
+  const userId = getCookie(c, SESSION_COOKIE);
+  
+  if (!userId) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Session required" } },
+      401
+    );
+  }
+
+  const tokens = await loadStoredTokens(kv, userId);
+  if (!tokens.discogs) {
+    return c.json(
+      { error: { code: "DISCOGS_NOT_CONNECTED", message: "Discogs connection required" } },
+      401
+    );
+  }
+
+  await next();
 }

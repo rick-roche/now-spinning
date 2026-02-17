@@ -2,22 +2,19 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["package.json"]
+      "entry": ["eslint.config.js"]
     },
     "apps/web": {
-      "entry": ["index.html"],
-      "project": ["src/**/*.{ts,tsx}"],
+      "entry": [],
       "ignore": ["dist/**", "coverage/**"]
     },
     "apps/worker": {
       "entry": ["wrangler.toml"],
-      "project": ["src/**/*.ts"],
       "ignore": ["dist/**", ".wrangler/**", "coverage/**"]
     },
     "packages/shared": {
-      "entry": ["package.json"],
-      "project": ["src/**/*.ts"],
-      "ignore": ["dist/**", "coverage/**", "test/**"]
+      "entry": [],
+      "ignore": ["dist/**", "coverage/**"]
     }
   }
 }

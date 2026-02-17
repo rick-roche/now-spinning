@@ -19,6 +19,7 @@ kv_namespaces = [
 PUBLIC_APP_ORIGIN = "http://localhost:5173"
 LASTFM_CALLBACK_URL = "http://localhost:8787/api/auth/lastfm/callback"
 DISCOGS_CALLBACK_URL = "http://localhost:8787/api/auth/discogs/callback"
+DEV_MODE = "true"
 
 # Secrets (set with: wrangler secret put KEY --env development)
 # Note: These are required before OAuth flows will work:

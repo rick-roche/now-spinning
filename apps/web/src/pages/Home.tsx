@@ -4,13 +4,15 @@ import { Card, Flex, Heading, Text, Button } from "@radix-ui/themes";
 
 export function Home() {
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [devMode, setDevMode] = useState<boolean>(false);
 
   useEffect(() => {
     // Test the /api/health endpoint
     fetch("/api/health")
       .then((res) => res.json())
-      .then((data: { status: string }) => {
+      .then((data: { status: string; devMode?: boolean }) => {
         setHealthStatus(data.status === "ok" ? "✓ API connected" : "⚠ API issue");
+        setDevMode(data.devMode === true);
       })
       .catch(() => {
         setHealthStatus("✗ API unavailable");
@@ -32,6 +34,7 @@ export function Home() {
           </Text>
           <Text size="1" color="gray">
             {healthStatus || "Checking API..."}
+            {devMode && " • DEV MODE (scrobbles logged only)"}
           </Text>
         </Flex>
       </Card>

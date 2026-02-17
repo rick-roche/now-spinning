@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Badge,
   Button,
@@ -17,6 +17,7 @@ import type {
 } from "@repo/shared";
 
 export function Collection() {
+  const navigate = useNavigate();
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [items, setItems] = useState<DiscogsCollectionItem[]>([]);
@@ -124,7 +125,11 @@ export function Collection() {
           ) : filteredItems.length > 0 ? (
             <Flex direction="column" gap="3">
               {filteredItems.map((item) => (
-                <Card key={item.instanceId}>
+                <Card
+                  key={item.instanceId}
+                  className="clickable-card"
+                  onClick={() => void navigate(`/release/${item.releaseId}`)}
+                >
                   <Flex gap="3" align="center">
                     {item.thumbUrl ? (
                       <img
@@ -168,10 +173,6 @@ export function Collection() {
                         </Flex>
                       ) : null}
                     </Flex>
-
-                    <Button asChild size="1" variant="soft">
-                      <Link to={`/release/${item.releaseId}`}>Details</Link>
-                    </Button>
                   </Flex>
                 </Card>
               ))}

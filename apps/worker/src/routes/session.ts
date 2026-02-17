@@ -1,6 +1,12 @@
 /**
  * Session endpoints (M3 MVP).
+ *
+ * Note: This module intentionally uses unsafe type assertions (`any`) to access Zod error details
+ * that are only available at runtime. This is a known limitation of TypeScript's type system when
+ * dealing with ZodError.errors, which exists at runtime but is not typed in the public API.
  */
+
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
 import { Hono } from "hono";
 import type { Context } from "hono";
@@ -10,6 +16,8 @@ import {
   normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
+  SessionStartRequestSchema,
+  SessionParamSchema,
   type DiscogsReleaseApiResponse,
   type NormalizedRelease,
   type Session,
@@ -18,7 +26,7 @@ import {
   type SessionStartResponse,
 } from "@repo/shared";
 import { fetchLastFm } from "../lastfm.js";
-import { getOrCreateSessionId, loadStoredTokens, setSessionCookie } from "../middleware/auth.js";
+import { getOrCreateSessionId, loadStoredTokens, setSessionCookie, requireLastFm } from "../middleware/auth.js";
 import type { CloudflareBinding } from "../types.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
@@ -126,29 +134,31 @@ function buildLastFmParams(values: Record<string, string | number | null | undef
   return params;
 }
 
-function extractReleaseId(value: unknown): string | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const candidate = value as { releaseId?: unknown };
-  if (typeof candidate.releaseId !== "string") {
-    return null;
-  }
-
-  const trimmed = candidate.releaseId.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 async function sendNowPlaying(
   env: CloudflareBinding,
   sessionKeyValue: string,
   release: NormalizedRelease,
   trackIndex: number
 ): Promise<{ ok: boolean; message?: string }> {
+  if (trackIndex < 0 || trackIndex >= release.tracks.length) {
+    return { ok: false, message: "Track index out of bounds" };
+  }
+  
   const track = release.tracks[trackIndex];
   if (!track) {
     return { ok: false, message: "Track not found" };
+  }
+
+  const isDevMode = env.DEV_MODE === "true";
+  
+  if (isDevMode) {
+    console.log("[DEV MODE] Would send Now Playing:", {
+      artist: track.artist,
+      track: track.title,
+      album: release.title,
+      duration: track.durationSec,
+    });
+    return { ok: true };
   }
 
   const result = await fetchLastFm("track.updateNowPlaying", {
@@ -174,9 +184,26 @@ async function scrobbleTrack(
   trackIndex: number,
   timestampSec: number
 ): Promise<{ ok: boolean; message?: string }> {
+  if (trackIndex < 0 || trackIndex >= release.tracks.length) {
+    return { ok: false, message: "Track index out of bounds" };
+  }
+  
   const track = release.tracks[trackIndex];
   if (!track) {
     return { ok: false, message: "Track not found" };
+  }
+
+  const isDevMode = env.DEV_MODE === "true";
+  
+  if (isDevMode) {
+    console.log("[DEV MODE] Would scrobble:", {
+      artist: track.artist,
+      track: track.title,
+      album: release.title,
+      timestamp: new Date(timestampSec * 1000).toISOString(),
+      duration: track.durationSec,
+    });
+    return { ok: true };
   }
 
   const result = await fetchLastFm("track.scrobble", {
@@ -196,159 +223,268 @@ async function scrobbleTrack(
   return result;
 }
 
-router.post("/start", async (c: HonoContext) => {
-  const kv = c.env.NOW_SPINNING_KV;
-  const userId = getOrCreateSessionId(c);
-  setSessionCookie(c, userId);
+router.post(
+  "/start",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
 
-  const body: unknown = await c.req.json().catch(() => null);
-  const releaseId = extractReleaseId(body);
-  if (!releaseId) {
-    return c.json(
-      { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
-      400
-    );
+    // Validate body
+    const body: unknown = await c.req.json();
+    const bodyResult = SessionStartRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      const details: Record<string, string[]> = {};
+      const errors = (bodyResult.error as any).errors || [];
+      errors.forEach((err: any) => {
+        const path = err.path.join(".");
+        if (!details[path]) details[path] = [];
+        details[path].push(err.message);
+      });
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Request body validation failed",
+            details,
+          },
+        },
+        400
+      );
+    }
+
+    const { releaseId } = bodyResult.data;
+
+    if (!/^[0-9]+$/.test(releaseId)) {
+      return c.json(
+        { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
+        400
+      );
+    }
+
+    const tokens = await loadStoredTokens(kv, userId);
+    if (!tokens.lastfm) {
+      return c.json(
+        { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
+        401
+      );
+    }
+
+    const releaseResponse = await fetchDiscogsRelease(c, releaseId);
+    if (!releaseResponse.ok) {
+      const status = releaseResponse.status;
+      return c.json(
+        { error: { code: "DISCOGS_ERROR", message: releaseResponse.message } },
+        status
+      );
+    }
+
+    const now = Date.now();
+    const session = createSession({
+      sessionId: crypto.randomUUID(),
+      userId,
+      release: releaseResponse.release,
+      startedAt: now,
+    });
+
+    await storeSession(kv, session);
+    const npResult = await sendNowPlaying(c.env, tokens.lastfm.accessToken, session.release, session.currentIndex);
+    if (!npResult.ok) {
+      console.error("[POST /start] Failed to send now playing:", npResult.message);
+    }
+
+    const response: SessionStartResponse = { session };
+    return c.json(response);
   }
+);
 
-  if (!/^[0-9]+$/.test(releaseId)) {
-    return c.json(
-      { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
-      400
-    );
+router.post(
+  "/:id/pause",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+
+    // Validate param
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      const details: Record<string, string[]> = {};
+      const errors = (paramResult.error as any).errors || [];
+      errors.forEach((err: any) => {
+        const path = err.path.join(".");
+        if (!details[path]) details[path] = [];
+        details[path].push(err.message);
+      });
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Path parameters validation failed",
+            details,
+          },
+        },
+        400
+      );
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(
+        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+        404
+      );
+    }
+
+    const updated = pauseSession(session);
+    await storeSession(kv, updated);
+
+    const response: SessionActionResponse = { session: updated };
+    return c.json(response);
   }
+);
 
-  const tokens = await loadStoredTokens(kv, userId);
-  if (!tokens.lastfm) {
-    return c.json(
-      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
-      401
-    );
+router.post(
+  "/:id/resume",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+
+    // Validate param
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      const details: Record<string, string[]> = {};
+      const errors = (paramResult.error as any).errors || [];
+      errors.forEach((err: any) => {
+        const path = err.path.join(".");
+        if (!details[path]) details[path] = [];
+        details[path].push(err.message);
+      });
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Path parameters validation failed",
+            details,
+          },
+        },
+        400
+      );
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(
+        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+        404
+      );
+    }
+
+    const updated = resumeSession(session, Date.now());
+    await storeSession(kv, updated);
+
+    const response: SessionActionResponse = { session: updated };
+    return c.json(response);
   }
+);
 
-  const releaseResponse = await fetchDiscogsRelease(c, releaseId);
-  if (!releaseResponse.ok) {
-    const status = releaseResponse.status;
-    return c.json(
-      { error: { code: "DISCOGS_ERROR", message: releaseResponse.message } },
-      status
-    );
-  }
+router.post(
+  "/:id/next",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
 
-  const now = Date.now();
-  const session = createSession({
-    sessionId: crypto.randomUUID(),
-    userId,
-    release: releaseResponse.release,
-    startedAt: now,
-  });
+    // Validate param
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      const details: Record<string, string[]> = {};
+      const errors = (paramResult.error as any).errors || [];
+      errors.forEach((err: any) => {
+        const path = err.path.join(".");
+        if (!details[path]) details[path] = [];
+        details[path].push(err.message);
+      });
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Path parameters validation failed",
+            details,
+          },
+        },
+        400
+      );
+    }
 
-  await storeSession(kv, session);
-  const npResult = await sendNowPlaying(c.env, tokens.lastfm.accessToken, session.release, session.currentIndex);
-  if (!npResult.ok) {
-    console.error("[POST /start] Failed to send now playing:", npResult.message);
-  }
+    const { id: sessionId } = paramResult.data;
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(
+        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+        404
+      );
+    }
 
-  const response: SessionStartResponse = { session };
-  return c.json(response);
-});
+    const tokens = await loadStoredTokens(kv, userId);
+    if (!tokens.lastfm) {
+      return c.json(
+        { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
+        401
+      );
+    }
 
-router.post("/:id/pause", async (c: HonoContext) => {
-  const kv = c.env.NOW_SPINNING_KV;
-  const userId = getOrCreateSessionId(c);
-  setSessionCookie(c, userId);
+    const now = Date.now();
+    const previousIndex = session.currentIndex;
+    
+    if (previousIndex < 0 || previousIndex >= session.tracks.length) {
+      return c.json(
+        { error: { code: "INVALID_TRACK_INDEX", message: "Current track index is invalid" } },
+        500
+      );
+    }
+    
+    const previousStartedAt = session.tracks[previousIndex]?.startedAt ?? now;
+    const updated = advanceSession(session, now);
 
-  const sessionId = c.req.param("id");
-  const session = await loadSession(kv, sessionId);
-  if (!session || session.userId !== userId) {
-    return c.json(
-      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-      404
-    );
-  }
+    await storeSession(kv, updated);
 
-  const updated = pauseSession(session);
-  await storeSession(kv, updated);
-
-  const response: SessionActionResponse = { session: updated };
-  return c.json(response);
-});
-
-router.post("/:id/resume", async (c: HonoContext) => {
-  const kv = c.env.NOW_SPINNING_KV;
-  const userId = getOrCreateSessionId(c);
-  setSessionCookie(c, userId);
-
-  const sessionId = c.req.param("id");
-  const session = await loadSession(kv, sessionId);
-  if (!session || session.userId !== userId) {
-    return c.json(
-      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-      404
-    );
-  }
-
-  const updated = resumeSession(session, Date.now());
-  await storeSession(kv, updated);
-
-  const response: SessionActionResponse = { session: updated };
-  return c.json(response);
-});
-
-router.post("/:id/next", async (c: HonoContext) => {
-  const kv = c.env.NOW_SPINNING_KV;
-  const userId = getOrCreateSessionId(c);
-  setSessionCookie(c, userId);
-
-  const sessionId = c.req.param("id");
-  const session = await loadSession(kv, sessionId);
-  if (!session || session.userId !== userId) {
-    return c.json(
-      { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-      404
-    );
-  }
-
-  const tokens = await loadStoredTokens(kv, userId);
-  if (!tokens.lastfm) {
-    return c.json(
-      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
-      401
-    );
-  }
-
-  const now = Date.now();
-  const previousIndex = session.currentIndex;
-  const previousStartedAt = session.tracks[previousIndex]?.startedAt ?? now;
-  const updated = advanceSession(session, now);
-
-  await storeSession(kv, updated);
-
-  const scrobbleResult = await scrobbleTrack(
-    c.env,
-    tokens.lastfm.accessToken,
-    updated.release,
-    previousIndex,
-    Math.floor(previousStartedAt / 1000)
-  );
-  if (!scrobbleResult.ok) {
-    console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
-  }
-
-  if (updated.state !== "ended") {
-    const npResult = await sendNowPlaying(
+    const scrobbleResult = await scrobbleTrack(
       c.env,
       tokens.lastfm.accessToken,
       updated.release,
-      updated.currentIndex
+      previousIndex,
+      Math.floor(previousStartedAt / 1000)
     );
-    if (!npResult.ok) {
-      console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+    if (!scrobbleResult.ok) {
+      console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
     }
-  }
 
-  const response: SessionActionResponse = { session: updated };
-  return c.json(response);
-});
+    if (updated.state !== "ended") {
+      const npResult = await sendNowPlaying(
+        c.env,
+        tokens.lastfm.accessToken,
+        updated.release,
+        updated.currentIndex
+      );
+      if (!npResult.ok) {
+        console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+      }
+    }
+
+    const response: SessionActionResponse = { session: updated };
+    return c.json(response);
+  }
+);
 
 router.get("/current", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;

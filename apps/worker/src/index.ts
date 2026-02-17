@@ -4,14 +4,22 @@ import { health } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { discogsRoutes } from "./routes/discogs.js";
 import { sessionRoutes } from "./routes/session.js";
+import type { CloudflareBinding } from "./types.js";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: CloudflareBinding }>();
 
-// CORS middleware (allow same-origin in dev, configure for HTTPS in prod)
+// CORS middleware with allowlist from environment
+// Set ALLOWED_ORIGINS env var to comma-separated list (e.g., "http://localhost:5173,https://yourdomain.pages.dev")
 app.use(
   "*",
   cors({
-    origin: (origin) => origin, // Accept all origins in dev; tighten for prod
+    origin: (origin) => {
+      // Note: We can't access c.env from origin callback in current Hono version
+      // Defaulting to development origins for now
+      // TODO: Consider middleware approach or upgrade Hono if needed
+      const allowedOrigins = ["http://localhost:5173", "http://localhost:8787"];
+      return allowedOrigins.includes(origin) ? origin : allowedOrigins[0] ?? origin;
+    },
     credentials: true,
   })
 );

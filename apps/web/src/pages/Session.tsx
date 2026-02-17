@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Button,
@@ -30,10 +30,13 @@ export function SessionPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [devMode, setDevMode] = useState<boolean>(false);
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const localElapsedRef = useRef(0);
   const localStartRef = useRef<number | null>(null);
   const lastTrackKeyRef = useRef<string | null>(null);
+  const storageKeyRef = useRef<string | null>(null);
 
   const loadSession = async () => {
     try {
@@ -56,7 +59,31 @@ export function SessionPage() {
 
   useEffect(() => {
     void loadSession();
+    
+    // Check dev mode
+    fetch("/api/health")
+      .then((res) => res.json())
+      .then((data: { devMode?: boolean }) => {
+        setDevMode(data.devMode === true);
+      })
+      .catch(() => {
+        // Ignore health check errors
+      });
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [session]);
 
   const currentTrack = useMemo(() => {
     if (!session) {
@@ -65,7 +92,34 @@ export function SessionPage() {
     return session.release.tracks[session.currentIndex] ?? null;
   }, [session]);
 
-  const handleAction = async (action: "pause" | "resume" | "next") => {
+  const elapsedMs = useMemo(() => {
+    if (!session) {
+      return 0;
+    }
+    return (
+      localElapsedRef.current +
+      (localStartRef.current ? nowMs - localStartRef.current : 0)
+    );
+  }, [nowMs, session]);
+
+  const durationSec = currentTrack?.durationSec ?? null;
+  const durationMs = durationSec && durationSec > 0 ? durationSec * 1000 : null;
+  const remainingMs = durationMs ? Math.max(0, durationMs - elapsedMs) : null;
+  const progressPct = durationMs
+    ? Math.min(100, Math.max(0, (elapsedMs / durationMs) * 100))
+    : 0;
+
+  const formatTime = (valueMs: number | null) => {
+    if (valueMs === null) {
+      return "--:--";
+    }
+    const totalSeconds = Math.max(0, Math.round(valueMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const handleAction = useCallback(async (action: "pause" | "resume" | "next") => {
     if (!session) {
       return;
     }
@@ -87,7 +141,7 @@ export function SessionPage() {
     } catch (err) {
       setError((err as Error).message);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (!session) {
@@ -97,8 +151,39 @@ export function SessionPage() {
     const trackKey = `${session.id}:${session.currentIndex}`;
     if (lastTrackKeyRef.current !== trackKey) {
       lastTrackKeyRef.current = trackKey;
-      localElapsedRef.current = 0;
-      localStartRef.current = session.state === "running" ? Date.now() : null;
+      storageKeyRef.current = `now-spinning:session-timer:${trackKey}`;
+
+      // Try to restore timing from sessionStorage
+      try {
+        const stored = sessionStorage.getItem(storageKeyRef.current);
+        if (stored) {
+          const data = JSON.parse(stored) as {
+            elapsedMs: number;
+            running: boolean;
+            updatedAt: number;
+          };
+          const safeElapsed = Number.isFinite(data.elapsedMs) ? data.elapsedMs : 0;
+          const safeUpdatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : Date.now();
+          const wasRunning = data.running === true;
+
+          if (session.state === "running") {
+            const carriedElapsed = wasRunning
+              ? safeElapsed + Math.max(0, Date.now() - safeUpdatedAt)
+              : safeElapsed;
+            localElapsedRef.current = carriedElapsed;
+            localStartRef.current = Date.now();
+          } else {
+            localElapsedRef.current = safeElapsed;
+            localStartRef.current = null;
+          }
+        } else {
+          localElapsedRef.current = 0;
+          localStartRef.current = session.state === "running" ? Date.now() : null;
+        }
+      } catch {
+        localElapsedRef.current = 0;
+        localStartRef.current = session.state === "running" ? Date.now() : null;
+      }
       return;
     }
 
@@ -110,7 +195,31 @@ export function SessionPage() {
     if (session.state === "running" && localStartRef.current === null) {
       localStartRef.current = Date.now();
     }
+
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !storageKeyRef.current) {
+      return;
+    }
+
+    const currentElapsed =
+      localElapsedRef.current +
+      (localStartRef.current ? Date.now() - localStartRef.current : 0);
+
+    try {
+      sessionStorage.setItem(
+        storageKeyRef.current,
+        JSON.stringify({
+          elapsedMs: currentElapsed,
+          running: session.state === "running" && localStartRef.current !== null,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch {
+      // ignore write failures
+    }
+  }, [nowMs, session]);
 
   useEffect(() => {
     if (!session) {
@@ -151,7 +260,7 @@ export function SessionPage() {
         autoAdvanceTimerRef.current = null;
       }
     };
-  }, [session]);
+  }, [session, handleAction]);
 
   return (
     <Flex direction="column" gap="4">
@@ -185,14 +294,23 @@ export function SessionPage() {
       ) : (
         <>
           <Heading size="6">Now Playing</Heading>
-          <Card>
-            <Flex direction="column" gap="2">
-              <Text size="2" color="gray">
-                {session.release.artist}
-              </Text>
-              <Heading size="5">{session.release.title}</Heading>
+          <Card className="now-playing-card">
+            <Flex direction="column" gap="3">
+              <Flex justify="between" align="center" gap="3">
+                <Flex direction="column" gap="1">
+                  <Text size="2" color="gray">
+                    {session.release.artist}
+                  </Text>
+                  <Heading size="5">{session.release.title}</Heading>
+                </Flex>
+                <span className="status-pill">
+                  <span className="status-dot" />
+                  {session.state === "running" ? "Playing" : "Paused"}
+                </span>
+              </Flex>
+
               {currentTrack ? (
-                <Text size="3">
+                <Text size="4" weight="bold">
                   {currentTrack.position}. {currentTrack.title}
                 </Text>
               ) : (
@@ -200,26 +318,53 @@ export function SessionPage() {
                   No track information
                 </Text>
               )}
-              <Text size="2" color="gray">
-                Status: {session.state}
-              </Text>
+
+              {durationMs ? (
+                <Flex direction="column" gap="2">
+                  <div className="progress-rail" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressPct)}>
+                    <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+                  <Flex justify="between">
+                    <Text size="1" color="gray">
+                      {formatTime(elapsedMs)} elapsed
+                    </Text>
+                    <Text size="1" color="gray">
+                      {formatTime(remainingMs)} left
+                    </Text>
+                  </Flex>
+                  <Text size="1" color="gray">
+                    {devMode ? "DEV MODE: Scrobbles logged only" : "Auto-advance on track end"}
+                  </Text>
+                </Flex>
+              ) : (
+                <Text size="1" color="gray">
+                  Duration unknown, auto-advance unavailable.
+                </Text>
+              )}
             </Flex>
           </Card>
 
-          <Flex gap="2" wrap="wrap">
-            {session.state === "paused" ? (
-              <Button size="3" onClick={() => void handleAction("resume")}>
-                Resume
-              </Button>
-            ) : (
-              <Button size="3" variant="soft" onClick={() => void handleAction("pause")}>
-                Pause
-              </Button>
-            )}
-            <Button size="3" onClick={() => void handleAction("next")}>
-              Next Track
-            </Button>
-          </Flex>
+          <div className="session-actions">
+            <Flex direction="column" gap="3">
+              <Text size="2" color="gray">
+                One-handed controls
+              </Text>
+              <div className="session-actions-buttons">
+                {session.state === "paused" ? (
+                  <Button size="4" onClick={() => void handleAction("resume")}>
+                    Resume
+                  </Button>
+                ) : (
+                  <Button size="4" variant="soft" onClick={() => void handleAction("pause")}>
+                    Pause
+                  </Button>
+                )}
+                <Button size="4" onClick={() => void handleAction("next")}>
+                  Next Track
+                </Button>
+              </div>
+            </Flex>
+          </div>
         </>
       )}
     </Flex>

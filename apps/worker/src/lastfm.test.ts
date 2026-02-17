@@ -62,4 +62,127 @@ describe("createLastFmSignature", () => {
     expect(signature).toBeDefined();
     expect(signature).toHaveLength(32);
   });
+
+  // Edge case tests
+  it("handles empty params object", () => {
+    const signature = createLastFmSignature({}, "secret");
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32); // MD5 hex always 32 chars
+    // Verify it's deterministic
+    const sig2 = createLastFmSignature({}, "secret");
+    expect(signature).toBe(sig2);
+  });
+
+  it("handles single parameter", () => {
+    const signature = createLastFmSignature({ key: "value" }, "secret");
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("handles parameters with spaces", () => {
+    const signature = createLastFmSignature(
+      { artist: "The Beatles", album: "Abbey Road" },
+      "secret"
+    );
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("handles special characters in values", () => {
+    const signature = createLastFmSignature(
+      { track: "Song & Dance", artist: "Artist/Solo" },
+      "secret"
+    );
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("sorts keys case-sensitively", () => {
+    const sig1 = createLastFmSignature({ B: "2", a: "1" }, "secret");
+    const sig2 = createLastFmSignature({ b: "2", A: "1" }, "secret");
+    // Different key cases should produce different signatures
+    expect(sig1).not.toBe(sig2);
+  });
+
+  it("handles numeric string values", () => {
+    const signature = createLastFmSignature(
+      { duration: "3", trackNumber: "5", year: "2024" },
+      "secret"
+    );
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("handles long parameter values", () => {
+    const longValue = "a".repeat(1000);
+    const signature = createLastFmSignature({ text: longValue }, "secret");
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("excludes format even when explicitly included", () => {
+    const sig1 = createLastFmSignature(
+      { key: "value", format: "json" },
+      "secret"
+    );
+    const sig2 = createLastFmSignature({ key: "value" }, "secret");
+    expect(sig1).toBe(sig2);
+  });
+
+  it("excludes api_sig even when explicitly included", () => {
+    const sig1 = createLastFmSignature(
+      { key: "value", api_sig: "xyz" },
+      "secret"
+    );
+    const sig2 = createLastFmSignature({ key: "value" }, "secret");
+    expect(sig1).toBe(sig2);
+  });
+
+  it("handles both format and api_sig exclusion", () => {
+    const sig1 = createLastFmSignature(
+      { key: "value", format: "json", api_sig: "xyz" },
+      "secret"
+    );
+    const sig2 = createLastFmSignature({ key: "value" }, "secret");
+    expect(sig1).toBe(sig2);
+  });
+
+  it("handles empty string values", () => {
+    const signature = createLastFmSignature(
+      { key1: "", key2: "value", key3: "" },
+      "secret"
+    );
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
+
+  it("is deterministic - same input produces same output", () => {
+    const params = { z: "1", a: "2", m: "3" };
+    const sig1 = createLastFmSignature(params, "secret");
+    const sig2 = createLastFmSignature(params, "secret");
+    expect(sig1).toBe(sig2);
+  });
+
+  it("changes with different secret", () => {
+    const params = { key: "value" };
+    const sig1 = createLastFmSignature(params, "secret1");
+    const sig2 = createLastFmSignature(params, "secret2");
+    expect(sig1).not.toBe(sig2);
+  });
+
+  it("changes with different param values", () => {
+    const sig1 = createLastFmSignature({ key: "value1" }, "secret");
+    const sig2 = createLastFmSignature({ key: "value2" }, "secret");
+    expect(sig1).not.toBe(sig2);
+  });
+
+  it("handles many parameters", () => {
+    const params: Record<string, string> = {};
+    for (let i = 0; i < 20; i++) {
+      params[`key${i}`] = `value${i}`;
+    }
+    const signature = createLastFmSignature(params, "secret");
+    expect(signature).toBeDefined();
+    expect(signature).toHaveLength(32);
+  });
 });

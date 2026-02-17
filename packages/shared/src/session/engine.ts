@@ -16,9 +16,9 @@ export function createSession(input: CreateSessionInput): Session {
     scrobbledAt: null,
   }));
 
-  const firstTrack = tracks[0];
-  if (firstTrack) {
-    tracks[0] = { ...firstTrack, startedAt: input.startedAt };
+  // Set startedAt for first track if it exists
+  if (tracks.length > 0 && tracks[0]) {
+    tracks[0] = { ...tracks[0], startedAt: input.startedAt };
   }
 
   return {

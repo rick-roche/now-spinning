@@ -12,3 +12,20 @@ export interface APIError {
     requestId?: string;
   };
 }
+
+/**
+ * Create a standardized API error response with generated request ID.
+ */
+export function createAPIError(
+  code: string,
+  message: string,
+  includeRequestId: boolean = true
+): APIError {
+  return {
+    error: {
+      code,
+      message,
+      ...(includeRequestId && { requestId: crypto.randomUUID() }),
+    },
+  };
+}

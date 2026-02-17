@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Button,
   Card,
@@ -44,6 +44,7 @@ export function Search() {
 }
 
 function DiscogsSearchPanel() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<DiscogsSearchItem[]>([]);
   const [page, setPage] = useState(1);
@@ -145,7 +146,11 @@ function DiscogsSearchPanel() {
       {items.length > 0 && (
         <Flex direction="column" gap="3">
           {items.map((item) => (
-            <Card key={item.instanceId}>
+            <Card
+              key={item.instanceId}
+              className="clickable-card"
+              onClick={() => void navigate(`/release/${item.releaseId}`)}
+            >
               <Flex gap="3" align="center">
                 {item.thumbUrl ? (
                   <img
@@ -185,10 +190,6 @@ function DiscogsSearchPanel() {
                     </Text>
                   ) : null}
                 </Flex>
-
-                <Button asChild size="1" variant="soft">
-                  <Link to={`/release/${item.releaseId}`}>Details</Link>
-                </Button>
               </Flex>
             </Card>
           ))}
