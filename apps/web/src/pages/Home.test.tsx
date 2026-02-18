@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Home } from "./Home";
+import type { AuthStatusResponse } from "@repo/shared";
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -16,64 +17,11 @@ describe("Home Page", () => {
     vi.clearAllMocks();
   });
 
-  it("displays welcome heading", () => {
+  it("displays Get Started heading", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(screen.getByText("Welcome to Now Spinning")).toBeInTheDocument();
-  });
-
-  it("displays main description", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(screen.getByText(/Scrobble your vinyl listening to Last.fm/)).toBeInTheDocument();
-  });
-
-  it("displays feature description", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(
-      screen.getByText(/Pick a record from your Discogs collection.*let the app scrobble each track/)
-    ).toBeInTheDocument();
-  });
-
-  it("checks health endpoint on mount", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -84,15 +32,15 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/health");
+      expect(screen.getByText("Get Started")).toBeInTheDocument();
     });
   });
 
-  it("displays API connected status when health check succeeds", async () => {
+  it("displays Connect your music services heading", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -103,15 +51,15 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/✓ API connected/)).toBeInTheDocument();
+      expect(screen.getByText("Connect your music services")).toBeInTheDocument();
     });
   });
 
-  it("displays API issue status when health check returns non-ok status", async () => {
+  it("displays Discogs connection card", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "error", devMode: false }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -122,31 +70,18 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/⚠ API issue/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Connect Discogs" })).toBeInTheDocument();
+      expect(
+        screen.getByText(/Access your vinyl collection and search the global database/)
+      ).toBeInTheDocument();
     });
   });
 
-  it("displays API unavailable when fetch fails", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.reject(new Error("Network error"))
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/✗ API unavailable/)).toBeInTheDocument();
-    });
-  });
-
-  it("displays dev mode indicator when devMode is true", async () => {
+  it("displays Last.fm connection card", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "ok", devMode: true }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -157,15 +92,18 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/DEV MODE \(scrobbles logged only\)/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Connect Last.fm" })).toBeInTheDocument();
+      expect(
+        screen.getByText(/Enable scrobbling to track your listening habits/)
+      ).toBeInTheDocument();
     });
   });
 
-  it("does not display dev mode indicator when devMode is false", async () => {
+  it("displays Connect Discogs button when not connected", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -176,104 +114,16 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/✓ API connected/)).toBeInTheDocument();
+      const buttons = screen.getAllByRole("button", { name: /Connect Discogs/ });
+      expect(buttons.length).toBeGreaterThan(0);
     });
-
-    expect(screen.queryByText(/DEV MODE/)).not.toBeInTheDocument();
   });
 
-  it("displays Browse Discogs button", () => {
+  it("displays Connect Last.fm button when not connected", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(screen.getByRole("link", { name: "Browse Discogs" })).toBeInTheDocument();
-  });
-
-  it("displays Continue Session button", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(screen.getByRole("link", { name: "Continue Session" })).toBeInTheDocument();
-  });
-
-  it("Browse Discogs button links to search page", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    const browseLink = screen.getByRole("link", { name: "Browse Discogs" });
-    expect(browseLink).toHaveAttribute("href", "/search");
-  });
-
-  it("Continue Session button links to session page", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    const continueLink = screen.getByRole("link", { name: "Continue Session" });
-    expect(continueLink).toHaveAttribute("href", "/session");
-  });
-
-  it("displays M3 status note", () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok", devMode: false }),
-      })
-    );
-
-    render(
-      <BrowserRouter>
-        <Home />
-      </BrowserRouter>
-    );
-
-    expect(screen.getByText(/M3 \(Session MVP\)/)).toBeInTheDocument();
-  });
-
-  it("handles health check returning undefined devMode", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ status: "ok" }),
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -284,25 +134,17 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/✓ API connected/)).toBeInTheDocument();
+      const buttons = screen.getAllByRole("button", { name: /Connect Last\.fm/ });
+      expect(buttons.length).toBeGreaterThan(0);
     });
-
-    expect(screen.queryByText(/DEV MODE/)).not.toBeInTheDocument();
   });
 
-  it("displays checking API status initially", () => {
-    (global.fetch as any).mockImplementationOnce(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: true,
-                json: async () => ({ status: "ok", devMode: false }),
-              }),
-            100
-          )
-        )
+  it("does not show connect screen when Discogs is connected", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+      })
     );
 
     render(
@@ -311,6 +153,170 @@ describe("Home Page", () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText("Checking API...")).toBeInTheDocument();
+    await waitFor(() => {
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+    });
+
+    // After auth resolves the component navigates away; the connect UI must never appear
+    expect(screen.queryByText("Connect your music services")).not.toBeInTheDocument();
+  });
+
+  it("shows connected status for Last.fm when only Last.fm is connected", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ lastfmConnected: true, discogsConnected: false } as AuthStatusResponse),
+      })
+    );
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("\u2713 Connected")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show connect screen when both services are connected", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ lastfmConnected: true, discogsConnected: true } as AuthStatusResponse),
+      })
+    );
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+    });
+
+    expect(screen.queryByText("Connect your music services")).not.toBeInTheDocument();
+  });
+
+  it("displays privacy note", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+      })
+    );
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Privacy First")).toBeInTheDocument();
+      expect(
+        screen.getByText(/We value your privacy.*never stored.*secure OAuth tokens/)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("calls Discogs connect endpoint when Connect Discogs button clicked", async () => {
+    const mockFetch = vi.fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ redirectUrl: "https://discogs.com/oauth" }),
+        })
+      );
+    
+    global.fetch = mockFetch;
+
+    // Mock window.location.href
+    delete (window as any).location;
+    (window as any).location = { href: "" };
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Connect Discogs/ })).toBeInTheDocument();
+    });
+
+    const button = screen.getByRole("button", { name: /Connect Discogs/ });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/discogs/start", { method: "POST" });
+    });
+  });
+
+  it("calls Last.fm connect endpoint when Connect Last.fm button clicked", async () => {
+    const mockFetch = vi.fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ redirectUrl: "https://last.fm/oauth" }),
+        })
+      );
+    
+    global.fetch = mockFetch;
+
+    // Mock window.location.href
+    delete (window as any).location;
+    (window as any).location = { href: "" };
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Connect Last\.fm/ })).toBeInTheDocument();
+    });
+
+    const button = screen.getByRole("button", { name: /Connect Last\.fm/ });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start");
+    });
+  });
+
+  it("fetches auth status on mount", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+      })
+    );
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+    });
   });
 });

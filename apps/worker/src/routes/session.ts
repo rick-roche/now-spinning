@@ -13,6 +13,7 @@ import type { Context } from "hono";
 import {
   advanceSession,
   createSession,
+  endSession,
   normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
@@ -478,6 +479,72 @@ router.post(
       );
       if (!npResult.ok) {
         console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+      }
+    }
+
+    const response: SessionActionResponse = { session: updated };
+    return c.json(response);
+  }
+);
+
+router.post(
+  "/:id/end",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      const details: Record<string, string[]> = {};
+      const errors = (paramResult.error as any).errors || [];
+      errors.forEach((err: any) => {
+        const path = err.path.join(".");
+        if (!details[path]) details[path] = [];
+        details[path].push(err.message);
+      });
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Path parameters validation failed",
+            details,
+          },
+        },
+        400
+      );
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(
+        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
+        404
+      );
+    }
+
+    const tokens = await loadStoredTokens(kv, userId);
+
+    const now = Date.now();
+    const currentIndex = session.currentIndex;
+    const currentStartedAt = session.tracks[currentIndex]?.startedAt ?? now;
+
+    const updated = endSession(session);
+    await storeSession(kv, updated);
+
+    if (tokens.lastfm && session.state !== "ended") {
+      const scrobbleResult = await scrobbleTrack(
+        c.env,
+        tokens.lastfm.accessToken,
+        updated.release,
+        currentIndex,
+        Math.floor(currentStartedAt / 1000)
+      );
+      if (!scrobbleResult.ok) {
+        console.error("[POST /:id/end] Failed to scrobble track:", scrobbleResult.message);
       }
     }
 

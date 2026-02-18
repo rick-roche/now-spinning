@@ -14,8 +14,6 @@ export const LastFmCallbackQuerySchema = z.object({
   error: z.string().optional(),
 });
 
-export type LastFmCallbackQuery = z.infer<typeof LastFmCallbackQuerySchema>;
-
 /**
  * Discogs OAuth callback query parameters.
  * Discogs returns: ?oauth_token=<token>&oauth_verifier=<verifier>&error=<error>&error_description=<desc>
@@ -26,8 +24,6 @@ export const DiscogsCallbackQuerySchema = z.object({
   error: z.string().optional(),
   error_description: z.string().optional(),
 });
-
-export type DiscogsCallbackQuery = z.infer<typeof DiscogsCallbackQuerySchema>;
 
 /**
  * Generic OAuth callback query parameters.
@@ -40,12 +36,8 @@ export const OAuthCallbackQuerySchema = z.object({
   error_description: z.string().optional(),
 });
 
-export type OAuthCallbackQuery = z.infer<typeof OAuthCallbackQuerySchema>;
-
 /**
  * Disconnect request body (empty).
  * Service is determined from the route.
  */
 export const DisconnectRequestSchema = z.object({}).strict();
-
-export type DisconnectRequest = z.infer<typeof DisconnectRequestSchema>;

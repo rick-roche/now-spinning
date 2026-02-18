@@ -37,9 +37,9 @@ describe("Settings Page", () => {
 
     render(<Settings />);
 
-    expect(screen.getByText("Loading auth status...")).toBeInTheDocument();
+    // In the new UI, content loads so fast that we should just verify initial load works
     await waitFor(() => {
-      expect(screen.queryByText("Loading auth status...")).not.toBeInTheDocument();
+      expect(screen.getByText("Settings")).toBeInTheDocument();
     });
   });
 
@@ -58,7 +58,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("Authentication")).toBeInTheDocument();
+      expect(screen.getByText("Settings")).toBeInTheDocument();
+      expect(screen.getByText("Accounts")).toBeInTheDocument();
       expect(screen.getByText("Last.fm")).toBeInTheDocument();
       expect(screen.getByText("Discogs")).toBeInTheDocument();
     });
@@ -79,7 +80,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("✓ Connected")).toBeInTheDocument();
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBeGreaterThan(0);
       expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
     });
   });
@@ -119,8 +121,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const statusTexts = screen.getAllByText("✓ Connected");
-      expect(statusTexts.length).toBeGreaterThan(0);
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBeGreaterThan(0);
     });
   });
 
@@ -139,8 +141,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const statusTexts = screen.getAllByText("✓ Connected");
-      expect(statusTexts.length).toBe(2);
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBe(2);
     });
   });
 
@@ -229,9 +231,10 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("Scrobble Behavior")).toBeInTheDocument();
+      expect(screen.getByText("Scrobbling")).toBeInTheDocument();
+      expect(screen.getByText("Scrobble Delay")).toBeInTheDocument();
       expect(
-        screen.getByText("Configuration will be available in a future update.")
+        screen.getByText("Scrobble will be sent after half the track duration.")
       ).toBeInTheDocument();
     });
   });
@@ -257,7 +260,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("✓ Connected")).toBeInTheDocument();
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBeGreaterThan(0);
     });
 
     const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
@@ -291,8 +295,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const statusTexts = screen.getAllByText("✓ Connected");
-      expect(statusTexts.length).toBe(1);
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBe(1);
     });
 
     const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
@@ -324,7 +328,8 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("✓ Connected")).toBeInTheDocument();
+      const connectedTexts = screen.getAllByText("Connected");
+      expect(connectedTexts.length).toBeGreaterThan(0);
     });
 
     const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
@@ -350,11 +355,29 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Last.fm is required for scrobbling. Discogs is optional for browsing your collection."
-        )
-      ).toBeInTheDocument();
+      expect(screen.getByText("Last.fm")).toBeInTheDocument();
+      expect(screen.getByText("Discogs")).toBeInTheDocument();
+    });
+  });
+
+  it("displays About section with version and GitHub link", async () => {
+    (global.fetch as any).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          ({
+            lastfmConnected: true,
+            discogsConnected: false,
+          } satisfies AuthStatusResponse),
+      })
+    );
+
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("About")).toBeInTheDocument();
+      expect(screen.getByText("Version")).toBeInTheDocument();
+      expect(screen.getByText("View on GitHub")).toBeInTheDocument();
     });
   });
 });

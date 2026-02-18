@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  Button,
-  Card,
-  Flex,
-  Heading,
-  Spinner,
-  Text,
-} from "@radix-ui/themes";
+import { Icon } from "../components/Icon";
 import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
 
 export function Release() {
@@ -46,9 +39,7 @@ export function Release() {
   }, [id]);
 
   const groupedTracks = useMemo(() => {
-    if (!release) {
-      return [];
-    }
+    if (!release) return [];
 
     const groups = new Map<string, typeof release.tracks>();
     const order: string[] = [];
@@ -70,28 +61,21 @@ export function Release() {
   }, [release]);
 
   const formatDuration = (durationSec: number | null) => {
-    if (!durationSec && durationSec !== 0) {
-      return "—";
-    }
-
+    if (!durationSec && durationSec !== 0) return "—";
     const minutes = Math.floor(durationSec / 60);
     const seconds = durationSec % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const startSession = async () => {
-    if (!release) {
-      return;
-    }
+    if (!release) return;
 
     try {
       setStarting(true);
       setError(null);
       const response = await fetch("/api/session/start", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ releaseId: release.id }),
       });
 
@@ -108,80 +92,132 @@ export function Release() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="sync" className="text-4xl text-primary animate-spin mb-2" />
+          <p className="text-sm text-slate-500">Loading release...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !release) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-500/10 text-red-400 mb-4">
+            <Icon name="error" className="text-4xl" />
+          </div>
+          <h2 className="text-xl font-bold mb-2">Couldn&apos;t load release</h2>
+          <p className="text-slate-500 mb-6">{error}</p>
+          <Link
+            to="/collection"
+            className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+          >
+            Back to Collection
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!release) return null;
+
   return (
-    <Flex direction="column" gap="4">
-      <Button asChild size="2" variant="soft">
-        <Link to="/search">Back to Search</Link>
-      </Button>
+    <>
+      {/* Header */}
+      <header className="flex items-center justify-center px-6 py-4">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">
+          Release
+        </span>
+      </header>
 
-      {loading ? (
-        <Flex gap="2" align="center">
-          <Spinner />
-          <Text size="2">Loading release...</Text>
-        </Flex>
-      ) : error ? (
-        <Card style={{ backgroundColor: "#fee2e2" }}>
-          <Text size="2" color="red">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto px-6 pb-32">
+        {/* Album Art */}
+        <div className="mt-2 flex justify-center">
+          <div className="relative aspect-square w-full max-w-[220px]">
+            <div className="absolute inset-0 bg-black/40 rounded-xl translate-y-3 scale-95 blur-2xl" />
+            <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+              {release.coverUrl ? (
+                <img
+                  src={release.coverUrl}
+                  alt={`${release.title} cover`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-accent-dark/50">
+                  <Icon name="album" className="text-6xl text-text-muted" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Release Info */}
+        <div className="mt-8 text-center">
+          <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
+          <p className="text-base opacity-60 mt-1 font-medium">
+            {release.artist}{release.year ? ` · ${release.year}` : ""}
+          </p>
+        </div>
+
+        {/* Start Session Button */}
+        <div className="mt-6">
+          <button
+            onClick={() => void startSession()}
+            disabled={starting}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-primary text-white font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
+          >
+            <Icon name={starting ? "sync" : "play_arrow"} className={starting ? "animate-spin" : ""} />
+            {starting ? "Starting..." : "Start Scrobbling"}
+          </button>
+        </div>
+
+        {/* Tracklist */}
+        <div className="mt-8">
+          {groupedTracks.map((group) => (
+            <div key={group.key} className="mb-6">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <h3 className="text-xs uppercase font-bold tracking-[0.2em] opacity-40">
+                  {group.label}
+                </h3>
+              </div>
+              <div className="space-y-1">
+                {group.tracks.map((track) => (
+                  <div
+                    key={`${group.key}-${track.index}`}
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <span className="text-xs font-bold opacity-30 w-6 shrink-0">
+                      {track.position}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium opacity-80 truncate">{track.title}</p>
+                      {track.artist !== release.artist ? (
+                        <p className="text-[11px] opacity-40 truncate">{track.artist}</p>
+                      ) : null}
+                    </div>
+                    <span className="text-[10px] opacity-40 shrink-0">
+                      {formatDuration(track.durationSec)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {error && (
+        <div className="fixed bottom-24 left-0 right-0 mx-auto max-w-md px-4">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm">
             {error}
-          </Text>
-        </Card>
-      ) : release ? (
-        <>
-          <Flex direction="column" gap="2">
-            <Heading size="6">{release.title}</Heading>
-            <Text size="2" color="gray">
-              {release.artist}
-              {release.year ? ` · ${release.year}` : ""}
-            </Text>
-          </Flex>
-
-          {release.coverUrl ? (
-            <img
-              src={release.coverUrl}
-              alt={`${release.title} cover`}
-              style={{
-                width: "100%",
-                maxWidth: 320,
-                borderRadius: 12,
-                objectFit: "cover",
-              }}
-            />
-          ) : null}
-
-          <Card>
-            <Flex direction="column" gap="3">
-              {groupedTracks.map((group) => (
-                <Flex key={group.key} direction="column" gap="2">
-                  <Text size="2" weight="bold">
-                    {group.label}
-                  </Text>
-                  {group.tracks.map((track) => (
-                    <Flex key={`${group.key}-${track.index}`} justify="between" gap="3">
-                      <Flex direction="column" gap="1">
-                        <Text size="2">
-                          {track.position}. {track.title}
-                        </Text>
-                        {track.artist !== release.artist ? (
-                          <Text size="1" color="gray">
-                            {track.artist}
-                          </Text>
-                        ) : null}
-                      </Flex>
-                      <Text size="1" color="gray">
-                        {formatDuration(track.durationSec)}
-                      </Text>
-                    </Flex>
-                  ))}
-                </Flex>
-              ))}
-            </Flex>
-          </Card>
-
-          <Button size="3" disabled={starting} onClick={() => void startSession()}>
-            {starting ? "Starting..." : "Start Session"}
-          </Button>
-        </>
-      ) : null}
-    </Flex>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

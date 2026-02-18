@@ -65,12 +65,13 @@ const renderSessionPage = () => {
 
 describe("SessionPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    global.fetch = vi.fn();
     sessionStorage.clear();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("displays loading state initially", () => {
@@ -82,19 +83,13 @@ describe("SessionPage", () => {
     );
 
     // Mock health check
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
 
     renderSessionPage();
 
     expect(screen.getByText("Loading session...")).toBeInTheDocument();
   });
 
-  it("displays error state when session fetch fails", async () => {
+  it("falls back to no session state when session fetch fails", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
@@ -103,17 +98,12 @@ describe("SessionPage", () => {
     );
 
     // Mock health check
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
 
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load session")).toBeInTheDocument();
+      expect(screen.getByText("No active session")).toBeInTheDocument();
+      expect(screen.getByText("Pick a release to start listening.")).toBeInTheDocument();
     });
   });
 
@@ -122,13 +112,6 @@ describe("SessionPage", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: null } satisfies SessionCurrentResponse),
-      })
-    );
-
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
       })
     );
 
@@ -148,21 +131,13 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
       expect(screen.getByText("Now Playing")).toBeInTheDocument();
+      expect(screen.getByText("Test Artist")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "First Track" })).toBeInTheDocument();
     });
-
-    expect(screen.getByText("Test Artist")).toBeInTheDocument();
-    expect(screen.getByText("Test Album")).toBeInTheDocument();
   });
 
   it("displays current track information", async () => {
@@ -173,21 +148,15 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("A1. First Track")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "First Track" })).toBeInTheDocument();
+      expect(screen.getAllByText("A1").length).toBeGreaterThan(0);
     });
   });
 
-  it("displays status badge with Playing when session is running", async () => {
+  it("displays status badge when session is running", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -195,41 +164,26 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Playing")).toBeInTheDocument();
+      expect(screen.getByText("Now Playing")).toBeInTheDocument();
+      expect(screen.getByText("Syncing to Last.fm")).toBeInTheDocument();
     });
   });
 
-  it("displays status badge with Paused when session is paused", async () => {
-    const pausedSession = { ...mockSession, state: "paused" as const };
-
+  it("displays pause button label when session is running", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ session: pausedSession } satisfies SessionCurrentResponse),
-      })
-    );
-
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
+        json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
       })
     );
 
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Paused")).toBeInTheDocument();
+      expect(screen.getByText("Pause Scrobble")).toBeInTheDocument();
     });
   });
 
@@ -241,17 +195,10 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+      expect(screen.getByText("Pause Scrobble")).toBeInTheDocument();
     });
   });
 
@@ -265,21 +212,14 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+      expect(screen.getByText("Resume")).toBeInTheDocument();
     });
   });
 
-  it("displays Next Track button", async () => {
+  it("displays Skip Track button", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -287,17 +227,10 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Next Track" })).toBeInTheDocument();
+      expect(screen.getByText("Skip Track")).toBeInTheDocument();
     });
   });
 
@@ -309,20 +242,11 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      const progressBar = screen.getByRole("progressbar");
-      expect(progressBar).toBeInTheDocument();
-      expect(progressBar).toHaveAttribute("aria-valuemin", "0");
-      expect(progressBar).toHaveAttribute("aria-valuemax", "100");
+      expect(screen.getByText("0:00")).toBeInTheDocument();
+      expect(screen.getByText("4:00")).toBeInTheDocument();
     });
   });
 
@@ -334,22 +258,15 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/elapsed/)).toBeInTheDocument();
-      expect(screen.getByText(/left/)).toBeInTheDocument();
+      expect(screen.getByText("0:00")).toBeInTheDocument();
+      expect(screen.getByText("4:00")).toBeInTheDocument();
     });
   });
 
-  it("displays auto-advance message in non-dev mode", async () => {
+  it("displays upcoming tracks section", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -357,21 +274,15 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Auto-advance on track end")).toBeInTheDocument();
+      expect(screen.getByText("Coming up")).toBeInTheDocument();
+      expect(screen.getByText("Playing now")).toBeInTheDocument();
     });
   });
 
-  it("displays dev mode message when in dev mode", async () => {
+  it("displays session page when in dev mode", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -379,21 +290,14 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: true }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/DEV MODE: Scrobbles logged only/)).toBeInTheDocument();
+      expect(screen.getByText("Now Playing")).toBeInTheDocument();
     });
   });
 
-  it("displays Back to Search link", async () => {
+  it("displays track list with current track", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -401,18 +305,11 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      const backLinks = screen.getAllByText("Back to Search");
-      expect(backLinks.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole("heading", { name: "First Track" })).toBeInTheDocument();
+      expect(screen.getByText("Second Track")).toBeInTheDocument();
     });
   });
 
@@ -427,12 +324,6 @@ describe("SessionPage", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ devMode: false }),
-        })
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
           json: () =>
             Promise.resolve({
               session: { ...mockSession, state: "paused" },
@@ -442,7 +333,11 @@ describe("SessionPage", () => {
 
     renderSessionPage();
 
-    const pauseButton = await screen.findByRole("button", { name: "Pause" });
+    await waitFor(() => {
+      expect(screen.getByText("Pause Scrobble")).toBeInTheDocument();
+    });
+
+    const pauseButton = screen.getByText("Pause Scrobble").closest("button")!;
     fireEvent.click(pauseButton);
 
     await waitFor(() => {
@@ -465,12 +360,6 @@ describe("SessionPage", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ devMode: false }),
-        })
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
           json: () =>
             Promise.resolve({
               session: { ...pausedSession, state: "running" },
@@ -480,7 +369,11 @@ describe("SessionPage", () => {
 
     renderSessionPage();
 
-    const resumeButton = await screen.findByRole("button", { name: "Resume" });
+    await waitFor(() => {
+      expect(screen.getByText("Resume")).toBeInTheDocument();
+    });
+
+    const resumeButton = screen.getByText("Resume").closest("button")!;
     fireEvent.click(resumeButton);
 
     await waitFor(() => {
@@ -501,12 +394,6 @@ describe("SessionPage", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ devMode: false }),
-        })
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
           json: () =>
             Promise.resolve({
               session: { ...mockSession, currentIndex: 1 },
@@ -516,7 +403,11 @@ describe("SessionPage", () => {
 
     renderSessionPage();
 
-    const nextButton = await screen.findByRole("button", { name: "Next Track" });
+    await waitFor(() => {
+      expect(screen.getByText("Skip Track")).toBeInTheDocument();
+    });
+
+    const nextButton = screen.getByText("Skip Track").closest("button")!;
     fireEvent.click(nextButton);
 
     await waitFor(() => {
@@ -536,12 +427,6 @@ describe("SessionPage", () => {
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ devMode: false }),
-        })
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
           ok: false,
           json: () =>
             Promise.resolve({
@@ -552,7 +437,11 @@ describe("SessionPage", () => {
 
     renderSessionPage();
 
-    const pauseButton = await screen.findByRole("button", { name: "Pause" });
+    await waitFor(() => {
+      expect(screen.getByText("Pause Scrobble")).toBeInTheDocument();
+    });
+
+    const pauseButton = screen.getByText("Pause Scrobble").closest("button")!;
     fireEvent.click(pauseButton);
 
     await waitFor(() => {
@@ -560,7 +449,7 @@ describe("SessionPage", () => {
     });
   });
 
-  it("displays Browse Discogs link when no session", async () => {
+  it("displays Browse Collection link when no session", async () => {
     (global.fetch as any).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
@@ -568,18 +457,10 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      const browseLinks = screen.getAllByText("Browse Discogs");
-      expect(browseLinks.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("Browse Collection")).toBeInTheDocument();
     });
   });
 
@@ -611,17 +492,10 @@ describe("SessionPage", () => {
       })
     );
 
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ devMode: false }),
-      })
-    );
-
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Duration unknown, auto-advance unavailable.")).toBeInTheDocument();
+      expect(screen.getByText("Duration unknown")).toBeInTheDocument();
     });
   });
 
@@ -631,12 +505,6 @@ describe("SessionPage", () => {
         Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
-        })
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ devMode: false }),
         })
       )
       .mockImplementationOnce(() =>
@@ -652,14 +520,16 @@ describe("SessionPage", () => {
     renderSessionPage();
 
     await waitFor(() => {
-      expect(screen.getByText("A1. First Track")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "First Track" })).toBeInTheDocument();
+      expect(screen.getAllByText("A1").length).toBeGreaterThan(0);
     });
 
-    const nextButton = screen.getByRole("button", { name: "Next Track" });
+    const nextButton = screen.getByText("Skip Track").closest("button")!;
     fireEvent.click(nextButton);
 
     await waitFor(() => {
-      expect(screen.getByText("A2. Second Track")).toBeInTheDocument();
+      expect(screen.getByText("A2")).toBeInTheDocument();
+      expect(screen.getByText("Second Track")).toBeInTheDocument();
     });
   });
 });

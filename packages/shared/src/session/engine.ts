@@ -54,6 +54,13 @@ export function resumeSession(session: Session, resumedAt: number): Session {
   return { ...session, state: "running", tracks };
 }
 
+export function endSession(session: Session): Session {
+  if (session.state === "ended") {
+    return session;
+  }
+  return { ...session, state: "ended" };
+}
+
 export function advanceSession(session: Session, advancedAt: number): Session {
   if (session.tracks.length === 0) {
     return { ...session, state: "ended" };

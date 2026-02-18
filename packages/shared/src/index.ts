@@ -12,6 +12,7 @@ export type {
 export {
   advanceSession,
   createSession,
+  endSession,
   pauseSession,
   resumeSession,
 } from "./session/engine.js";

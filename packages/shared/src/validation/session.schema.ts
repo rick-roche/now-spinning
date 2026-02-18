@@ -13,8 +13,6 @@ export const SessionStartRequestSchema = z.object({
   releaseId: z.string().trim().min(1, "Release ID is required"),
 });
 
-export type SessionStartRequest = z.infer<typeof SessionStartRequestSchema>;
-
 /**
  * Session ID validation.
  * Session IDs are UUIDs generated server-side.

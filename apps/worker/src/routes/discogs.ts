@@ -27,6 +27,7 @@ type HonoContext = Context<{ Bindings: CloudflareBinding }>;
 const DISCOGS_API_BASE = "https://api.discogs.com";
 const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
 const CACHE_TTL_SECONDS = 600;
+const CACHE_VERSION = "v2";
 
 interface DiscogsIdentityResponse {
   username?: string;
@@ -44,6 +45,7 @@ interface DiscogsCollectionApiResponse {
 
 interface DiscogsCollectionRelease {
   id?: number;
+  date_added?: string;
   basic_information?: {
     id?: number;
     title?: string;
@@ -134,6 +136,7 @@ function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsColl
     year,
     thumbUrl: basic.thumb ?? basic.cover_image ?? null,
     formats,
+    dateAdded: release.date_added ?? null,
   };
 }
 
@@ -237,7 +240,7 @@ router.get("/collection", async (c: HonoContext) => {
     Math.max(5, Number.parseInt(c.req.query("perPage") ?? "25", 10) || 25)
   );
 
-  const cacheKey = `discogs:collection:${sessionId}:${page}:${perPage}`;
+  const cacheKey = `discogs:collection:${CACHE_VERSION}:${sessionId}:${page}:${perPage}`;
   const cached = await kv.get<DiscogsCollectionResponse>(cacheKey, "json");
   if (cached) {
     return c.json(cached);

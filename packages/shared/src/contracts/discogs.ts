@@ -10,6 +10,7 @@ export interface DiscogsCollectionItem {
   year: number | null;
   thumbUrl: string | null;
   formats: string[];
+  dateAdded?: string | null;
 }
 
 export interface DiscogsCollectionResponse {

@@ -112,6 +112,7 @@ describe("Release Page", () => {
     });
 
     expect(screen.getByText("Pink Floyd · 1973")).toBeInTheDocument();
+    expect(screen.getByText("The Dark Side of the Moon")).toBeInTheDocument();
   });
 
   it("displays cover image when available", async () => {
@@ -157,9 +158,9 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByText(/A1\. Speak to Me/)).toBeInTheDocument();
-      expect(screen.getByText(/A2\. Breathe/)).toBeInTheDocument();
-      expect(screen.getByText(/B1\. Time/)).toBeInTheDocument();
+      expect(screen.getByText("Speak to Me")).toBeInTheDocument();
+      expect(screen.getByText("Breathe")).toBeInTheDocument();
+      expect(screen.getByText("Time")).toBeInTheDocument();
     });
   });
 
@@ -275,7 +276,7 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start Session" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
   });
 
@@ -296,10 +297,10 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start Session" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole("button", { name: "Start Session" });
+    const startButton = screen.getByRole("button", { name: /Start Scrobbling/i });
     fireEvent.click(startButton);
 
     await waitFor(() => {
@@ -324,10 +325,10 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start Session" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole("button", { name: "Start Session" });
+    const startButton = screen.getByRole("button", { name: /Start Scrobbling/i });
     fireEvent.click(startButton);
 
     await waitFor(() => {
@@ -353,45 +354,14 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start Session" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole("button", { name: "Start Session" });
+    const startButton = screen.getByRole("button", { name: /Start Scrobbling/i });
     fireEvent.click(startButton);
 
     await waitFor(() => {
       expect(screen.getByText("Session start failed")).toBeInTheDocument();
-    });
-  });
-
-  it("displays Back to Search link", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
-      })
-    );
-
-    renderWithRouter();
-
-    expect(screen.getByRole("link", { name: "Back to Search" })).toBeInTheDocument();
-  });
-
-  it("navigates to search when Back to Search clicked", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
-      })
-    );
-
-    renderWithRouter();
-
-    const backLink = screen.getByRole("link", { name: "Back to Search" });
-    fireEvent.click(backLink);
-
-    await waitFor(() => {
-      expect(screen.getByText("Search Page")).toBeInTheDocument();
     });
   });
 
@@ -406,7 +376,7 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByText(/1973/)).toBeInTheDocument();
+      expect(screen.getByText("Pink Floyd · 1973")).toBeInTheDocument();
     });
   });
 
@@ -458,14 +428,14 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Start Session" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
 
-    const startButton = screen.getByRole("button", { name: "Start Session" });
+    const startButton = screen.getByRole("button", { name: /Start Scrobbling/i });
     fireEvent.click(startButton);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Starting.../i })).toBeDisabled();
     });
   });
 });
