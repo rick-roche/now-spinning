@@ -7,7 +7,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "dev": "concurrently -n WORKER,WEB -c auto \"pnpm -C apps/worker dev --env development\" \"pnpm -C apps/web dev\"",
+    "dev": "concurrently -n WORKER,WEB -c auto \"pnpm -C apps/worker dev\" \"pnpm -C apps/web dev\"",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
@@ -30,6 +30,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "knip": "^5.40.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.55.0"
+    "typescript-eslint": "^8.55.0",
+    "wrangler": "^4.65.0"
   }
 }

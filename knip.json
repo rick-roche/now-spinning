@@ -16,5 +16,6 @@
       "entry": [],
       "ignore": ["dist/**", "coverage/**"]
     }
-  }
+  },
+  "ignoreDependencies": ["wrangler"]
 }
