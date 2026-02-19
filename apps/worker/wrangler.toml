@@ -1,6 +1,6 @@
 name = "now-spinning-api"
 main = "src/index.ts"
-compatibility_date = "2026-02-14"
+compatibility_date = "2026-02-12"
 
 # KV namespace for token/session storage
 # Local dev: automatically created
