@@ -2,24 +2,27 @@ name = "now-spinning-api"
 main = "src/index.ts"
 compatibility_date = "2026-02-12"
 
-# KV namespace for token/session storage
-# Local dev: automatically created
-# Production: run: wrangler kv namespace create now_spinning_kv --preview false
+# Default = local dev environment
 kv_namespaces = [
-  { binding = "NOW_SPINNING_KV", id = "dev" }
-]
-
-[env.production]
-kv_namespaces = [
-  { binding = "NOW_SPINNING_KV", id = "REPLACE_WITH_PROD_KV_ID" }
+  { binding = "NOW_SPINNING_KV", id = "LOCAL_KV_ID", preview_id = "LOCAL_PREVIEW_KV_ID" }
 ]
 
 [vars]
-# Non-secret configuration
 PUBLIC_APP_ORIGIN = "http://localhost:5173"
 LASTFM_CALLBACK_URL = "http://localhost:8787/api/auth/lastfm/callback"
 DISCOGS_CALLBACK_URL = "http://localhost:8787/api/auth/discogs/callback"
 DEV_MODE = "true"
+
+[env.production]
+kv_namespaces = [
+  { binding = "NOW_SPINNING_KV", id = "1d0f824e743e4228a407d19deb6f416c", preview_id = "618e3ab2ce1a427ca28f566697420755" }
+]
+
+[env.production.vars]
+PUBLIC_APP_ORIGIN = "https://rickroche.workers.dev"
+LASTFM_CALLBACK_URL = "https://rickroche.workers.dev/api/auth/lastfm/callback"
+DISCOGS_CALLBACK_URL = "https://rickroche.workers.dev/api/auth/discogs/callback"
+DEV_MODE = "false"
 
 # Secrets (set with: wrangler secret put KEY --env development)
 # Note: These are required before OAuth flows will work:
