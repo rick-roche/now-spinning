@@ -1,10 +1,14 @@
 # Now Spinning — Vinyl Scrobbler
 
-A mobile-first app for scrobbling vinyl listening sessions to Last.fm.
+CI: ![CI](https://img.shields.io/github/actions/workflow/status/rick-roche/now-spinning/ci.yml) | Deploy: ![Deploy](https://img.shields.io/github/actions/workflow/status/rick-roche/now-spinning/deploy.yml)
 
-Pick a record from your Discogs collection, tap **Now Playing**, and let the app scrobble each track as you listen.
 
----
+A mobile-first app for scrobbling vinyl listening sessions to [last.fm](https://www.last.fm/).
+
+Connect your [last.fm](https://www.last.fm/) and [Discogs](https://www.discogs.com/) accounts and then
+
+- Pick a record from your [Discogs](https://www.discogs.com/) collection
+- Tap **Start Scrobbling**, and let the app scrobble each track as you listen.
 
 ## Documentation
 
@@ -37,6 +41,15 @@ pnpm install
 
 ### 2. Start local development
 
+There are secrets that are needed (set with: wrangler secret put KEY --env development or in a `apps/worker/.dev.vars` file)
+
+Note: These are required before OAuth flows will work.
+
+- LASTFM_API_KEY
+- LASTFM_API_SECRET
+- DISCOGS_CONSUMER_KEY
+- DISCOGS_CONSUMER_SECRET
+
 This runs both the SPA and Worker concurrently:
 
 ```bash
@@ -51,11 +64,7 @@ The SPA proxies `/api/*` requests to the Worker automatically.
 
 ### 3. Verify it works
 
-Open http://localhost:5173 in your browser. You should see:
-
-- A Radix Themes-styled home page
-- An API health status indicator
-- Navigation to Home and Settings
+Open http://localhost:5173 in your browser.
 
 ---
 
@@ -92,8 +101,6 @@ pnpm -C apps/worker deploy
 pnpm -C packages/shared test
 ```
 
----
-
 ## Project structure
 
 ```
@@ -105,13 +112,9 @@ now-spinning/
 │   └── shared/        # Shared types + pure logic
 ├── .github/
 │   └── workflows/     # CI pipeline
-├── SPEC.md            # Product specification
 ├── AGENTS.md          # Agent workflow guide
-├── PLAN.md            # Implementation plan
 └── README.md          # This file
 ```
-
----
 
 ## Architecture
 
@@ -129,42 +132,12 @@ now-spinning/
 
 See [SPEC.md](SPEC.md) for detailed architecture and security model.
 
----
-
-## Current milestone: M0 (Skeleton)
-
-**Status:** ✅ Complete
-
-**Deliverables:**
-- ✅ Monorepo with pnpm workspaces
-- ✅ React SPA with Radix Themes
-- ✅ Worker with `/api/health` endpoint
-- ✅ Shared types package
-- ✓ CI pipeline (typecheck + test + lint + knip)
-- ✓ ESLint with TypeScript and React support
-
-**Next:** M1 will add Discogs and Last.fm OAuth authentication.
-
----
-
 ## Contributing
 
-This project uses agents to accelerate development while maintaining quality.
-
-Before starting work:
-
-1. Read [AGENTS.md](AGENTS.md) for workflow and role definitions
-2. Check [PLAN.md](PLAN.md) for current tasks and progress
-3. Ensure your changes match the **Definition of Ready** criteria
-
-All PRs should include:
-
-- Test evidence (`pnpm test`, `pnpm typecheck`, `pnpm knip`)
-- Mobile UX verification (screenshots for UI changes)
-- Clear description of what changed and why
-
----
+Contributions welcome — please open issues or pull requests with a clear description of changes and ensure tests pass.
 
 ## License
 
-Private project — not currently open source.
+See the [LICENSE](./LICENSE) file in the repository root.
+
+
