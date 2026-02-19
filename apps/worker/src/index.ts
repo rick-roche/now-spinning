@@ -14,10 +14,11 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      // Note: We can't access c.env from origin callback in current Hono version
-      // Defaulting to development origins for now
-      // TODO: Consider middleware approach or upgrade Hono if needed
-      const allowedOrigins = ["http://localhost:5173", "http://localhost:8787"];
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:8787",
+        "https://now-spinning.pages.dev"
+      ];
       return allowedOrigins.includes(origin) ? origin : allowedOrigins[0] ?? origin;
     },
     credentials: true,

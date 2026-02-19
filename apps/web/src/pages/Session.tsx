@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { getApiUrl } from "../lib/api";
 import type { Session, SessionActionResponse, SessionCurrentResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -27,7 +28,7 @@ export function SessionPage() {
   const loadSession = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/session/current");
+      const response = await fetch(getApiUrl("/api/session/current"));
       if (!response.ok) {
         throw new Error("Failed to load session");
       }
@@ -88,7 +89,7 @@ export function SessionPage() {
 
       try {
         setError(null);
-        const response = await fetch(`/api/session/${session.id}/${action}`, {
+        const response = await fetch(getApiUrl(`/api/session/${session.id}/${action}`), {
           method: "POST",
         });
         if (!response.ok) {

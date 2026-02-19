@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { getApiUrl } from "../lib/api";
 import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
 
 export function Release() {
@@ -21,7 +22,7 @@ export function Release() {
 
       try {
         setLoading(true);
-        const response = await fetch(`/api/discogs/release/${id}`);
+        const response = await fetch(getApiUrl(`/api/discogs/release/${id}`));
         if (!response.ok) {
           throw new Error("Failed to load release");
         }
@@ -73,7 +74,7 @@ export function Release() {
     try {
       setStarting(true);
       setError(null);
-      const response = await fetch("/api/session/start", {
+      const response = await fetch(getApiUrl("/api/session/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ releaseId: release.id }),

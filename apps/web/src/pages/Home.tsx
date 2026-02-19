@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getApiUrl } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import type { AuthStatusResponse } from "@repo/shared";
@@ -16,7 +17,7 @@ export function Home() {
     let cancelled = false;
     const fetchStatus = async () => {
       try {
-        const response = await fetch("/api/auth/status");
+        const response = await fetch(getApiUrl("/api/auth/status"));
         if (!response.ok) throw new Error("Failed to fetch auth status");
         const data = (await response.json()) as AuthStatusResponse;
         if (cancelled) return;
@@ -39,7 +40,7 @@ export function Home() {
 
   const handleConnectDiscogs = async () => {
     try {
-      const response = await fetch("/api/auth/discogs/start", { method: "POST" });
+      const response = await fetch(getApiUrl("/api/auth/discogs/start"), { method: "POST" });
       const data = (await response.json()) as OAuthStartResponse;
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
@@ -51,7 +52,7 @@ export function Home() {
 
   const handleConnectLastFm = async () => {
     try {
-      const response = await fetch("/api/auth/lastfm/start");
+      const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
       const data = (await response.json()) as OAuthStartResponse;
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../components/Icon";
+import { getApiUrl } from "../lib/api";
 import type { AuthStatusResponse } from "@repo/shared";
 
 interface OAuthStartResponse {
@@ -16,7 +17,7 @@ export function Settings() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch("/api/auth/status");
+        const response = await fetch(getApiUrl("/api/auth/status"));
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
@@ -34,7 +35,7 @@ export function Settings() {
 
   const handleConnectLastFm = async () => {
     try {
-      const response = await fetch("/api/auth/lastfm/start");
+      const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
       const data = (await response.json()) as OAuthStartResponse;
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
@@ -46,7 +47,7 @@ export function Settings() {
 
   const handleConnectDiscogs = async () => {
     try {
-      const response = await fetch("/api/auth/discogs/start", {
+      const response = await fetch(getApiUrl("/api/auth/discogs/start"), {
         method: "POST",
       });
       const data = (await response.json()) as OAuthStartResponse;
@@ -60,7 +61,7 @@ export function Settings() {
 
   const handleDisconnectLastFm = async () => {
     try {
-      await fetch("/api/auth/lastfm/disconnect", { method: "POST" });
+      await fetch(getApiUrl("/api/auth/lastfm/disconnect"), { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
     } catch (err) {
       setError((err as Error).message);
@@ -69,7 +70,7 @@ export function Settings() {
 
   const handleDisconnectDiscogs = async () => {
     try {
-      await fetch("/api/auth/discogs/disconnect", { method: "POST" });
+      await fetch(getApiUrl("/api/auth/discogs/disconnect"), { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
     } catch (err) {
       setError((err as Error).message);

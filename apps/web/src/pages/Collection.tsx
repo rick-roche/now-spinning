@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { getApiUrl } from "../lib/api";
 import type {
   AuthStatusResponse,
   DiscogsCollectionItem,
@@ -45,7 +46,7 @@ export function Collection() {
         setLoading(true);
       }
 
-      const response = await fetch(`/api/discogs/collection?page=${nextPage}`);
+      const response = await fetch(getApiUrl(`/api/discogs/collection?page=${nextPage}`));
       if (!response.ok) {
         throw new Error("Failed to load collection");
       }
@@ -66,7 +67,7 @@ export function Collection() {
     const fetchStatus = async () => {
       try {
         setLoadingStatus(true);
-        const response = await fetch("/api/auth/status");
+        const response = await fetch(getApiUrl("/api/auth/status"));
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
@@ -125,7 +126,7 @@ export function Collection() {
         }
 
         const response = await fetch(
-          `/api/discogs/search?query=${encodeURIComponent(trimmed)}&page=${nextPage}`
+          getApiUrl(`/api/discogs/search?query=${encodeURIComponent(trimmed)}&page=${nextPage}`)
         );
         if (!response.ok) {
           throw new Error("Failed to search Discogs");
