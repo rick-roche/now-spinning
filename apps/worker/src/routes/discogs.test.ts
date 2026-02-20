@@ -454,6 +454,36 @@ describe("Discogs Proxy Routes", () => {
       }
     });
 
+    it("should send Authorization header with app credentials", async () => {
+      let capturedInit: RequestInit | undefined;
+      const originalFetch = global.fetch;
+      global.fetch = async (input: string | Request | URL, init?: RequestInit) => {
+        const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+        if (urlStr.includes("/database/search")) {
+          capturedInit = init;
+          return new Response(
+            JSON.stringify({ pagination: { page: 1, pages: 1, per_page: 25, items: 0 }, results: [] }),
+            { status: 200 }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const response = await app.request(
+          new Request("http://localhost:8787/discogs/search?query=test")
+        );
+        expect(response.status).toBe(200);
+        expect(capturedInit).toBeDefined();
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers["Authorization"]).toBe("Discogs key=test-key, secret=test-secret");
+        expect(headers["User-Agent"]).toBe("NowSpinning/0.0.1 +now-spinning.dev");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
     it("should handle Discogs search errors", async () => {
       const originalFetch = global.fetch;
       global.fetch = async () => new Response("Server error", { status: 500 });
@@ -586,6 +616,36 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(200);
         const body = (await response.json()) as Record<string, unknown>;
         expect((body.release as any).title).toBe("Test Album");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should send Authorization header with app credentials", async () => {
+      let capturedInit: RequestInit | undefined;
+      const originalFetch = global.fetch;
+      global.fetch = async (input: string | Request | URL, init?: RequestInit) => {
+        const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+        if (urlStr.includes("/releases/")) {
+          capturedInit = init;
+          return new Response(
+            JSON.stringify({ id: 123, title: "Test Album", year: 2024, artists: [{ name: "Test Artist" }], tracklist: [] }),
+            { status: 200 }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const response = await app.request(
+          new Request("http://localhost:8787/discogs/release/123")
+        );
+        expect(response.status).toBe(200);
+        expect(capturedInit).toBeDefined();
+        const headers = capturedInit?.headers as Record<string, string>;
+        expect(headers["Authorization"]).toBe("Discogs key=test-key, secret=test-secret");
+        expect(headers["User-Agent"]).toBe("NowSpinning/0.0.1 +now-spinning.dev");
       } finally {
         global.fetch = originalFetch;
       }

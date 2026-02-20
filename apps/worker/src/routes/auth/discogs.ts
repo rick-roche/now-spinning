@@ -76,6 +76,10 @@ router.post("/start", async (c: HonoContext) => {
       headers: { "User-Agent": "NowSpinning/0.0.1 +now-spinning.dev" },
     });
 
+    console.log(
+      `[Discogs] /oauth/request_token → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")}`
+    );
+
     if (!response.ok) {
       return discogsError(response);
     }
@@ -145,6 +149,10 @@ router.get("/callback", async (c: HonoContext) => {
       method: "POST",
       headers: { "User-Agent": "NowSpinning/0.0.1 +now-spinning.dev" },
     });
+
+    console.log(
+      `[Discogs] /oauth/access_token → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")}`
+    );
 
     if (!response.ok) {
       return discogsError(response);

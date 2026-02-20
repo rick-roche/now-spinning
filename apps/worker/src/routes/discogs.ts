@@ -185,6 +185,11 @@ async function fetchDiscogsJson<T>(
     headers,
   });
 
+  const urlPath = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+  console.log(
+    `[Discogs] ${urlPath} → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")} auth=${authHeader ? "yes" : "no"}`
+  );
+
   if (!response.ok) {
     return { ok: false, status: response.status };
   }
@@ -207,9 +212,8 @@ function getDiscogsAppCredentials(
   return { consumerKey, consumerSecret };
 }
 
-function applyAppAuth(url: URL, consumerKey: string, consumerSecret: string): void {
-  url.searchParams.set("key", consumerKey);
-  url.searchParams.set("secret", consumerSecret);
+function createAppAuthHeader(consumerKey: string, consumerSecret: string): string {
+  return `Discogs key=${consumerKey}, secret=${consumerSecret}`;
 }
 
 router.get("/collection", async (c: HonoContext) => {
@@ -359,9 +363,9 @@ router.get("/search", async (c: HonoContext) => {
   searchUrl.searchParams.set("type", "release");
   searchUrl.searchParams.set("page", page.toString());
   searchUrl.searchParams.set("per_page", perPage.toString());
-  applyAppAuth(searchUrl, appCredentials.consumerKey, appCredentials.consumerSecret);
+  const searchAuthHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
 
-  const searchResponse = await fetchDiscogsJson<DiscogsSearchApiResponse>(searchUrl.toString());
+  const searchResponse = await fetchDiscogsJson<DiscogsSearchApiResponse>(searchUrl.toString(), searchAuthHeader);
   if (!searchResponse.ok) {
     const statusCode = searchResponse.status >= 500 ? 502 : 400;
     return c.json(
@@ -418,10 +422,11 @@ router.get("/release/:id", async (c: HonoContext) => {
   }
 
   const releaseUrl = new URL(`${DISCOGS_API_BASE}/releases/${releaseId}`);
-  applyAppAuth(releaseUrl, appCredentials.consumerKey, appCredentials.consumerSecret);
+  const releaseAuthHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
 
   const releaseResponse = await fetchDiscogsJson<DiscogsReleaseApiResponse>(
-    releaseUrl.toString()
+    releaseUrl.toString(),
+    releaseAuthHeader
   );
 
   if (!releaseResponse.ok) {
