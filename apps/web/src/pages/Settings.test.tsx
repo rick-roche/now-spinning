@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Settings } from "./Settings";
 import type { AuthStatusResponse } from "@repo/shared";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fetchMock = vi.fn() as any;
+global.fetch = fetchMock;
 
 describe("Settings Page", () => {
   beforeEach(() => {
@@ -17,14 +17,14 @@ describe("Settings Page", () => {
   });
 
   it("displays loading state initially", async () => {
-    (global.fetch as any).mockImplementationOnce(
+    fetchMock.mockImplementationOnce(
       () =>
         new Promise((resolve) =>
           setTimeout(
             () =>
               resolve({
                 ok: true,
-                json: async () =>
+                json: () =>
                   ({
                     lastfmConnected: true,
                     discogsConnected: false,
@@ -44,10 +44,10 @@ describe("Settings Page", () => {
   });
 
   it("displays auth status when loaded", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: false,
@@ -66,10 +66,10 @@ describe("Settings Page", () => {
   });
 
   it("displays Last.fm connected status when connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: false,
@@ -87,10 +87,10 @@ describe("Settings Page", () => {
   });
 
   it("displays Last.fm not connected status when disconnected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: false,
             discogsConnected: false,
@@ -107,10 +107,10 @@ describe("Settings Page", () => {
   });
 
   it("displays Discogs connected status when connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: false,
             discogsConnected: true,
@@ -127,10 +127,10 @@ describe("Settings Page", () => {
   });
 
   it("displays both connected when both are connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: true,
@@ -147,10 +147,10 @@ describe("Settings Page", () => {
   });
 
   it("displays Last.fm Disconnect button when connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: false,
@@ -167,11 +167,11 @@ describe("Settings Page", () => {
   });
 
   it("calls Last.fm connect endpoint when Connect button clicked", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () =>
+          json: () =>
             ({
               lastfmConnected: false,
               discogsConnected: false,
@@ -191,7 +191,7 @@ describe("Settings Page", () => {
   });
 
   it("handles auth status fetch failure", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
       })
@@ -205,7 +205,7 @@ describe("Settings Page", () => {
   });
 
   it("displays error message when fetch rejects", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.reject(new Error("Network error"))
     );
 
@@ -217,10 +217,10 @@ describe("Settings Page", () => {
   });
 
   it("displays Scrobble Behavior card", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: true,
@@ -240,11 +240,11 @@ describe("Settings Page", () => {
   });
 
   it("updates Last.fm status when disconnect clicked", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () =>
+          json: () =>
             ({
               lastfmConnected: true,
               discogsConnected: false,
@@ -275,11 +275,11 @@ describe("Settings Page", () => {
   });
 
   it("updates Discogs status when disconnect clicked", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () =>
+          json: () =>
             ({
               lastfmConnected: false,
               discogsConnected: true,
@@ -310,11 +310,11 @@ describe("Settings Page", () => {
   });
 
   it("handles disconnect error gracefully", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () =>
+          json: () =>
             ({
               lastfmConnected: true,
               discogsConnected: false,
@@ -341,10 +341,10 @@ describe("Settings Page", () => {
   });
 
   it("displays helpful text about Last.fm and Discogs", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: false,
@@ -361,10 +361,10 @@ describe("Settings Page", () => {
   });
 
   it("displays About section with version and GitHub link", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () =>
+        json: () =>
           ({
             lastfmConnected: true,
             discogsConnected: false,

@@ -1,16 +1,17 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Home } from "./Home";
 import type { AuthStatusResponse } from "@repo/shared";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fetchMock = vi.fn() as any;
+global.fetch = fetchMock;
 
 describe("Home Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    global.fetch = fetchMock;
   });
 
   afterEach(() => {
@@ -18,10 +19,10 @@ describe("Home Page", () => {
   });
 
   it("displays Get Started heading", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -37,10 +38,10 @@ describe("Home Page", () => {
   });
 
   it("displays Connect your music services heading", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -56,10 +57,10 @@ describe("Home Page", () => {
   });
 
   it("displays Discogs connection card", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -78,10 +79,10 @@ describe("Home Page", () => {
   });
 
   it("displays Last.fm connection card", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -100,10 +101,10 @@ describe("Home Page", () => {
   });
 
   it("displays Connect Discogs button when not connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -120,10 +121,10 @@ describe("Home Page", () => {
   });
 
   it("displays Connect Last.fm button when not connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -140,10 +141,10 @@ describe("Home Page", () => {
   });
 
   it("does not show connect screen when Discogs is connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
       })
     );
 
@@ -154,7 +155,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
 
     // After auth resolves the component navigates away; the connect UI must never appear
@@ -162,10 +163,10 @@ describe("Home Page", () => {
   });
 
   it("shows connected status for Last.fm when only Last.fm is connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: true, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: true, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -181,10 +182,10 @@ describe("Home Page", () => {
   });
 
   it("does not show connect screen when both services are connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: true, discogsConnected: true } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: true, discogsConnected: true } as AuthStatusResponse),
       })
     );
 
@@ -195,17 +196,17 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
 
     expect(screen.queryByText("Connect your music services")).not.toBeInTheDocument();
   });
 
   it("displays privacy note", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -228,20 +229,21 @@ describe("Home Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ redirectUrl: "https://discogs.com/oauth" }),
+          json: () => ({ redirectUrl: "https://discogs.com/oauth" }),
         })
       );
     
     global.fetch = mockFetch;
 
-    // Mock window.location.href
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).location;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).location = { href: "" };
 
     render(
@@ -267,20 +269,21 @@ describe("Home Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ redirectUrl: "https://last.fm/oauth" }),
+          json: () => ({ redirectUrl: "https://last.fm/oauth" }),
         })
       );
     
     global.fetch = mockFetch;
 
-    // Mock window.location.href
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (window as any).location;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).location = { href: "" };
 
     render(
@@ -302,10 +305,10 @@ describe("Home Page", () => {
   });
 
   it("fetches auth status on mount", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -316,7 +319,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
   });
 });

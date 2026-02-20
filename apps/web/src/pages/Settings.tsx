@@ -104,15 +104,6 @@ export function Settings() {
 
   return (
     <>
-      {/* Header */}
-      {/* <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-border-dark px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Icon name="arrow_back" className="text-primary cursor-pointer invisible" />
-          <h1 className="text-xl font-bold tracking-tight">Settings</h1>
-        </div>
-        <button className="text-primary font-medium text-sm invisible">Save</button>
-      </header> */}
-
       <main className="flex-1 overflow-y-auto pb-24 md:pb-12">
         <div className="max-w-2xl mx-auto">
         <div className="px-4 pt-6 pb-2">
@@ -124,7 +115,7 @@ export function Settings() {
           <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3 px-1">
             Scrobbling
           </h2>
-          <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark overflow-hidden">
+          <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark overflow-hidden opacity-60 pointer-events-none">
             {/* Scrobble Delay Slider */}
             <div className="p-4 border-b border-slate-100 dark:border-border-dark">
               <div className="flex justify-between items-center mb-4">
@@ -134,7 +125,7 @@ export function Settings() {
               <div className="relative w-full h-6 flex items-center">
                 <div className="absolute w-full h-1 bg-slate-200 dark:bg-border-dark rounded-full"></div>
                 <div className="absolute w-1/2 h-1 bg-primary rounded-full"></div>
-                <div className="absolute left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-primary rounded-full shadow-lg cursor-pointer"></div>
+                <div className="absolute left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-primary rounded-full shadow-lg"></div>
               </div>
               <p className="text-[11px] text-slate-500 mt-2">
                 Scrobble will be sent after half the track duration.
@@ -147,9 +138,9 @@ export function Settings() {
                 <p className="text-sm font-medium">Auto-advance tracks</p>
                 <p className="text-xs text-slate-500">Automatically move to the next track</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input defaultChecked className="sr-only peer" type="checkbox" />
-                <div className="w-11 h-6 bg-slate-200 dark:bg-border-dark peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <label className="relative inline-flex items-center">
+                <input defaultChecked disabled className="sr-only peer" type="checkbox" />
+                <div className="w-11 h-6 bg-slate-200 dark:bg-border-dark rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
               </label>
             </div>
 
@@ -158,12 +149,13 @@ export function Settings() {
                 <p className="text-sm font-medium">Notify on side completion</p>
                 <p className="text-xs text-slate-500">Alert when the record side finishes</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input className="sr-only peer" type="checkbox" />
-                <div className="w-11 h-6 bg-slate-200 dark:bg-border-dark peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <label className="relative inline-flex items-center">
+                <input disabled className="sr-only peer" type="checkbox" />
+                <div className="w-11 h-6 bg-slate-200 dark:bg-border-dark rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
               </label>
             </div>
           </div>
+          <p className="text-center text-[10px] text-slate-400 mt-2">Coming Soon</p>
         </section>
 
         {/* Accounts Section */}

@@ -6,8 +6,10 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import {
   advanceSession,
+  createAPIError,
   createSession,
   endSession,
+  ErrorCode,
   normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
@@ -217,13 +219,7 @@ router.post(
     const bodyResult = SessionStartRequestSchema.safeParse(body);
     if (!bodyResult.success) {
       return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Request body validation failed",
-            details: formatZodErrors(bodyResult.error),
-          },
-        },
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)),
         400
       );
     }
@@ -231,27 +227,18 @@ router.post(
     const { releaseId } = bodyResult.data;
 
     if (!/^[0-9]+$/.test(releaseId)) {
-      return c.json(
-        { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
-        400
-      );
+      return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
     }
 
     const tokens = await loadStoredTokens(kv, userId);
     if (!tokens.lastfm) {
-      return c.json(
-        { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
-        401
-      );
+      return c.json(createAPIError(ErrorCode.LASTFM_NOT_CONNECTED, "Last.fm is not connected"), 401);
     }
 
     const releaseResponse = await fetchDiscogsRelease(c, releaseId);
     if (!releaseResponse.ok) {
       const status = releaseResponse.status;
-      return c.json(
-        { error: { code: "DISCOGS_ERROR", message: releaseResponse.message } },
-        status
-      );
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, releaseResponse.message), status);
     }
 
     const now = Date.now();
@@ -286,13 +273,7 @@ router.post(
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
       return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Path parameters validation failed",
-            details: formatZodErrors(paramResult.error),
-          },
-        },
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
         400
       );
     }
@@ -300,10 +281,7 @@ router.post(
     const { id: sessionId } = paramResult.data;
     const session = await loadSession(kv, sessionId);
     if (!session || session.userId !== userId) {
-      return c.json(
-        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-        404
-      );
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
     }
 
     const updated = pauseSession(session);
@@ -327,13 +305,7 @@ router.post(
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
       return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Path parameters validation failed",
-            details: formatZodErrors(paramResult.error),
-          },
-        },
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
         400
       );
     }
@@ -341,10 +313,7 @@ router.post(
     const { id: sessionId } = paramResult.data;
     const session = await loadSession(kv, sessionId);
     if (!session || session.userId !== userId) {
-      return c.json(
-        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-        404
-      );
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
     }
 
     const updated = resumeSession(session, Date.now());
@@ -368,13 +337,7 @@ router.post(
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
       return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Path parameters validation failed",
-            details: formatZodErrors(paramResult.error),
-          },
-        },
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
         400
       );
     }
@@ -382,28 +345,19 @@ router.post(
     const { id: sessionId } = paramResult.data;
     const session = await loadSession(kv, sessionId);
     if (!session || session.userId !== userId) {
-      return c.json(
-        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-        404
-      );
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
     }
 
     const tokens = await loadStoredTokens(kv, userId);
     if (!tokens.lastfm) {
-      return c.json(
-        { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm is not connected" } },
-        401
-      );
+      return c.json(createAPIError(ErrorCode.LASTFM_NOT_CONNECTED, "Last.fm is not connected"), 401);
     }
 
     const now = Date.now();
     const previousIndex = session.currentIndex;
     
     if (previousIndex < 0 || previousIndex >= session.tracks.length) {
-      return c.json(
-        { error: { code: "INVALID_TRACK_INDEX", message: "Current track index is invalid" } },
-        500
-      );
+      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
     }
     
     const previousStartedAt = session.tracks[previousIndex]?.startedAt ?? now;
@@ -451,13 +405,7 @@ router.post(
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
       return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Path parameters validation failed",
-            details: formatZodErrors(paramResult.error),
-          },
-        },
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
         400
       );
     }
@@ -465,10 +413,7 @@ router.post(
     const { id: sessionId } = paramResult.data;
     const session = await loadSession(kv, sessionId);
     if (!session || session.userId !== userId) {
-      return c.json(
-        { error: { code: "SESSION_NOT_FOUND", message: "Session not found" } },
-        404
-      );
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
     }
 
     const tokens = await loadStoredTokens(kv, userId);

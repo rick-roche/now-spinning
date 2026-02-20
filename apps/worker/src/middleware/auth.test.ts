@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
+import type { StoredToken } from "@repo/shared";
 import type { CloudflareBinding } from "../types";
 import {
   getOrCreateSessionId,
@@ -12,7 +12,7 @@ import {
   requireLastFm,
   requireDiscogs,
 } from "./auth";
-import { createKVMock, TEST_SESSION_ID } from "../test-utils";
+import { createKVMock, TEST_SESSION_ID, type TestErrorResponse } from "../test-utils";
 
 describe("Auth Middleware", () => {
   let kvMock: ReturnType<typeof createKVMock>;
@@ -145,7 +145,7 @@ describe("Auth Middleware", () => {
 
   describe("storeTokens", () => {
     it("should store tokens in KV with correct key", async () => {
-      const tokens = {
+      const tokens: { lastfm: StoredToken | null; discogs: StoredToken | null } = {
         lastfm: {
           service: "lastfm",
           accessToken: "stored-token",
@@ -154,13 +154,13 @@ describe("Auth Middleware", () => {
         discogs: null,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await storeTokens(kvMock as unknown as KVNamespace, "user-123", tokens as any);
+       
+      await storeTokens(kvMock as unknown as KVNamespace, "user-123", tokens);
 
       const stored = kvMock.store.get("user:user-123:tokens");
       expect(stored).toBeDefined();
       if (stored) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         const parsed = JSON.parse(stored);
         expect(parsed.lastfm.accessToken).toBe("stored-token");
         expect(parsed.discogs).toBeNull();
@@ -168,7 +168,7 @@ describe("Auth Middleware", () => {
     });
 
     it("should overwrite existing tokens", async () => {
-      const oldTokens = {
+      const oldTokens: { lastfm: StoredToken | null; discogs: StoredToken | null } = {
         lastfm: {
           service: "lastfm",
           accessToken: "old-token",
@@ -177,10 +177,10 @@ describe("Auth Middleware", () => {
         discogs: null,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await storeTokens(kvMock as unknown as KVNamespace, "user-456", oldTokens as any);
+       
+      await storeTokens(kvMock as unknown as KVNamespace, "user-456", oldTokens);
 
-      const newTokens = {
+      const newTokens: { lastfm: StoredToken | null; discogs: StoredToken | null } = {
         lastfm: null,
         discogs: {
           service: "discogs",
@@ -190,12 +190,12 @@ describe("Auth Middleware", () => {
         },
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await storeTokens(kvMock as unknown as KVNamespace, "user-456", newTokens as any);
+       
+      await storeTokens(kvMock as unknown as KVNamespace, "user-456", newTokens);
 
       const stored = kvMock.store.get("user:user-456:tokens");
       if (stored) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         const parsed = JSON.parse(stored);
         expect(parsed.lastfm).toBeNull();
         expect(parsed.discogs.accessToken).toBe("new-discogs-token");
@@ -213,7 +213,7 @@ describe("Auth Middleware", () => {
       const stored = kvMock.store.get("oauth:lastfm:state-token-123");
       expect(stored).toBeDefined();
       if (stored) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+         
         const parsed = JSON.parse(stored);
         expect(parsed.sessionId).toBe(TEST_SESSION_ID);
         expect(parsed.verifier).toBe("pkce-verifier");
@@ -311,8 +311,8 @@ describe("Auth Middleware", () => {
       const response = await app.request(new Request("http://localhost:8787/protected"));
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("UNAUTHORIZED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("UNAUTHORIZED");
     });
 
     it("should reject if Last.fm token not stored", async () => {
@@ -337,8 +337,8 @@ describe("Auth Middleware", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("LASTFM_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
     });
 
     it("should allow request with valid Last.fm token", async () => {
@@ -398,8 +398,8 @@ describe("Auth Middleware", () => {
       const response = await app.request(new Request("http://localhost:8787/protected"));
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("UNAUTHORIZED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("UNAUTHORIZED");
     });
 
     it("should reject if Discogs token not stored", async () => {
@@ -424,8 +424,8 @@ describe("Auth Middleware", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("DISCOGS_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("DISCOGS_NOT_CONNECTED");
     });
 
     it("should allow request with valid Discogs token", async () => {
@@ -499,8 +499,8 @@ describe("Auth Middleware", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("DISCOGS_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("DISCOGS_NOT_CONNECTED");
     });
   });
 });

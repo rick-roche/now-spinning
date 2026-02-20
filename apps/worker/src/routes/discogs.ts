@@ -4,7 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { normalizeDiscogsRelease } from "@repo/shared";
+import { normalizeDiscogsRelease, createAPIError, ErrorCode } from "@repo/shared";
 import type {
   DiscogsCollectionResponse,
   DiscogsCollectionItem,
@@ -249,19 +249,13 @@ router.get("/collection", async (c: HonoContext) => {
 
   const tokens = await loadStoredTokens(kv, sessionId);
   if (!tokens.discogs || !tokens.discogs.accessTokenSecret) {
-    return c.json(
-      { error: { code: "DISCOGS_NOT_CONNECTED", message: "Discogs is not connected" } },
-      401
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_NOT_CONNECTED, "Discogs is not connected"), 401);
   }
 
   const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
   const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
   if (!consumerKey || !consumerSecret) {
-    return c.json(
-      { error: { code: "CONFIG_ERROR", message: "Discogs credentials not configured" } },
-      500
-    );
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const page = Math.max(1, Number.parseInt(c.req.query("page") ?? "1", 10) || 1);
@@ -296,16 +290,10 @@ router.get("/collection", async (c: HonoContext) => {
     if (!identityResponse.ok) {
       if (identityResponse.status === 429) {
         if (identityResponse.retryAfter) c.header("Retry-After", identityResponse.retryAfter);
-        return c.json(
-          { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
-          429
-        );
+        return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
       }
       const statusCode = identityResponse.status >= 500 ? 502 : 400;
-      return c.json(
-        { error: { code: "DISCOGS_ERROR", message: "Discogs identity lookup failed" } },
-        statusCode
-      );
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs identity lookup failed"), statusCode);
     }
 
     identity = identityResponse.data;
@@ -316,10 +304,7 @@ router.get("/collection", async (c: HonoContext) => {
 
   const username = identity.username;
   if (!username) {
-    return c.json(
-      { error: { code: "DISCOGS_ERROR", message: "Discogs username not available" } },
-      502
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs username not available"), 502);
   }
 
   const collectionUrl = new URL(
@@ -336,16 +321,10 @@ router.get("/collection", async (c: HonoContext) => {
   if (!collectionResponse.ok) {
     if (collectionResponse.status === 429) {
       if (collectionResponse.retryAfter) c.header("Retry-After", collectionResponse.retryAfter);
-      return c.json(
-        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
-        429
-      );
+      return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
     const statusCode = collectionResponse.status >= 500 ? 502 : 400;
-    return c.json(
-      { error: { code: "DISCOGS_ERROR", message: "Discogs collection fetch failed" } },
-      statusCode
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), statusCode);
   }
 
   const rawData = collectionResponse.data;
@@ -372,18 +351,12 @@ router.get("/search", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;
   const query = (c.req.query("query") ?? "").trim();
   if (!query) {
-    return c.json(
-      { error: { code: "INVALID_QUERY", message: "Query is required" } },
-      400
-    );
+    return c.json(createAPIError(ErrorCode.INVALID_QUERY, "Query is required"), 400);
   }
 
   const appCredentials = getDiscogsAppCredentials(c);
   if (!appCredentials) {
-    return c.json(
-      { error: { code: "CONFIG_ERROR", message: "Discogs credentials not configured" } },
-      500
-    );
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const page = Math.max(1, Number.parseInt(c.req.query("page") ?? "1", 10) || 1);
@@ -409,16 +382,10 @@ router.get("/search", async (c: HonoContext) => {
   if (!searchResponse.ok) {
     if (searchResponse.status === 429) {
       if (searchResponse.retryAfter) c.header("Retry-After", searchResponse.retryAfter);
-      return c.json(
-        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
-        429
-      );
+      return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
     const statusCode = searchResponse.status >= 500 ? 502 : 400;
-    return c.json(
-      { error: { code: "DISCOGS_ERROR", message: "Discogs search failed" } },
-      statusCode
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs search failed"), statusCode);
   }
 
   const rawData = searchResponse.data;
@@ -448,18 +415,12 @@ router.get("/release/:id", async (c: HonoContext) => {
   const releaseId = c.req.param("id");
 
   if (!/^[0-9]+$/.test(releaseId)) {
-    return c.json(
-      { error: { code: "INVALID_RELEASE_ID", message: "Release id must be numeric" } },
-      400
-    );
+    return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
   }
 
   const appCredentials = getDiscogsAppCredentials(c);
   if (!appCredentials) {
-    return c.json(
-      { error: { code: "CONFIG_ERROR", message: "Discogs credentials not configured" } },
-      500
-    );
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const cacheKey = `discogs:release:${releaseId}`;
@@ -479,16 +440,10 @@ router.get("/release/:id", async (c: HonoContext) => {
   if (!releaseResponse.ok) {
     if (releaseResponse.status === 429) {
       if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
-      return c.json(
-        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
-        429
-      );
+      return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
     const statusCode = releaseResponse.status >= 500 ? 502 : 400;
-    return c.json(
-      { error: { code: "DISCOGS_ERROR", message: "Discogs release lookup failed" } },
-      statusCode
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs release lookup failed"), statusCode);
   }
 
   const normalized = normalizeDiscogsRelease(releaseResponse.data);

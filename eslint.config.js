@@ -70,5 +70,18 @@ export default tseslint.config(
   {
     files: ["**/*.config.{js,ts}", "eslint.config.js"],
     ...tseslint.configs.disableTypeChecked,
+  },
+
+  // Relax strict type-safety rules for test files (mocks are inherently untyped)
+  {
+    files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/test-utils.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/require-await": "off",
+    },
   }
 );

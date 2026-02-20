@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../types";

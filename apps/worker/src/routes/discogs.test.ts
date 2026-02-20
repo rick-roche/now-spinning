@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../types";
@@ -9,6 +8,8 @@ import {
   kvUserTokensKey,
   getTestSessionCookie,
   TEST_SESSION_ID,
+  type TestErrorResponse,
+  type TestListResponse,
 } from "../test-utils";
 
 describe("Discogs Proxy Routes", () => {
@@ -46,8 +47,8 @@ describe("Discogs Proxy Routes", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("DISCOGS_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("DISCOGS_NOT_CONNECTED");
     });
 
     it("should require Discogs connection for app credentials", async () => {
@@ -66,8 +67,8 @@ describe("Discogs Proxy Routes", () => {
 
       // Should fail auth check before getting to credentials
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("DISCOGS_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("DISCOGS_NOT_CONNECTED");
     });
 
     it("should fetch collection with default pagination", async () => {
@@ -132,12 +133,12 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(200);
-        const body = (await response.json()) as Record<string, unknown>;
+        const body = (await response.json()) as TestListResponse;
         expect(body.page).toBe(1);
         expect(body.pages).toBe(1);
-        expect((body.items as any[]).length).toBe(1);
-        expect((body.items as any[])[0].title).toBe("Test Album");
-        expect((body.items as any[])[0].artist).toBe("Test Artist");
+        expect(body.items.length).toBe(1);
+        expect(body.items[0]!.title).toBe("Test Album");
+        expect(body.items[0]!.artist).toBe("Test Artist");
       } finally {
         global.fetch = originalFetch;
       }
@@ -205,6 +206,7 @@ describe("Discogs Proxy Routes", () => {
       kvMock.store.set(tokenKey, JSON.stringify(tokens));
 
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Unauthorized", { status: 401 });
 
       try {
@@ -218,8 +220,8 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(400);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -304,8 +306,8 @@ describe("Discogs Proxy Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("INVALID_QUERY");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_QUERY");
     });
 
     it("should return error if Discogs credentials not configured", async () => {
@@ -326,8 +328,8 @@ describe("Discogs Proxy Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should search releases with query parameter", async () => {
@@ -363,11 +365,11 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(200);
-        const body = (await response.json()) as Record<string, unknown>;
+        const body = (await response.json()) as TestListResponse;
         expect(body.query).toBe("test");
-        expect((body.items as any[]).length).toBe(1);
-        expect((body.items as any[])[0].title).toBe("Test Album");
-        expect((body.items as any[])[0].artist).toBe("Test Artist");
+        expect(body.items.length).toBe(1);
+        expect(body.items[0]!.title).toBe("Test Album");
+        expect(body.items[0]!.artist).toBe("Test Artist");
       } finally {
         global.fetch = originalFetch;
       }
@@ -446,9 +448,9 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(200);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.items as any[]).length).toBe(1);
-        expect((body.items as any[])[0].title).toBe("Release Result");
+        const body = (await response.json()) as TestListResponse;
+        expect(body.items.length).toBe(1);
+        expect(body.items[0]!.title).toBe("Release Result");
       } finally {
         global.fetch = originalFetch;
       }
@@ -486,6 +488,7 @@ describe("Discogs Proxy Routes", () => {
 
     it("should handle Discogs search errors", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Server error", { status: 500 });
 
       try {
@@ -496,8 +499,8 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(502);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -518,6 +521,7 @@ describe("Discogs Proxy Routes", () => {
 
       let callCount = 0;
       const originalFetch = global.fetch;
+       
       global.fetch = async () => {
         callCount++;
         return new Response(JSON.stringify(mockSearchResponse), { status: 200 });
@@ -554,8 +558,8 @@ describe("Discogs Proxy Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("INVALID_RELEASE_ID");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_RELEASE_ID");
     });
 
     it("should return error if Discogs credentials not configured", async () => {
@@ -576,8 +580,8 @@ describe("Discogs Proxy Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should fetch and normalize release", async () => {
@@ -614,8 +618,8 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(200);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.release as any).title).toBe("Test Album");
+        const body = (await response.json()) as { release: { title: string } };
+        expect(body.release.title).toBe("Test Album");
       } finally {
         global.fetch = originalFetch;
       }
@@ -653,6 +657,7 @@ describe("Discogs Proxy Routes", () => {
 
     it("should handle Discogs release lookup errors", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Not found", { status: 404 });
 
       try {
@@ -663,8 +668,8 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(400);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -681,6 +686,7 @@ describe("Discogs Proxy Routes", () => {
 
       let callCount = 0;
       const originalFetch = global.fetch;
+       
       global.fetch = async () => {
         callCount++;
         return new Response(JSON.stringify(mockReleaseResponse), { status: 200 });
@@ -814,6 +820,7 @@ describe("Discogs Proxy Routes", () => {
 
     it("should return 429 to client with DISCOGS_RATE_LIMIT after exhausting retries", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("", { status: 429 });
 
       try {
@@ -824,8 +831,8 @@ describe("Discogs Proxy Routes", () => {
         await vi.runAllTimersAsync();
         const response = await fetchPromise;
         expect(response.status).toBe(429);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_RATE_LIMIT");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_RATE_LIMIT");
       } finally {
         global.fetch = originalFetch;
       }
@@ -833,6 +840,7 @@ describe("Discogs Proxy Routes", () => {
 
     it("should propagate Retry-After header to client after exhausting retries", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("", { status: 429, headers: { "Retry-After": "5" } });
 
       try {

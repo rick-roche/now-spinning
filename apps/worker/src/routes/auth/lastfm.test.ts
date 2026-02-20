@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../../types";
@@ -9,6 +8,7 @@ import {
   createKVMock,
   kvUserTokensKey,
   getTestSessionCookie,
+  type TestErrorResponse,
 } from "../../test-utils";
 
 describe("Last.fm OAuth Routes", () => {
@@ -89,8 +89,8 @@ describe("Last.fm OAuth Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should store OAuth state token in KV", async () => {
@@ -125,8 +125,8 @@ describe("Last.fm OAuth Routes", () => {
       );
 
       expect(response.status).toBe(403);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("AUTH_DENIED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("AUTH_DENIED");
     });
 
     it("should reject if both token and error are missing", async () => {
@@ -140,8 +140,8 @@ describe("Last.fm OAuth Routes", () => {
       );
 
       expect(response.status).toBe(403);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("AUTH_DENIED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("AUTH_DENIED");
     });
 
     it("should reject if state token is missing", async () => {
@@ -158,8 +158,8 @@ describe("Last.fm OAuth Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("INVALID_STATE");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_STATE");
     });
 
     it("should reject if state token is invalid", async () => {
@@ -176,8 +176,8 @@ describe("Last.fm OAuth Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("INVALID_STATE");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_STATE");
     });
   });
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
 import { vi } from "vitest";
 
 /**
@@ -45,22 +44,27 @@ export function createKVMock() {
   const store = new Map<string, string>();
 
   return {
+     
     get: vi.fn(async (key: string, format?: "json" | "text" | "arrayBuffer" | "stream") => {
       const value = store.get(key);
       if (!value) return null;
 
       if (format === "json") {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         return JSON.parse(value);
       }
       return value;
     }),
+     
     put: vi.fn(async (key: string, value: string | Record<string, unknown>) => {
       const stringValue = typeof value === "string" ? value : JSON.stringify(value);
       store.set(key, stringValue);
     }),
+     
     delete: vi.fn(async (key: string) => {
       store.delete(key);
     }),
+     
     list: vi.fn(async () => {
       return {
         keys: Array.from(store.keys()).map((name) => ({ name })),
@@ -81,4 +85,19 @@ export function getTestSessionCookie(): { name: string; value: string } {
     name: "now_spinning_session",
     value: TEST_SESSION_ID,
   };
+}
+
+/** Typed shape for API error responses in tests */
+export interface TestErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+/** Typed shape for API responses with arrays */
+export interface TestListResponse {
+  items: Array<Record<string, unknown>>;
+  [key: string]: unknown;
 }

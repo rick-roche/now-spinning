@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../../types";
@@ -9,6 +8,7 @@ import {
   kvUserTokensKey,
   getTestSessionCookie,
   TEST_SESSION_ID,
+  type TestErrorResponse,
 } from "../../test-utils";
 
 describe("Discogs OAuth Routes", () => {
@@ -57,8 +57,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should return error if Discogs callback URL not configured", async () => {
@@ -82,8 +82,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should return redirect URL with OAuth token after successful fetch", async () => {
@@ -120,8 +120,11 @@ describe("Discogs OAuth Routes", () => {
         const storedState = kvMock.store.get(`oauth:discogs:test-request-token`);
         expect(storedState).toBeDefined();
         if (storedState) {
+           
           const parsed = JSON.parse(storedState);
+           
           expect(parsed.oauth_token).toBe("test-request-token");
+           
           expect(parsed.oauth_token_secret).toBe("test-request-secret");
         }
       } finally {
@@ -131,6 +134,7 @@ describe("Discogs OAuth Routes", () => {
 
     it("should preserve Discogs API 4xx status codes", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Bad request", { status: 400 });
 
       try {
@@ -145,8 +149,8 @@ describe("Discogs OAuth Routes", () => {
         );
 
         expect(response.status).toBe(400);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -154,6 +158,7 @@ describe("Discogs OAuth Routes", () => {
 
     it("should return rate-limit error when Discogs returns 429", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Too many requests", { status: 429 });
 
       try {
@@ -168,8 +173,8 @@ describe("Discogs OAuth Routes", () => {
         );
 
         expect(response.status).toBe(429);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_RATE_LIMIT");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_RATE_LIMIT");
       } finally {
         global.fetch = originalFetch;
       }
@@ -177,6 +182,7 @@ describe("Discogs OAuth Routes", () => {
 
     it("should handle Discogs API errors (5xx)", async () => {
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Server error", { status: 500 });
 
       try {
@@ -191,8 +197,8 @@ describe("Discogs OAuth Routes", () => {
         );
 
         expect(response.status).toBe(500);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -216,8 +222,8 @@ describe("Discogs OAuth Routes", () => {
         );
 
         expect(response.status).toBe(500);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -267,8 +273,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(403);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("AUTH_DENIED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("AUTH_DENIED");
     });
 
     it("should return error if oauth_verifier missing", async () => {
@@ -282,8 +288,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(403);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("AUTH_DENIED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("AUTH_DENIED");
     });
 
     it("should return error if OAuth state token invalid", async () => {
@@ -297,8 +303,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(403);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("INVALID_STATE");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_STATE");
     });
 
     it("should exchange verifier for access token on successful callback", async () => {
@@ -346,8 +352,11 @@ describe("Discogs OAuth Routes", () => {
         const storedTokens = kvMock.store.get(tokenKey);
         expect(storedTokens).toBeDefined();
         if (storedTokens) {
+           
           const parsed = JSON.parse(storedTokens);
+           
           expect(parsed.discogs.accessToken).toBe("access-token-123");
+           
           expect(parsed.discogs.accessTokenSecret).toBe("access-secret-123");
         }
 
@@ -391,8 +400,8 @@ describe("Discogs OAuth Routes", () => {
       );
 
       expect(response.status).toBe(500);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body.error as any).code).toBe("CONFIG_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("CONFIG_ERROR");
     });
 
     it("should preserve Discogs API errors during token exchange", async () => {
@@ -405,6 +414,7 @@ describe("Discogs OAuth Routes", () => {
       kvMock.store.set(stateKey, stateValue);
 
       const originalFetch = global.fetch;
+       
       global.fetch = async () => new Response("Unauthorized", { status: 401 });
 
       try {
@@ -419,8 +429,8 @@ describe("Discogs OAuth Routes", () => {
         );
 
         expect(response.status).toBe(401);
-        const body = (await response.json()) as Record<string, unknown>;
-        expect((body.error as any).code).toBe("DISCOGS_ERROR");
+        const body = (await response.json()) as TestErrorResponse;
+        expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
         global.fetch = originalFetch;
       }
@@ -490,7 +500,9 @@ describe("Discogs OAuth Routes", () => {
       const storedTokens = kvMock.store.get(tokenKey);
       expect(storedTokens).toBeDefined();
       if (storedTokens) {
+         
         const parsed = JSON.parse(storedTokens);
+         
         expect(parsed.discogs).toBeNull();
       }
     });
@@ -514,9 +526,13 @@ describe("Discogs OAuth Routes", () => {
 
       const storedTokens = kvMock.store.get(tokenKey);
       if (storedTokens) {
+         
         const parsed = JSON.parse(storedTokens);
+         
         expect(parsed.lastfm).toBeDefined();
+         
         expect(parsed.lastfm.accessToken).toBe("test-lastfm-token-abc123");
+         
         expect(parsed.discogs).toBeNull();
       }
     });

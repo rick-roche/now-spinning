@@ -19,7 +19,7 @@ export {
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
-export { createAPIError } from "./contracts/errors.js";
+export { createAPIError, ErrorCode } from "./contracts/errors.js";
 export type {
   AuthStatusResponse,
   DisconnectRequest,

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../types";
@@ -10,6 +9,7 @@ import {
   createKVMock,
   kvUserTokensKey,
   getTestSessionCookie,
+  type TestErrorResponse,
 } from "../test-utils";
 
 describe("Session Routes", () => {
@@ -28,6 +28,7 @@ describe("Session Routes", () => {
         c.env = mockEnv;
         await next();
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .route("/session", sessionRoutes as any);
   }
 
@@ -49,8 +50,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("LASTFM_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
     });
 
     it("should reject request without releaseId", async () => {
@@ -73,8 +74,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("VALIDATION_ERROR");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("VALIDATION_ERROR");
     });
 
     it("should reject invalid releaseId format", async () => {
@@ -97,8 +98,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("INVALID_RELEASE_ID");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_RELEASE_ID");
     });
   });
 
@@ -118,8 +119,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("LASTFM_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
     });
 
     it("should return 404 if session does not exist", async () => {
@@ -140,8 +141,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(404);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("SESSION_NOT_FOUND");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("SESSION_NOT_FOUND");
     });
   });
 
@@ -161,8 +162,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("LASTFM_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
     });
 
     it("should return 404 if session does not exist", async () => {
@@ -183,8 +184,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(404);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("SESSION_NOT_FOUND");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("SESSION_NOT_FOUND");
     });
   });
 
@@ -204,8 +205,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(401);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("LASTFM_NOT_CONNECTED");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
     });
 
     it("should return 404 if session does not exist", async () => {
@@ -226,8 +227,8 @@ describe("Session Routes", () => {
       );
 
       expect(response.status).toBe(404);
-      const body = (await response.json()) as Record<string, unknown>;
-      expect((body as any).error?.code).toBe("SESSION_NOT_FOUND");
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("SESSION_NOT_FOUND");
     });
   });
 });

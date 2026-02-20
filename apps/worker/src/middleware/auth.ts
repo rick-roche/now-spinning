@@ -5,6 +5,7 @@
 
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
+import { createAPIError, ErrorCode } from "@repo/shared";
 import type { StoredToken } from "@repo/shared";
 import type { CloudflareBinding } from "../types.js";
 
@@ -127,18 +128,12 @@ export async function requireLastFm(
   const userId = getCookie(c, SESSION_COOKIE);
   
   if (!userId) {
-    return c.json(
-      { error: { code: "UNAUTHORIZED", message: "Session required" } },
-      401
-    );
+    return c.json(createAPIError(ErrorCode.UNAUTHORIZED, "Session required"), 401);
   }
 
   const tokens = await loadStoredTokens(kv, userId);
   if (!tokens.lastfm) {
-    return c.json(
-      { error: { code: "LASTFM_NOT_CONNECTED", message: "Last.fm connection required" } },
-      401
-    );
+    return c.json(createAPIError(ErrorCode.LASTFM_NOT_CONNECTED, "Last.fm connection required"), 401);
   }
 
   await next();
@@ -147,9 +142,6 @@ export async function requireLastFm(
 /**
  * Middleware to require Discogs authentication.
  * Returns 401 if user doesn't have a valid Discogs token.
- * 
- * Used in Discogs API routes (will be integrated when those routes are validated).
- * knip: ignore
  */
 export async function requireDiscogs(
   c: Context<{ Bindings: CloudflareBinding }>,
@@ -159,18 +151,12 @@ export async function requireDiscogs(
   const userId = getCookie(c, SESSION_COOKIE);
   
   if (!userId) {
-    return c.json(
-      { error: { code: "UNAUTHORIZED", message: "Session required" } },
-      401
-    );
+    return c.json(createAPIError(ErrorCode.UNAUTHORIZED, "Session required"), 401);
   }
 
   const tokens = await loadStoredTokens(kv, userId);
   if (!tokens.discogs) {
-    return c.json(
-      { error: { code: "DISCOGS_NOT_CONNECTED", message: "Discogs connection required" } },
-      401
-    );
+    return c.json(createAPIError(ErrorCode.DISCOGS_NOT_CONNECTED, "Discogs connection required"), 401);
   }
 
   await next();

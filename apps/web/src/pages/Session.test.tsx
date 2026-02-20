@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import type { Session, SessionCurrentResponse } from "@repo/shared";
 import { SessionPage } from "./Session";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fetchMock = vi.fn() as any;
+global.fetch = fetchMock;
 
 const mockSession: Session = {
   id: "sess-123",
@@ -66,7 +66,7 @@ const renderSessionPage = () => {
 describe("SessionPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    global.fetch = vi.fn();
+    global.fetch = fetchMock;
     sessionStorage.clear();
   });
 
@@ -75,7 +75,7 @@ describe("SessionPage", () => {
   });
 
   it("displays loading state initially", () => {
-    (global.fetch as any).mockImplementationOnce(
+    fetchMock.mockImplementationOnce(
       () =>
         new Promise(() => {
           /* Never resolves */
@@ -90,7 +90,7 @@ describe("SessionPage", () => {
   });
 
   it("falls back to no session state when session fetch fails", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
         json: () => Promise.resolve({}),
@@ -108,7 +108,7 @@ describe("SessionPage", () => {
   });
 
   it("displays no session state when session is null", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: null } satisfies SessionCurrentResponse),
@@ -124,7 +124,7 @@ describe("SessionPage", () => {
   });
 
   it("displays active session information", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -141,7 +141,7 @@ describe("SessionPage", () => {
   });
 
   it("displays current track information", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -157,7 +157,7 @@ describe("SessionPage", () => {
   });
 
   it("displays status badge when session is running", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -173,7 +173,7 @@ describe("SessionPage", () => {
   });
 
   it("displays pause button label when session is running", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -188,7 +188,7 @@ describe("SessionPage", () => {
   });
 
   it("displays Pause button when session is running", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -205,7 +205,7 @@ describe("SessionPage", () => {
   it("displays Resume button when session is paused", async () => {
     const pausedSession = { ...mockSession, state: "paused" as const };
 
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: pausedSession } satisfies SessionCurrentResponse),
@@ -220,7 +220,7 @@ describe("SessionPage", () => {
   });
 
   it("displays Skip Track button", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -235,7 +235,7 @@ describe("SessionPage", () => {
   });
 
   it("displays progress bar for tracks with duration", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -251,7 +251,7 @@ describe("SessionPage", () => {
   });
 
   it("displays elapsed and remaining time", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -267,7 +267,7 @@ describe("SessionPage", () => {
   });
 
   it("displays upcoming tracks section", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -283,7 +283,7 @@ describe("SessionPage", () => {
   });
 
   it("displays session page when in dev mode", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -298,7 +298,7 @@ describe("SessionPage", () => {
   });
 
   it("displays track list with current track", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
@@ -314,7 +314,7 @@ describe("SessionPage", () => {
   });
 
   it("handles pause action", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
@@ -341,7 +341,7 @@ describe("SessionPage", () => {
     fireEvent.click(pauseButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/pause", {
+      expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/pause", {
         credentials: "include",
         method: "POST",
       });
@@ -351,7 +351,7 @@ describe("SessionPage", () => {
   it("handles resume action", async () => {
     const pausedSession = { ...mockSession, state: "paused" as const };
 
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
@@ -378,7 +378,7 @@ describe("SessionPage", () => {
     fireEvent.click(resumeButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/resume", {
+      expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/resume", {
         credentials: "include",
         method: "POST",
       });
@@ -386,7 +386,7 @@ describe("SessionPage", () => {
   });
 
   it("handles next track action", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
@@ -413,7 +413,7 @@ describe("SessionPage", () => {
     fireEvent.click(nextButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/next", {
+      expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/next", {
         credentials: "include",
         method: "POST",
       });
@@ -421,7 +421,7 @@ describe("SessionPage", () => {
   });
 
   it("displays error message when action fails", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
@@ -453,7 +453,7 @@ describe("SessionPage", () => {
   });
 
   it("displays Browse Collection link when no session", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ session: null } satisfies SessionCurrentResponse),
@@ -485,7 +485,7 @@ describe("SessionPage", () => {
       },
     };
 
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () =>
@@ -503,7 +503,7 @@ describe("SessionPage", () => {
   });
 
   it("updates current track when advancing", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,

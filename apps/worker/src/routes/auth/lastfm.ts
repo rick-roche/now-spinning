@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { createAPIError, ErrorCode } from "@repo/shared";
 import { generateRandomString } from "../../oauth.js";
 import {
   getOrCreateSessionId,
@@ -28,12 +29,12 @@ router.get("/start", async (c: HonoContext) => {
 
   const apiKey = c.env.LASTFM_API_KEY;
   if (!apiKey) {
-    return c.json({ error: { code: "CONFIG_ERROR", message: "Last.fm API key not configured" } }, 500);
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm API key not configured"), 500);
   }
 
   const callbackUrl = c.env.LASTFM_CALLBACK_URL;
   if (!callbackUrl) {
-    return c.json({ error: { code: "CONFIG_ERROR", message: "Last.fm callback URL not configured" } }, 500);
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm callback URL not configured"), 500);
   }
 
   const stateToken = generateRandomString(32);
@@ -54,18 +55,18 @@ router.get("/callback", async (c: HonoContext) => {
 
   if (!token) {
     const error = c.req.query("error") || "User denied Last.fm authorization";
-    return c.json({ error: { code: "AUTH_DENIED", message: error } }, 403);
+    return c.json(createAPIError(ErrorCode.AUTH_DENIED, error), 403);
   }
 
   // Verify CSRF state token
   const stateToken = c.req.query("state");
   if (!stateToken) {
-    return c.json({ error: { code: "INVALID_STATE", message: "Missing OAuth state parameter" } }, 400);
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "Missing OAuth state parameter"), 400);
   }
 
   const stateData = await getAndDeleteOAuthState(kv, "lastfm", stateToken);
   if (!stateData) {
-    return c.json({ error: { code: "INVALID_STATE", message: "Invalid or expired OAuth state" } }, 400);
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "Invalid or expired OAuth state"), 400);
   }
 
   const sessionId = stateData.sessionId ?? getOrCreateSessionId(c);
@@ -78,18 +79,12 @@ router.get("/callback", async (c: HonoContext) => {
   );
 
   if (!sessionResponse.ok) {
-    return c.json(
-      { error: { code: "LASTFM_ERROR", message: sessionResponse.message } },
-      502
-    );
+    return c.json(createAPIError(ErrorCode.LASTFM_ERROR, sessionResponse.message), 502);
   }
 
   const sessionKey = sessionResponse.data.session?.key;
   if (!sessionKey) {
-    return c.json(
-      { error: { code: "LASTFM_ERROR", message: "Last.fm session key missing" } },
-      502
-    );
+    return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Last.fm session key missing"), 502);
   }
 
   const tokens = await loadStoredTokens(kv, sessionId);

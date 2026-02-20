@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -9,8 +8,9 @@ import type {
   AuthStatusResponse,
 } from "@repo/shared";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fetchMock = vi.fn() as any;
+global.fetch = fetchMock;
 
 describe("Collection Page", () => {
   beforeEach(() => {
@@ -22,11 +22,11 @@ describe("Collection Page", () => {
   });
 
   it("displays loading state when loading collection", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(
@@ -36,7 +36,7 @@ describe("Collection Page", () => {
               () =>
                 resolve({
                   ok: true,
-                  json: async () => ({
+                  json: () => ({
                     page: 1,
                     pages: 1,
                     perPage: 20,
@@ -61,10 +61,10 @@ describe("Collection Page", () => {
   });
 
   it("displays connect message when Discogs not connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -81,10 +81,10 @@ describe("Collection Page", () => {
   });
 
   it("displays button to go to Settings when Discogs not connected", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
       })
     );
 
@@ -101,17 +101,17 @@ describe("Collection Page", () => {
   });
 
   it("loads collection when Discogs is connected", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 2,
             perPage: 20,
@@ -144,17 +144,17 @@ describe("Collection Page", () => {
   });
 
   it("displays collection items with cover image", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -187,17 +187,17 @@ describe("Collection Page", () => {
   });
 
   it("displays collection items without format badges", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -231,17 +231,17 @@ describe("Collection Page", () => {
   });
 
   it("filters collection by title", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -288,17 +288,17 @@ describe("Collection Page", () => {
   });
 
   it("filters collection by artist", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -345,17 +345,17 @@ describe("Collection Page", () => {
   });
 
   it("shows load more button when there are more pages", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 3,
             perPage: 20,
@@ -387,17 +387,17 @@ describe("Collection Page", () => {
   });
 
   it("hides load more button on last page", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 2,
             pages: 2,
             perPage: 20,
@@ -429,17 +429,17 @@ describe("Collection Page", () => {
   });
 
   it("shows empty message when no items match search", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -476,11 +476,11 @@ describe("Collection Page", () => {
   });
 
   it("displays error when loading collection fails", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() => Promise.reject(new Error("Network error")));
@@ -497,11 +497,11 @@ describe("Collection Page", () => {
   });
 
   it("displays error when collection response is not ok", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
@@ -522,17 +522,17 @@ describe("Collection Page", () => {
   });
 
   it("item card displays and is interactive", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -569,17 +569,17 @@ describe("Collection Page", () => {
   // ── Global Search tab ─────────────────────────────────────────────────────
 
   it("switches to Global Search tab without navigating away", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -606,17 +606,17 @@ describe("Collection Page", () => {
   });
 
   it("searches Discogs when Enter is pressed in global search mode", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -628,7 +628,7 @@ describe("Collection Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             query: "Pink Floyd",
             page: 1,
             pages: 1,
@@ -671,17 +671,17 @@ describe("Collection Page", () => {
   });
 
   it("searches Discogs when the submit button is clicked", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -693,7 +693,7 @@ describe("Collection Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             query: "Beatles",
             page: 1,
             pages: 1,
@@ -737,17 +737,17 @@ describe("Collection Page", () => {
   });
 
   it("shows empty state in global search when no results found", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -759,7 +759,7 @@ describe("Collection Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             query: "xyzxyz",
             page: 1,
             pages: 1,
@@ -792,17 +792,17 @@ describe("Collection Page", () => {
   });
 
   it("shows error when Discogs search fails", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,
@@ -835,17 +835,17 @@ describe("Collection Page", () => {
   });
 
   it("switches back to My Collection tab and restores collection view", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({
+          json: () => ({
             page: 1,
             pages: 1,
             perPage: 20,

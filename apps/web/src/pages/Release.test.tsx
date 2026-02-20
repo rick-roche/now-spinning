@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Release } from "./Release";
 import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fetchMock = vi.fn() as any;
+global.fetch = fetchMock;
 
 describe("Release Page", () => {
   beforeEach(() => {
@@ -64,14 +64,14 @@ describe("Release Page", () => {
   };
 
   it("displays loading state initially", () => {
-    (global.fetch as any).mockImplementationOnce(
+    fetchMock.mockImplementationOnce(
       () =>
         new Promise((resolve) =>
           setTimeout(
             () =>
               resolve({
                 ok: true,
-                json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+                json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
               }),
             100
           )
@@ -98,10 +98,10 @@ describe("Release Page", () => {
   });
 
   it("displays release information when loaded", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -116,10 +116,10 @@ describe("Release Page", () => {
   });
 
   it("displays cover image when available", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -132,10 +132,10 @@ describe("Release Page", () => {
   });
 
   it("groups tracks by side", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -148,10 +148,10 @@ describe("Release Page", () => {
   });
 
   it("displays all track information", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -165,10 +165,10 @@ describe("Release Page", () => {
   });
 
   it("formats track durations correctly", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -196,10 +196,10 @@ describe("Release Page", () => {
       ],
     };
 
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: releaseWithDifferentArtists } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: releaseWithDifferentArtists } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -225,10 +225,10 @@ describe("Release Page", () => {
       ],
     };
 
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: releaseWithNullDuration } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: releaseWithNullDuration } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -240,7 +240,7 @@ describe("Release Page", () => {
   });
 
   it("displays error message on fetch failure", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: false,
       })
@@ -254,7 +254,7 @@ describe("Release Page", () => {
   });
 
   it("displays error when fetch rejects", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.reject(new Error("Network error"))
     );
 
@@ -266,10 +266,10 @@ describe("Release Page", () => {
   });
 
   it("displays Start Session button", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -281,11 +281,11 @@ describe("Release Page", () => {
   });
 
   it("calls session start endpoint when Start Session button clicked", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+          json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
         })
       )
       .mockImplementationOnce(() =>
@@ -304,16 +304,16 @@ describe("Release Page", () => {
     fireEvent.click(startButton);
 
     await waitFor(() => {
-      expect((global.fetch as any).mock.calls[1][0]).toContain("/api/session/start");
+      expect(fetchMock.mock.calls[1][0]).toContain("/api/session/start");
     });
   });
 
   it("navigates to session after start success", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+          json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
         })
       )
       .mockImplementationOnce(() =>
@@ -337,17 +337,17 @@ describe("Release Page", () => {
   });
 
   it("handles session start error", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+          json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
         })
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: false,
-          json: async () => ({ error: { message: "Session start failed" } }),
+          json: () => ({ error: { message: "Session start failed" } }),
         })
       );
 
@@ -366,10 +366,10 @@ describe("Release Page", () => {
   });
 
   it("displays year when available", async () => {
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -386,10 +386,10 @@ describe("Release Page", () => {
       year: null,
     };
 
-    (global.fetch as any).mockImplementationOnce(() =>
+    fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ release: releaseNoYear } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+        json: () => ({ release: releaseNoYear } satisfies DiscogsReleaseResponse<NormalizedRelease>),
       })
     );
 
@@ -405,11 +405,11 @@ describe("Release Page", () => {
   });
 
   it("disables Start Session button while starting", async () => {
-    (global.fetch as any)
+    fetchMock
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
-          json: async () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+          json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
         })
       )
       .mockImplementationOnce(

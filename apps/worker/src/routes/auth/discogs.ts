@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { createAPIError, ErrorCode } from "@repo/shared";
 import { generateRandomString, parseFormEncoded } from "../../oauth.js";
 import {
   getOrCreateSessionId,
@@ -27,7 +28,7 @@ const router = new Hono<{ Bindings: CloudflareBinding }>();
 function discogsError(response: Response): Response {
   const retryAfter = response.headers.get("Retry-After");
   const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
-  const code = status === 429 ? "DISCOGS_RATE_LIMIT" : "DISCOGS_ERROR";
+  const code = status === 429 ? ErrorCode.DISCOGS_RATE_LIMIT : ErrorCode.DISCOGS_ERROR;
   const message =
     status === 429 ? "Discogs rate limit reached. Please retry shortly." : `Discogs returned ${status}`;
 
@@ -36,7 +37,7 @@ function discogsError(response: Response): Response {
     headers.set("Retry-After", retryAfter);
   }
 
-  return new Response(JSON.stringify({ error: { code, message } }), { status, headers });
+  return new Response(JSON.stringify(createAPIError(code, message)), { status, headers });
 }
 
 router.post("/start", async (c: HonoContext) => {
@@ -46,12 +47,12 @@ router.post("/start", async (c: HonoContext) => {
 
   const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
   if (!consumerKey) {
-    return c.json({ error: { code: "CONFIG_ERROR", message: "Discogs consumer key not configured" } }, 500);
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
   }
 
   const callbackUrl = c.env.DISCOGS_CALLBACK_URL;
   if (!callbackUrl) {
-    return c.json({ error: { code: "CONFIG_ERROR", message: "Discogs callback URL not configured" } }, 500);
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs callback URL not configured"), 500);
   }
 
   const nonce = generateRandomString(32);
@@ -99,7 +100,7 @@ router.post("/start", async (c: HonoContext) => {
     const authorizeUrl = `${DISCOGS_AUTHORIZE_URL}?oauth_token=${encodeURIComponent(tokenStr)}`;
     return c.json({ redirectUrl: authorizeUrl });
   } catch (err) {
-    return c.json({ error: { code: "DISCOGS_ERROR", message: (err as Error).message } }, 500);
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, (err as Error).message), 500);
   }
 });
 
@@ -112,19 +113,19 @@ router.get("/callback", async (c: HonoContext) => {
   const oauthVerifier = c.req.query("oauth_verifier") ?? "";
 
   if (!oauthToken || !oauthVerifier) {
-    return c.json({ error: { code: "AUTH_DENIED", message: "User denied Discogs authorization" } }, 403);
+    return c.json(createAPIError(ErrorCode.AUTH_DENIED, "User denied Discogs authorization"), 403);
   }
 
   const storedState = await getAndDeleteOAuthState(kv, "discogs", oauthToken);
   if (!storedState) {
-    return c.json({ error: { code: "INVALID_STATE", message: "OAuth state token expired or invalid" } }, 403);
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth state token expired or invalid"), 403);
   }
 
   const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
   const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET || "";
 
   if (!consumerKey) {
-    return c.json({ error: { code: "CONFIG_ERROR", message: "Discogs consumer key not configured" } }, 500);
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
   }
 
   const nonce = generateRandomString(32);
@@ -176,7 +177,7 @@ router.get("/callback", async (c: HonoContext) => {
 
     return c.redirect(redirectUrl);
   } catch (err) {
-    return c.json({ error: { code: "DISCOGS_ERROR", message: (err as Error).message } }, 500);
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, (err as Error).message), 500);
   }
 });
 
