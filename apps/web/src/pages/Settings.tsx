@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../components/Icon";
-import { getApiUrl } from "../lib/api";
+import { apiFetch } from "../lib/api";
 import type { AuthStatusResponse } from "@repo/shared";
 
 async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -35,7 +35,7 @@ export function Settings() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(getApiUrl("/api/auth/status"));
+        const response = await apiFetch("/api/auth/status");
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
@@ -59,7 +59,7 @@ export function Settings() {
     try {
       setConnectingLastFm(true);
       setError(null);
-      const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
+      const response = await apiFetch("/api/auth/lastfm/start");
       if (!response.ok) {
         const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
         throw new Error(message);
@@ -80,7 +80,7 @@ export function Settings() {
     try {
       setConnectingDiscogs(true);
       setError(null);
-      const response = await fetch(getApiUrl("/api/auth/discogs/start"), {
+      const response = await apiFetch("/api/auth/discogs/start", {
         method: "POST",
       });
       if (!response.ok) {
@@ -101,7 +101,7 @@ export function Settings() {
 
   const handleDisconnectLastFm = async () => {
     try {
-      await fetch(getApiUrl("/api/auth/lastfm/disconnect"), { method: "POST" });
+      await apiFetch("/api/auth/lastfm/disconnect", { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
     } catch (err) {
        
@@ -112,7 +112,7 @@ export function Settings() {
 
   const handleDisconnectDiscogs = async () => {
     try {
-      await fetch(getApiUrl("/api/auth/discogs/disconnect"), { method: "POST" });
+      await apiFetch("/api/auth/discogs/disconnect", { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
     } catch (err) {
        

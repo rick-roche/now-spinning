@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApiUrl } from "../lib/api";
+import { apiFetch } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import type { AuthStatusResponse } from "@repo/shared";
@@ -42,7 +42,7 @@ export function Home() {
     const fetchStatus = async () => {
       try {
         setError(null);
-        const response = await fetch(getApiUrl("/api/auth/status"));
+        const response = await apiFetch("/api/auth/status");
         if (!response.ok) throw new Error("Failed to fetch auth status");
          
         const data: AuthStatusResponse = await response.json();
@@ -69,7 +69,7 @@ export function Home() {
     try {
       setConnectingDiscogs(true);
       setError(null);
-      const response = await fetch(getApiUrl("/api/auth/discogs/start"), { method: "POST" });
+      const response = await apiFetch("/api/auth/discogs/start", { method: "POST" });
       if (!response.ok) {
         const message = await getApiErrorMessage(response, "Failed to start Discogs authentication");
         throw new Error(message);
@@ -90,7 +90,7 @@ export function Home() {
     try {
       setConnectingLastFm(true);
       setError(null);
-      const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
+      const response = await apiFetch("/api/auth/lastfm/start");
       if (!response.ok) {
         const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
         throw new Error(message);

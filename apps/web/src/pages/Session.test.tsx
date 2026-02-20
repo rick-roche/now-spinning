@@ -342,6 +342,7 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/pause", {
+        credentials: "include",
         method: "POST",
       });
     });
@@ -378,6 +379,7 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/resume", {
+        credentials: "include",
         method: "POST",
       });
     });
@@ -412,6 +414,7 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/session/sess-123/next", {
+        credentials: "include",
         method: "POST",
       });
     });

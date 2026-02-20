@@ -11,6 +11,7 @@ import {
   loadStoredTokens,
   storeTokens,
   storeOAuthState,
+  getAndDeleteOAuthState,
 } from "../../middleware/auth.js";
 import { fetchLastFm } from "../../lastfm.js";
 import type { CloudflareBinding } from "../../types.js";
@@ -38,7 +39,11 @@ router.get("/start", async (c: HonoContext) => {
   const stateToken = generateRandomString(32);
   await storeOAuthState(kv, "lastfm", stateToken, { sessionId });
 
-  const params = new URLSearchParams({ api_key: apiKey, cb: callbackUrl });
+  // Embed state token in callback URL for CSRF verification
+  const callbackWithState = new URL(callbackUrl);
+  callbackWithState.searchParams.set("state", stateToken);
+
+  const params = new URLSearchParams({ api_key: apiKey, cb: callbackWithState.toString() });
   const redirectUrl = `${LASTFM_AUTH_URL}?${params.toString()}`;
   return c.json({ redirectUrl });
 });
@@ -52,7 +57,18 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json({ error: { code: "AUTH_DENIED", message: error } }, 403);
   }
 
-  const sessionId = getOrCreateSessionId(c);
+  // Verify CSRF state token
+  const stateToken = c.req.query("state");
+  if (!stateToken) {
+    return c.json({ error: { code: "INVALID_STATE", message: "Missing OAuth state parameter" } }, 400);
+  }
+
+  const stateData = await getAndDeleteOAuthState(kv, "lastfm", stateToken);
+  if (!stateData) {
+    return c.json({ error: { code: "INVALID_STATE", message: "Invalid or expired OAuth state" } }, 400);
+  }
+
+  const sessionId = stateData.sessionId ?? getOrCreateSessionId(c);
   setSessionCookie(c, sessionId);
 
   const sessionResponse = await fetchLastFm<{ session: { key: string } }>(

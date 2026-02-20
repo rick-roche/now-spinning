@@ -29,22 +29,6 @@ export function createLastFmSignature(
 
   const hash = md5(signatureBase);
   
-  console.log("[createLastFmSignature] Sorted keys (excl. format/api_sig):", sortedKeys);
-  
-  // Log each key-value pair for debugging
-  sortedKeys.forEach(key => {
-    const val = params[key] ?? "";
-    const display = val.length > 40 ? val.substring(0, 40) + "..." : val;
-    console.log(`[createLastFmSignature]   ${key}=${display}`);
-  });
-  
-  // Log the signature base (truncated for security)
-  const displayBase = signatureBase.length > 100 
-    ? signatureBase.substring(0, 100) + "...[" + (signatureBase.length - 100) + " more chars]"
-    : signatureBase;
-  console.log("[createLastFmSignature] Signature base:", displayBase);
-  console.log("[createLastFmSignature] Final hash:", hash);
-  
   return hash;
 }
 
@@ -67,19 +51,10 @@ export async function fetchLastFm<T>(
     ...params,
   };
 
-  console.log("[fetchLastFm] Payload before signature:", Object.keys(payload).sort());
-  console.log("[fetchLastFm] sk value:", payload.sk ? payload.sk.substring(0, 10) + "..." : "MISSING");
-
   const signature = createLastFmSignature(payload, sharedSecret);
   payload.api_sig = signature;
 
-  console.log("[fetchLastFm] Method:", method);
-  console.log("[fetchLastFm] API key:", apiKey.substring(0, 4) + "...");
-  console.log("[fetchLastFm] Payload keys:", Object.keys(payload).sort());
-  console.log("[fetchLastFm] Signature (first 8):", signature.substring(0, 8));
-
   const body = new URLSearchParams(payload).toString();
-  console.log("[fetchLastFm] POST body:", body);
   
   const response = await fetch(LASTFM_API_URL, {
     method: "POST",
@@ -94,7 +69,7 @@ export async function fetchLastFm<T>(
   
   if (!response.ok || data.error) {
     const errorMessage = data.message ?? "Last.fm request failed";
-    console.log("[fetchLastFm] Error response:", errorMessage, data);
+    console.error("[fetchLastFm] Error:", errorMessage);
     return { ok: false, message: errorMessage };
   }
 

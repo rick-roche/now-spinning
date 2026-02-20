@@ -91,12 +91,11 @@ async function fetchDiscogsRelease(
   }
 
   const releaseUrl = new URL(`${DISCOGS_API_BASE}/releases/${releaseId}`);
-  releaseUrl.searchParams.set("key", appCredentials.consumerKey);
-  releaseUrl.searchParams.set("secret", appCredentials.consumerSecret);
 
   const response = await fetch(releaseUrl.toString(), {
     headers: {
       "User-Agent": DISCOGS_USER_AGENT,
+      "Authorization": `Discogs key=${appCredentials.consumerKey}, secret=${appCredentials.consumerSecret}`,
     },
   });
 

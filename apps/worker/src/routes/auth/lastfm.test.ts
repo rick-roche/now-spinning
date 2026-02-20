@@ -45,8 +45,9 @@ describe("Last.fm OAuth Routes", () => {
       expect(body).toHaveProperty("redirectUrl");
       expect(body.redirectUrl).toContain("https://www.last.fm/api/auth");
       expect(body.redirectUrl).toContain("api_key=test-api-key");
-      // URL params are encoded, so check for encoded version
-      expect(body.redirectUrl).toContain("cb=http%3A%2F%2Flocalhost");
+      // Callback URL should contain the state parameter for CSRF protection
+      expect(body.redirectUrl).toContain("cb=");
+      expect(body.redirectUrl).toContain("state%3D");
     });
 
     it("should set session cookie", async () => {
@@ -141,6 +142,42 @@ describe("Last.fm OAuth Routes", () => {
       expect(response.status).toBe(403);
       const body = (await response.json()) as Record<string, unknown>;
       expect((body as any).error?.code).toBe("AUTH_DENIED");
+    });
+
+    it("should reject if state token is missing", async () => {
+      const kvMock = createKVMock();
+      const app = createTestApp(kvMock);
+
+      const response = await app.request(
+        new Request(
+          "http://localhost:8787/auth/lastfm/callback?token=test-token",
+          {
+            method: "GET",
+          }
+        )
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect((body as any).error?.code).toBe("INVALID_STATE");
+    });
+
+    it("should reject if state token is invalid", async () => {
+      const kvMock = createKVMock();
+      const app = createTestApp(kvMock);
+
+      const response = await app.request(
+        new Request(
+          "http://localhost:8787/auth/lastfm/callback?token=test-token&state=invalid-state",
+          {
+            method: "GET",
+          }
+        )
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect((body as any).error?.code).toBe("INVALID_STATE");
     });
   });
 

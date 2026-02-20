@@ -154,7 +154,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
 
     // After auth resolves the component navigates away; the connect UI must never appear
@@ -195,7 +195,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
 
     expect(screen.queryByText("Connect your music services")).not.toBeInTheDocument();
@@ -258,7 +258,7 @@ describe("Home Page", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/auth/discogs/start", { method: "POST" });
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/discogs/start", { credentials: "include", method: "POST" });
     });
   });
 
@@ -297,7 +297,7 @@ describe("Home Page", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start");
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start", { credentials: "include" });
     });
   });
 
@@ -316,7 +316,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status");
+      expect((global.fetch as any)).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
     });
   });
 });
