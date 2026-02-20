@@ -22,6 +22,7 @@ import {
   type SessionCurrentResponse,
   type SessionStartResponse,
 } from "@repo/shared";
+import { getCookie } from "hono/cookie";
 import { fetchLastFm } from "../lastfm.js";
 import { getOrCreateSessionId, loadStoredTokens, setSessionCookie, requireLastFm } from "../middleware/auth.js";
 import type { CloudflareBinding } from "../types.js";
@@ -215,7 +216,15 @@ router.post(
     setSessionCookie(c, userId);
 
     // Validate body
-    const body: unknown = await c.req.json();
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"),
+        400
+      );
+    }
     const bodyResult = SessionStartRequestSchema.safeParse(body);
     if (!bodyResult.success) {
       return c.json(
@@ -231,9 +240,6 @@ router.post(
     }
 
     const tokens = await loadStoredTokens(kv, userId);
-    if (!tokens.lastfm) {
-      return c.json(createAPIError(ErrorCode.LASTFM_NOT_CONNECTED, "Last.fm is not connected"), 401);
-    }
 
     const releaseResponse = await fetchDiscogsRelease(c, releaseId);
     if (!releaseResponse.ok) {
@@ -250,7 +256,7 @@ router.post(
     });
 
     await storeSession(kv, session);
-    const npResult = await sendNowPlaying(c.env, tokens.lastfm.accessToken, session.release, session.currentIndex);
+    const npResult = await sendNowPlaying(c.env, tokens.lastfm!.accessToken, session.release, session.currentIndex);
     if (!npResult.ok) {
       console.error("[POST /start] Failed to send now playing:", npResult.message);
     }
@@ -349,9 +355,6 @@ router.post(
     }
 
     const tokens = await loadStoredTokens(kv, userId);
-    if (!tokens.lastfm) {
-      return c.json(createAPIError(ErrorCode.LASTFM_NOT_CONNECTED, "Last.fm is not connected"), 401);
-    }
 
     const now = Date.now();
     const previousIndex = session.currentIndex;
@@ -367,7 +370,7 @@ router.post(
 
     const scrobbleResult = await scrobbleTrack(
       c.env,
-      tokens.lastfm.accessToken,
+      tokens.lastfm!.accessToken,
       updated.release,
       previousIndex,
       Math.floor(previousStartedAt / 1000)
@@ -379,7 +382,7 @@ router.post(
     if (updated.state !== "ended") {
       const npResult = await sendNowPlaying(
         c.env,
-        tokens.lastfm.accessToken,
+        tokens.lastfm!.accessToken,
         updated.release,
         updated.currentIndex
       );
@@ -425,10 +428,10 @@ router.post(
     const updated = endSession(session);
     await storeSession(kv, updated);
 
-    if (tokens.lastfm && session.state !== "ended") {
+    if (session.state !== "ended") {
       const scrobbleResult = await scrobbleTrack(
         c.env,
-        tokens.lastfm.accessToken,
+        tokens.lastfm!.accessToken,
         updated.release,
         currentIndex,
         Math.floor(currentStartedAt / 1000)
@@ -445,8 +448,11 @@ router.post(
 
 router.get("/current", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;
-  const userId = getOrCreateSessionId(c);
-  setSessionCookie(c, userId);
+  const userId = getCookie(c, "now_spinning_session");
+  if (!userId) {
+    const response: SessionCurrentResponse = { session: null };
+    return c.json(response);
+  }
 
   const session = await loadCurrentSession(kv, userId);
   const response: SessionCurrentResponse = { session };

@@ -36,7 +36,7 @@ export function SessionPage() {
       if (!isSessionCurrentResponse(raw)) {
         throw new Error("Invalid session response");
       }
-      setSession(raw.session);
+      setSession(raw.session?.state === "ended" ? null : raw.session);
     } catch (err) {
        
       const error: unknown = err;

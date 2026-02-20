@@ -82,10 +82,13 @@ export function Settings() {
 
   const handleDisconnectLastFm = async () => {
     try {
-      await apiFetch("/api/auth/lastfm/disconnect", { method: "POST" });
+      const response = await apiFetch("/api/auth/lastfm/disconnect", { method: "POST" });
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to disconnect Last.fm");
+        throw new Error(message);
+      }
       setAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
     } catch (err) {
-       
       const error: unknown = err;
       setError(error instanceof Error ? error.message : String(error));
     }
@@ -93,10 +96,13 @@ export function Settings() {
 
   const handleDisconnectDiscogs = async () => {
     try {
-      await apiFetch("/api/auth/discogs/disconnect", { method: "POST" });
+      const response = await apiFetch("/api/auth/discogs/disconnect", { method: "POST" });
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to disconnect Discogs");
+        throw new Error(message);
+      }
       setAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
     } catch (err) {
-       
       const error: unknown = err;
       setError(error instanceof Error ? error.message : String(error));
     }
