@@ -21,11 +21,9 @@ import {
   loadStoredTokens,
 } from "../middleware/auth.js";
 import type { CloudflareBinding } from "../types.js";
+import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials, createAppAuthHeader } from "../utils/discogs.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
-
-const DISCOGS_API_BASE = "https://api.discogs.com";
-const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
 const CACHE_TTL_SECONDS = 600;
 const CACHE_VERSION = "v2";
 
@@ -243,22 +241,6 @@ async function fetchDiscogsJson<T>(
 }
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
-
-function getDiscogsAppCredentials(
-  c: HonoContext
-): { consumerKey: string; consumerSecret: string } | null {
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
-  if (!consumerKey || !consumerSecret) {
-    return null;
-  }
-
-  return { consumerKey, consumerSecret };
-}
-
-function createAppAuthHeader(consumerKey: string, consumerSecret: string): string {
-  return `Discogs key=${consumerKey}, secret=${consumerSecret}`;
-}
 
 router.get("/collection", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;

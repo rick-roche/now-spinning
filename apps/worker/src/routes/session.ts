@@ -1,12 +1,6 @@
 /**
  * Session endpoints (M3 MVP).
- *
- * Note: This module intentionally uses unsafe type assertions (`any`) to access Zod error details
- * that are only available at runtime. This is a known limitation of TypeScript's type system when
- * dealing with ZodError.errors, which exists at runtime but is not typed in the public API.
  */
-
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
 import { Hono } from "hono";
 import type { Context } from "hono";
@@ -29,11 +23,10 @@ import {
 import { fetchLastFm } from "../lastfm.js";
 import { getOrCreateSessionId, loadStoredTokens, setSessionCookie, requireLastFm } from "../middleware/auth.js";
 import type { CloudflareBinding } from "../types.js";
+import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials } from "../utils/discogs.js";
+import { formatZodErrors } from "../utils/validation.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
-
-const DISCOGS_API_BASE = "https://api.discogs.com";
-const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
 
@@ -64,18 +57,6 @@ async function loadCurrentSession(
   }
 
   return loadSession(kv, currentId);
-}
-
-function getDiscogsAppCredentials(
-  c: HonoContext
-): { consumerKey: string; consumerSecret: string } | null {
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
-  if (!consumerKey || !consumerSecret) {
-    return null;
-  }
-
-  return { consumerKey, consumerSecret };
 }
 
 async function fetchDiscogsRelease(
@@ -235,19 +216,12 @@ router.post(
     const body: unknown = await c.req.json();
     const bodyResult = SessionStartRequestSchema.safeParse(body);
     if (!bodyResult.success) {
-      const details: Record<string, string[]> = {};
-      const errors = (bodyResult.error as any).errors || [];
-      errors.forEach((err: any) => {
-        const path = err.path.join(".");
-        if (!details[path]) details[path] = [];
-        details[path].push(err.message);
-      });
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "Request body validation failed",
-            details,
+            details: formatZodErrors(bodyResult.error),
           },
         },
         400
@@ -311,19 +285,12 @@ router.post(
     const params = c.req.param();
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
-      const details: Record<string, string[]> = {};
-      const errors = (paramResult.error as any).errors || [];
-      errors.forEach((err: any) => {
-        const path = err.path.join(".");
-        if (!details[path]) details[path] = [];
-        details[path].push(err.message);
-      });
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "Path parameters validation failed",
-            details,
+            details: formatZodErrors(paramResult.error),
           },
         },
         400
@@ -359,19 +326,12 @@ router.post(
     const params = c.req.param();
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
-      const details: Record<string, string[]> = {};
-      const errors = (paramResult.error as any).errors || [];
-      errors.forEach((err: any) => {
-        const path = err.path.join(".");
-        if (!details[path]) details[path] = [];
-        details[path].push(err.message);
-      });
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "Path parameters validation failed",
-            details,
+            details: formatZodErrors(paramResult.error),
           },
         },
         400
@@ -407,19 +367,12 @@ router.post(
     const params = c.req.param();
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
-      const details: Record<string, string[]> = {};
-      const errors = (paramResult.error as any).errors || [];
-      errors.forEach((err: any) => {
-        const path = err.path.join(".");
-        if (!details[path]) details[path] = [];
-        details[path].push(err.message);
-      });
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "Path parameters validation failed",
-            details,
+            details: formatZodErrors(paramResult.error),
           },
         },
         400
@@ -497,19 +450,12 @@ router.post(
     const params = c.req.param();
     const paramResult = SessionParamSchema.safeParse(params);
     if (!paramResult.success) {
-      const details: Record<string, string[]> = {};
-      const errors = (paramResult.error as any).errors || [];
-      errors.forEach((err: any) => {
-        const path = err.path.join(".");
-        if (!details[path]) details[path] = [];
-        details[path].push(err.message);
-      });
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "Path parameters validation failed",
-            details,
+            details: formatZodErrors(paramResult.error),
           },
         },
         400

@@ -73,12 +73,3 @@ export {
   type SessionId,
   type SessionParam,
 } from "./validation/index.js";
-
-// Utilities
-export {
-  fetchWithRetry,
-  fetchWithRetryInit,
-  fetchJSON,
-  createFetchClient,
-  type FetchConfig,
-} from "./utils/index.js";

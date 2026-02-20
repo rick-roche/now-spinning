@@ -1,45 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./Icon";
-
-interface NavItem {
-  label: string;
-  icon: string;
-  to: string;
-  match?: (path: string) => boolean;
-}
+import { navItems, isNavItemActive } from "./nav-config";
 
 export function SideNav() {
   const location = useLocation();
   const path = location.pathname;
-
-  const navItems: NavItem[] = [
-    {
-      label: "Collection",
-      icon: "library_music",
-      to: "/collection",
-      match: (p) =>
-        p === "/" ||
-        p.startsWith("/collection") ||
-        p.startsWith("/search") ||
-        p.startsWith("/release"),
-    },
-    {
-      label: "Player",
-      icon: "album",
-      to: "/session",
-      match: (p) => p.startsWith("/session"),
-    },
-    {
-      label: "Settings",
-      icon: "settings",
-      to: "/settings",
-    },
-  ];
-
-  const isActive = (item: NavItem) => {
-    if (item.match) return item.match(path);
-    return path === item.to;
-  };
 
   return (
     <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-56 bg-surface-dark border-r border-border-dark z-40">
@@ -59,7 +24,7 @@ export function SideNav() {
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => {
-          const active = isActive(item);
+          const active = isNavItemActive(item, path);
           return (
             <Link
               key={item.to}

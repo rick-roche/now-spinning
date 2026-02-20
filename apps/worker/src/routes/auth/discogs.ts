@@ -14,12 +14,13 @@ import {
   storeOAuthState,
 } from "../../middleware/auth.js";
 import type { CloudflareBinding } from "../../types.js";
+import { DISCOGS_API_BASE, DISCOGS_USER_AGENT } from "../../utils/discogs.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
 
-const DISCOGS_REQUEST_TOKEN_URL = "https://api.discogs.com/oauth/request_token";
+const DISCOGS_REQUEST_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/request_token`;
 const DISCOGS_AUTHORIZE_URL = "https://www.discogs.com/oauth/authorize";
-const DISCOGS_ACCESS_TOKEN_URL = "https://api.discogs.com/oauth/access_token";
+const DISCOGS_ACCESS_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/access_token`;
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
 
@@ -73,7 +74,7 @@ router.post("/start", async (c: HonoContext) => {
   try {
     const response = await fetch(`${DISCOGS_REQUEST_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
-      headers: { "User-Agent": "NowSpinning/0.0.1 +now-spinning.dev" },
+      headers: { "User-Agent": DISCOGS_USER_AGENT },
     });
 
     console.log(
@@ -147,7 +148,7 @@ router.get("/callback", async (c: HonoContext) => {
   try {
     const response = await fetch(`${DISCOGS_ACCESS_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
-      headers: { "User-Agent": "NowSpinning/0.0.1 +now-spinning.dev" },
+      headers: { "User-Agent": DISCOGS_USER_AGENT },
     });
 
     console.log(
