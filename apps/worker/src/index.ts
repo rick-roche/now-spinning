@@ -14,10 +14,16 @@ app.use(
   cors({
     origin: (origin, c) => {
       const env = c.env as CloudflareBinding;
-      const allowedOrigins = [
+      const defaultOrigins = [
         "http://localhost:5173",
         "http://localhost:8787",
-        "https://now-spinning.rickroche.com",
+      ];
+      const envOrigins = env.ALLOWED_ORIGINS
+        ? env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+        : [];
+      const allowedOrigins = [
+        ...defaultOrigins,
+        ...envOrigins,
         env.PUBLIC_APP_ORIGIN,
       ].filter(Boolean);
       if (!origin) {

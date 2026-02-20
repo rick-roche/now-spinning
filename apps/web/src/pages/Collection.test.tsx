@@ -7,10 +7,9 @@ import type {
   DiscogsSearchResponse,
   AuthStatusResponse,
 } from "@repo/shared";
+import { createFetchMock } from "../test-utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchMock = vi.fn() as any;
-global.fetch = fetchMock;
+const fetchMock = createFetchMock();
 
 describe("Collection Page", () => {
   beforeEach(() => {

@@ -12,11 +12,12 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchAuthStatus = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiFetch("/api/auth/status");
+        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
@@ -25,15 +26,16 @@ export function Settings() {
          
         setAuthStatus(data);
       } catch (err) {
-         
+        if (controller.signal.aborted) return;
         const error: unknown = err;
         setError(error instanceof Error ? error.message : String(error));
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
     void fetchAuthStatus();
+    return () => controller.abort();
   }, []);
 
   const handleConnectLastFm = async () => {
@@ -254,7 +256,7 @@ export function Settings() {
           <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-border-dark">
               <span className="text-sm font-medium">Version</span>
-              <span className="text-sm text-slate-500">v1.2.0</span>
+              <span className="text-sm text-slate-500">{__APP_VERSION__}</span>
             </div>
             <a
               className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"

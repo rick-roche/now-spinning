@@ -14,11 +14,11 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     const fetchStatus = async () => {
       try {
         setError(null);
-        const response = await apiFetch("/api/auth/status");
+        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
         if (!response.ok) throw new Error("Failed to fetch auth status");
          
         const data: AuthStatusResponse = await response.json();
@@ -28,17 +28,15 @@ export function Home() {
           return;
         }
       } catch (err) {
-         
+        if (controller.signal.aborted) return;
         const error: unknown = err;
         console.error(getErrorMessage(error));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
     void fetchStatus();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [navigate]);
 
   const handleConnectDiscogs = async () => {

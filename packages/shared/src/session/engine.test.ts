@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedRelease } from "../domain/release.js";
-import { advanceSession, createSession, pauseSession, resumeSession } from "./engine.js";
+import { advanceSession, createSession, endSession, pauseSession, resumeSession } from "./engine.js";
 
 const release: NormalizedRelease = {
   id: "123",
@@ -432,6 +432,78 @@ describe("session engine", () => {
 
       expect(resumed1.currentIndex).toBe(0);
       expect(advanced2.currentIndex).toBe(1);
+    });
+  });
+
+  describe("endSession", () => {
+    it("ends a running session", () => {
+      const session = createSession({
+        sessionId: "end-run",
+        userId: "user-end",
+        release,
+        startedAt: 1000,
+      });
+
+      const ended = endSession(session);
+      expect(ended.state).toBe("ended");
+    });
+
+    it("ends a paused session", () => {
+      const session = createSession({
+        sessionId: "end-pause",
+        userId: "user-end2",
+        release,
+        startedAt: 1000,
+      });
+
+      const paused = pauseSession(session);
+      const ended = endSession(paused);
+      expect(ended.state).toBe("ended");
+    });
+
+    it("is idempotent on already ended session", () => {
+      const session = createSession({
+        sessionId: "end-idem",
+        userId: "user-end3",
+        release,
+        startedAt: 1000,
+      });
+
+      const ended1 = endSession(session);
+      const ended2 = endSession(ended1);
+      expect(ended2.state).toBe("ended");
+      expect(ended2).toBe(ended1); // same reference returned
+    });
+
+    it("preserves session data when ending", () => {
+      const session = createSession({
+        sessionId: "end-data",
+        userId: "user-end4",
+        release,
+        startedAt: 1000,
+      });
+
+      const advanced = advanceSession(session, 1300);
+      const ended = endSession(advanced);
+
+      expect(ended.id).toBe("end-data");
+      expect(ended.userId).toBe("user-end4");
+      expect(ended.currentIndex).toBe(1);
+      expect(ended.tracks[0]?.status).toBe("scrobbled");
+      expect(ended.release).toEqual(release);
+    });
+
+    it("does not scrobble current track when ending mid-track", () => {
+      const session = createSession({
+        sessionId: "end-mid",
+        userId: "user-end5",
+        release,
+        startedAt: 1000,
+      });
+
+      const ended = endSession(session);
+      expect(ended.tracks[0]?.status).toBe("pending");
+      expect(ended.tracks[0]?.scrobbledAt).toBeNull();
     });
   });
 });

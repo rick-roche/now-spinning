@@ -25,33 +25,34 @@ export function SessionPage() {
   const lastTrackKeyRef = useRef<string | null>(null);
   const storageKeyRef = useRef<string | null>(null);
 
-  const loadSession = async () => {
-    try {
-      setLoading(true);
-      const response = await apiFetch("/api/session/current");
-      if (!response.ok) {
-        throw new Error("Failed to load session");
-      }
-      const raw: unknown = await response.json();
-      if (!isSessionCurrentResponse(raw)) {
-        throw new Error("Invalid session response");
-      }
-      setSession(raw.session?.state === "ended" ? null : raw.session);
-    } catch (err) {
-       
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    void loadSession();
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        setLoading(true);
+        const response = await apiFetch("/api/session/current", { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error("Failed to load session");
+        }
+        const raw: unknown = await response.json();
+        if (!isSessionCurrentResponse(raw)) {
+          throw new Error("Invalid session response");
+        }
+        setSession(raw.session?.state === "ended" ? null : raw.session);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        const error: unknown = err;
+        setError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    void load();
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || session.state !== "running") return;
     const interval = window.setInterval(() => {
       setNowMs(Date.now());
     }, 1000);

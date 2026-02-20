@@ -11,8 +11,10 @@ export default defineConfig({
       exclude: [
         "node_modules/",
         "dist/",
+        "coverage/",
         "**/*.test.ts",
         "**/*.spec.ts",
+        "**/*.config.{js,ts}",
       ],
     },
   },

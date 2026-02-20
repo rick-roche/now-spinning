@@ -13,6 +13,7 @@ export function Release() {
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const loadRelease = async () => {
       if (!id) {
         setError("Missing release id.");
@@ -22,7 +23,7 @@ export function Release() {
 
       try {
         setLoading(true);
-        const response = await apiFetch(`/api/discogs/release/${id}`);
+        const response = await apiFetch(`/api/discogs/release/${id}`, { signal: controller.signal });
         if (!response.ok) {
           throw new Error("Failed to load release");
         }
@@ -30,15 +31,16 @@ export function Release() {
         const data: DiscogsReleaseResponse<NormalizedRelease> = await response.json();
         setRelease(data.release);
       } catch (err) {
-         
+        if (controller.signal.aborted) return;
         const error: unknown = err;
         setError(error instanceof Error ? error.message : String(error));
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
     void loadRelease();
+    return () => controller.abort();
   }, [id]);
 
   const groupedTracks = useMemo(() => {

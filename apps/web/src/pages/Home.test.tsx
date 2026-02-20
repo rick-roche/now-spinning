@@ -3,15 +3,14 @@ import { BrowserRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Home } from "./Home";
 import type { AuthStatusResponse } from "@repo/shared";
+import { createFetchMock } from "../test-utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchMock = vi.fn() as any;
-global.fetch = fetchMock;
+const fetchMock = createFetchMock();
 
 describe("Home Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = fetchMock;
+    global.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -155,7 +154,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", expect.objectContaining({ credentials: "include" }));
     });
 
     // After auth resolves the component navigates away; the connect UI must never appear
@@ -196,7 +195,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", expect.objectContaining({ credentials: "include" }));
     });
 
     expect(screen.queryByText("Connect your music services")).not.toBeInTheDocument();
@@ -239,12 +238,12 @@ describe("Home Page", () => {
         })
       );
     
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (window as any).location;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).location = { href: "" };
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { href: "" },
+    });
 
     render(
       <BrowserRouter>
@@ -279,12 +278,12 @@ describe("Home Page", () => {
         })
       );
     
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (window as any).location;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).location = { href: "" };
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { href: "" },
+    });
 
     render(
       <BrowserRouter>
@@ -319,7 +318,7 @@ describe("Home Page", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", { credentials: "include" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/status", expect.objectContaining({ credentials: "include" }));
     });
   });
 });

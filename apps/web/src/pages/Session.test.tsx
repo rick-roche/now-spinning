@@ -3,10 +3,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import type { Session, SessionCurrentResponse } from "@repo/shared";
 import { SessionPage } from "./Session";
+import { createFetchMock } from "../test-utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchMock = vi.fn() as any;
-global.fetch = fetchMock;
+const fetchMock = createFetchMock();
 
 const mockSession: Session = {
   id: "sess-123",
@@ -66,7 +65,7 @@ const renderSessionPage = () => {
 describe("SessionPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    global.fetch = fetchMock;
+    global.fetch = fetchMock as unknown as typeof fetch;
     sessionStorage.clear();
   });
 

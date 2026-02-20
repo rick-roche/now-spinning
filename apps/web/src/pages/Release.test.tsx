@@ -3,10 +3,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Release } from "./Release";
 import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
+import { createFetchMock } from "../test-utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchMock = vi.fn() as any;
-global.fetch = fetchMock;
+const fetchMock = createFetchMock();
 
 describe("Release Page", () => {
   beforeEach(() => {
@@ -304,7 +303,7 @@ describe("Release Page", () => {
     fireEvent.click(startButton);
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls[1][0]).toContain("/api/session/start");
+      expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/session/start");
     });
   });
 

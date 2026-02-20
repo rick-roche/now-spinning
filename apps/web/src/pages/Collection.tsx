@@ -67,10 +67,11 @@ export function Collection() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchStatus = async () => {
       try {
         setLoadingStatus(true);
-        const response = await apiFetch("/api/auth/status");
+        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
@@ -81,15 +82,16 @@ export function Collection() {
           await loadCollection(1, false);
         }
       } catch (err) {
-         
+        if (controller.signal.aborted) return;
         const error: unknown = err;
         setError(error instanceof Error ? error.message : String(error));
       } finally {
-        setLoadingStatus(false);
+        if (!controller.signal.aborted) setLoadingStatus(false);
       }
     };
 
     void fetchStatus();
+    return () => controller.abort();
   }, [loadCollection]);
 
   const filteredItems = useMemo(() => {

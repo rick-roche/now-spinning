@@ -2,10 +2,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Settings } from "./Settings";
 import type { AuthStatusResponse } from "@repo/shared";
+import { createFetchMock } from "../test-utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchMock = vi.fn() as any;
-global.fetch = fetchMock;
+const fetchMock = createFetchMock();
 
 describe("Settings Page", () => {
   beforeEach(() => {
