@@ -1,20 +1,20 @@
 /**
- * Cloudflare Pages Function to proxy all /api/* requests to the Worker
+ * Cloudflare Pages Function to proxy all /api/* requests to the Worker by URL.
+ * This avoids requiring a Pages service binding for Worker-to-Worker fetch.
  */
 
+const DEFAULT_API_BASE_URL = "https://now-spinning-api.rickroche.workers.dev";
+
 interface Env {
-  API: {
-    fetch: (request: Request) => Promise<Response>;
-  };
+  API_BASE_URL?: string;
 }
 
 interface PagesContext<E = unknown> {
   request: Request;
   env: E;
-  params: Record<string, string>;
-  waitUntil: (promise: Promise<unknown>) => void;
-  next: () => Promise<Response>;
-  data: Record<string, unknown>;
+  params: {
+    path?: string | string[];
+  };
 }
 
 type PagesHandler<E = unknown> = (
@@ -22,9 +22,24 @@ type PagesHandler<E = unknown> = (
 ) => Response | Promise<Response>;
 
 export const onRequest: PagesHandler<Env> = async (context) => {
-  const { request, env } = context;
+  const { request, env, params } = context;
 
-  // Forward the request to the Worker service
-  // The Worker will receive the full URL path including /api
-  return env.API.fetch(request);
+  const path =
+    Array.isArray(params.path) ? params.path.join("/") : (params.path ?? "");
+
+  const incomingUrl = new URL(request.url);
+  const apiBaseUrl = (env.API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+  const upstreamUrl = new URL(`${apiBaseUrl}/api/${path}`);
+  upstreamUrl.search = incomingUrl.search;
+
+  const init: RequestInit = {
+    method: request.method,
+    headers: request.headers,
+    redirect: "manual",
+  };
+  if (!["GET", "HEAD"].includes(request.method)) {
+    init.body = await request.arrayBuffer();
+  }
+
+  return fetch(upstreamUrl, init);
 };

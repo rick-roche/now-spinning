@@ -9,15 +9,39 @@ function getErrorMessage(err: unknown): string {
   return String(err);
 }
 
+async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload: unknown = await response.json();
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "error" in payload &&
+      typeof payload.error === "object" &&
+      payload.error !== null &&
+      "message" in payload.error &&
+      typeof payload.error.message === "string"
+    ) {
+      return payload.error.message;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function Home() {
   const navigate = useNavigate();
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectingDiscogs, setConnectingDiscogs] = useState(false);
+  const [connectingLastFm, setConnectingLastFm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const fetchStatus = async () => {
       try {
+        setError(null);
         const response = await fetch(getApiUrl("/api/auth/status"));
         if (!response.ok) throw new Error("Failed to fetch auth status");
          
@@ -43,31 +67,43 @@ export function Home() {
 
   const handleConnectDiscogs = async () => {
     try {
+      setConnectingDiscogs(true);
+      setError(null);
       const response = await fetch(getApiUrl("/api/auth/discogs/start"), { method: "POST" });
-       
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to start Discogs authentication");
+        throw new Error(message);
+      }
       const data: { redirectUrl?: string } = await response.json();
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-       
       const error: unknown = err;
-      console.error(getErrorMessage(error));
+      setError(getErrorMessage(error));
+    } finally {
+      setConnectingDiscogs(false);
     }
   };
 
   const handleConnectLastFm = async () => {
     try {
+      setConnectingLastFm(true);
+      setError(null);
       const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
-       
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
+        throw new Error(message);
+      }
       const data: { redirectUrl?: string } = await response.json();
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-       
       const error: unknown = err;
-      console.error(getErrorMessage(error));
+      setError(getErrorMessage(error));
+    } finally {
+      setConnectingLastFm(false);
     }
   };
 
@@ -134,11 +170,15 @@ export function Home() {
               </div>
               <button
                 onClick={() => void handleConnectDiscogs()}
-                disabled={loading}
+                disabled={loading || connectingDiscogs}
                 className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 <span className="truncate">
-                  {authStatus?.discogsConnected ? "✓ Connected" : "Connect Discogs"}
+                  {authStatus?.discogsConnected
+                    ? "✓ Connected"
+                    : connectingDiscogs
+                      ? "Connecting Discogs..."
+                      : "Connect Discogs"}
                 </span>
                 <Icon name="open_in_new" className="text-sm" />
               </button>
@@ -171,17 +211,27 @@ export function Home() {
               </div>
               <button
                 onClick={() => void handleConnectLastFm()}
-                disabled={loading}
+                disabled={loading || connectingLastFm}
                 className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 <span className="truncate">
-                  {authStatus?.lastfmConnected ? "✓ Connected" : "Connect Last.fm"}
+                  {authStatus?.lastfmConnected
+                    ? "✓ Connected"
+                    : connectingLastFm
+                      ? "Connecting Last.fm..."
+                      : "Connect Last.fm"}
                 </span>
                 <Icon name="open_in_new" className="text-sm" />
               </button>
             </div>
           </div>
         </div>
+
+        {error && (
+          <div className="mt-6 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Privacy Note */}
         <footer className="mt-12 mb-8 text-center px-6">

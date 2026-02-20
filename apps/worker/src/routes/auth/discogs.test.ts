@@ -129,7 +129,7 @@ describe("Discogs OAuth Routes", () => {
       }
     });
 
-    it("should handle Discogs API errors (4xx)", async () => {
+    it("should preserve Discogs API 4xx status codes", async () => {
       const originalFetch = global.fetch;
       global.fetch = async () => new Response("Bad request", { status: 400 });
 
@@ -147,6 +147,29 @@ describe("Discogs OAuth Routes", () => {
         expect(response.status).toBe(400);
         const body = (await response.json()) as Record<string, unknown>;
         expect((body.error as any).code).toBe("DISCOGS_ERROR");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should return rate-limit error when Discogs returns 429", async () => {
+      const originalFetch = global.fetch;
+      global.fetch = async () => new Response("Too many requests", { status: 429 });
+
+      try {
+        const app = createTestApp(kvMock);
+        const { name, value } = getTestSessionCookie();
+
+        const response = await app.request(
+          new Request("http://localhost:8787/auth/discogs/start", {
+            method: "POST",
+            headers: { cookie: `${name}=${value}` },
+          })
+        );
+
+        expect(response.status).toBe(429);
+        const body = (await response.json()) as Record<string, unknown>;
+        expect((body.error as any).code).toBe("DISCOGS_RATE_LIMIT");
       } finally {
         global.fetch = originalFetch;
       }
@@ -372,7 +395,7 @@ describe("Discogs OAuth Routes", () => {
       expect((body.error as any).code).toBe("CONFIG_ERROR");
     });
 
-    it("should handle Discogs API errors during token exchange", async () => {
+    it("should preserve Discogs API errors during token exchange", async () => {
       const stateKey = `oauth:discogs:request-token-789`;
       const stateValue = JSON.stringify({
         sessionId: TEST_SESSION_ID,
@@ -395,7 +418,7 @@ describe("Discogs OAuth Routes", () => {
           )
         );
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(401);
         const body = (await response.json()) as Record<string, unknown>;
         expect((body.error as any).code).toBe("DISCOGS_ERROR");
       } finally {

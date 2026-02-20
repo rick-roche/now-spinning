@@ -3,9 +3,31 @@ import { Icon } from "../components/Icon";
 import { getApiUrl } from "../lib/api";
 import type { AuthStatusResponse } from "@repo/shared";
 
+async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload: unknown = await response.json();
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "error" in payload &&
+      typeof payload.error === "object" &&
+      payload.error !== null &&
+      "message" in payload.error &&
+      typeof payload.error.message === "string"
+    ) {
+      return payload.error.message;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function Settings() {
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectingDiscogs, setConnectingDiscogs] = useState(false);
+  const [connectingLastFm, setConnectingLastFm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,35 +57,45 @@ export function Settings() {
 
   const handleConnectLastFm = async () => {
     try {
+      setConnectingLastFm(true);
+      setError(null);
       const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
-         
-        const data: { redirectUrl?: string } = await response.json();
-         
-        if (data.redirectUrl) {
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
+        throw new Error(message);
+      }
+      const data: { redirectUrl?: string } = await response.json();
+      if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-       
       const error: unknown = err;
       setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnectingLastFm(false);
     }
   };
 
   const handleConnectDiscogs = async () => {
     try {
+      setConnectingDiscogs(true);
+      setError(null);
       const response = await fetch(getApiUrl("/api/auth/discogs/start"), {
         method: "POST",
       });
-         
-        const data: { redirectUrl?: string } = await response.json();
-         
-        if (data.redirectUrl) {
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to start Discogs authentication");
+        throw new Error(message);
+      }
+      const data: { redirectUrl?: string } = await response.json();
+      if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-       
       const error: unknown = err;
       setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnectingDiscogs(false);
     }
   };
 
@@ -184,10 +216,14 @@ export function Settings() {
                     ? handleDisconnectDiscogs()
                     : handleConnectDiscogs())
                 }
-                disabled={loading}
+                disabled={loading || connectingDiscogs}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
-                {authStatus?.discogsConnected ? "Disconnect" : "Connect"}
+                {authStatus?.discogsConnected
+                  ? "Disconnect"
+                  : connectingDiscogs
+                    ? "Connecting..."
+                    : "Connect"}
               </button>
             </div>
 
@@ -217,10 +253,14 @@ export function Settings() {
                     ? handleDisconnectLastFm()
                     : handleConnectLastFm())
                 }
-                disabled={loading}
+                disabled={loading || connectingLastFm}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
-                {authStatus?.lastfmConnected ? "Disconnect" : "Connect"}
+                {authStatus?.lastfmConnected
+                  ? "Disconnect"
+                  : connectingLastFm
+                    ? "Connecting..."
+                    : "Connect"}
               </button>
             </div>
           </div>

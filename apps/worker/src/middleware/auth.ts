@@ -28,13 +28,18 @@ export function getOrCreateSessionId(c: Context<{ Bindings: CloudflareBinding }>
  * Set the session cookie.
  */
 export function setSessionCookie(c: Context<{ Bindings: CloudflareBinding }>, sessionId: string): void {
-  setCookie(c, SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "Lax",
-    maxAge: SESSION_COOKIE_MAX_AGE,
-    path: "/",
-  });
+  try {
+    setCookie(c, SESSION_COOKIE, sessionId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      maxAge: SESSION_COOKIE_MAX_AGE,
+      path: "/",
+    });
+  } catch (err) {
+    console.error("Failed to set session cookie:", err);
+    // Don't throw - just log it. The rest of the request can continue.
+  }
 }
 
 /**

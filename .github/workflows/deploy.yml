@@ -63,6 +63,7 @@ jobs:
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
           DISCOGS_CONSUMER_KEY: ${{ secrets.DISCOGS_CONSUMER_KEY }}
           DISCOGS_CONSUMER_SECRET: ${{ secrets.DISCOGS_CONSUMER_SECRET }}
+          DEBUG: wrangler:*
 
       - name: Deploy SPA to Pages
         uses: cloudflare/wrangler-action@v3

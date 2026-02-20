@@ -23,6 +23,21 @@ const DISCOGS_ACCESS_TOKEN_URL = "https://api.discogs.com/oauth/access_token";
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
 
+function discogsError(response: Response): Response {
+  const retryAfter = response.headers.get("Retry-After");
+  const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+  const code = status === 429 ? "DISCOGS_RATE_LIMIT" : "DISCOGS_ERROR";
+  const message =
+    status === 429 ? "Discogs rate limit reached. Please retry shortly." : `Discogs returned ${status}`;
+
+  const headers = new Headers({ "content-type": "application/json" });
+  if (retryAfter) {
+    headers.set("Retry-After", retryAfter);
+  }
+
+  return new Response(JSON.stringify({ error: { code, message } }), { status, headers });
+}
+
 router.post("/start", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;
   const sessionId = getOrCreateSessionId(c);
@@ -62,8 +77,7 @@ router.post("/start", async (c: HonoContext) => {
     });
 
     if (!response.ok) {
-      const statusCode = response.status >= 500 ? 500 : 400;
-      return c.json({ error: { code: "DISCOGS_ERROR", message: `Discogs returned ${response.status}` } }, statusCode);
+      return discogsError(response);
     }
 
     const text = await response.text();
@@ -133,8 +147,7 @@ router.get("/callback", async (c: HonoContext) => {
     });
 
     if (!response.ok) {
-      const statusCode = response.status >= 500 ? 500 : 400;
-      return c.json({ error: { code: "DISCOGS_ERROR", message: `Discogs returned ${response.status}` } }, statusCode);
+      return discogsError(response);
     }
 
     const text = await response.text();
