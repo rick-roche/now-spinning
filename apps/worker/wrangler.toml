@@ -6,6 +6,9 @@ kv_namespaces = [
   { binding = "NOW_SPINNING_KV", id = "DEV_KV" }
 ]
 
+[placement]
+mode = "smart"
+
 [vars]
 PUBLIC_APP_ORIGIN = "http://localhost:5173"
 LASTFM_CALLBACK_URL = "http://localhost:8787/api/auth/lastfm/callback"

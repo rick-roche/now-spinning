@@ -29,6 +29,29 @@ const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
 const CACHE_TTL_SECONDS = 600;
 const CACHE_VERSION = "v2";
 
+const RATE_LIMIT_MAX_RETRIES = 3;
+const RATE_LIMIT_INITIAL_BACKOFF_MS = 500;
+const RATE_LIMIT_MAX_BACKOFF_MS = 10_000;
+
+/**
+ * Parse Retry-After header value into milliseconds.
+ * Accepts a numeric string (seconds) or an HTTP date string.
+ * Returns null if the header is absent or unparseable.
+ */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(Math.ceil(seconds) * 1000, RATE_LIMIT_MAX_BACKOFF_MS);
+  }
+  const date = new Date(header);
+  if (!isNaN(date.getTime())) {
+    const ms = date.getTime() - Date.now();
+    return ms > 0 ? Math.min(ms, RATE_LIMIT_MAX_BACKOFF_MS) : 0;
+  }
+  return null;
+}
+
 interface DiscogsIdentityResponse {
   username?: string;
 }
@@ -171,7 +194,7 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
 async function fetchDiscogsJson<T>(
   url: string,
   authHeader?: string
-): Promise<{ ok: true; data: T } | { ok: false; status: number }> {
+): Promise<{ ok: true; data: T } | { ok: false; status: number; retryAfter?: string | null }> {
   const headers: Record<string, string> = {
     "User-Agent": DISCOGS_USER_AGENT,
   };
@@ -180,22 +203,43 @@ async function fetchDiscogsJson<T>(
     headers.Authorization = authHeader;
   }
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-  });
-
   const urlPath = (() => { try { return new URL(url).pathname; } catch { return url; } })();
-  console.log(
-    `[Discogs] ${urlPath} → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")} auth=${authHeader ? "yes" : "no"}`
-  );
 
-  if (!response.ok) {
-    return { ok: false, status: response.status };
+  for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
+    const response = await fetch(url, { method: "GET", headers });
+
+    console.log(
+      `[Discogs] ${urlPath} → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")} auth=${authHeader ? "yes" : "no"}${attempt > 0 ? ` attempt=${attempt + 1}` : ""}`
+    );
+
+    if (response.status !== 429) {
+      if (!response.ok) {
+        return { ok: false, status: response.status };
+      }
+      const data = (await response.json()) as T;
+      return { ok: true, data };
+    }
+
+    // 429: rate limited — retry with backoff unless we've exhausted attempts
+    const retryAfterHeader = response.headers.get("Retry-After");
+
+    if (attempt >= RATE_LIMIT_MAX_RETRIES) {
+      return { ok: false, status: 429, retryAfter: retryAfterHeader };
+    }
+
+    const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+    const backoffMs =
+      retryAfterMs ?? Math.min(RATE_LIMIT_INITIAL_BACKOFF_MS * Math.pow(2, attempt), RATE_LIMIT_MAX_BACKOFF_MS);
+
+    console.log(
+      `[Discogs] ${urlPath} → 429 rate limited, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${RATE_LIMIT_MAX_RETRIES})`
+    );
+
+    await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
   }
 
-  const data = (await response.json()) as T;
-  return { ok: true, data };
+  // Should not be reached
+  return { ok: false, status: 429 };
 }
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
@@ -268,6 +312,13 @@ router.get("/collection", async (c: HonoContext) => {
     );
 
     if (!identityResponse.ok) {
+      if (identityResponse.status === 429) {
+        if (identityResponse.retryAfter) c.header("Retry-After", identityResponse.retryAfter);
+        return c.json(
+          { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
+          429
+        );
+      }
       const statusCode = identityResponse.status >= 500 ? 502 : 400;
       return c.json(
         { error: { code: "DISCOGS_ERROR", message: "Discogs identity lookup failed" } },
@@ -301,6 +352,13 @@ router.get("/collection", async (c: HonoContext) => {
   );
 
   if (!collectionResponse.ok) {
+    if (collectionResponse.status === 429) {
+      if (collectionResponse.retryAfter) c.header("Retry-After", collectionResponse.retryAfter);
+      return c.json(
+        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
+        429
+      );
+    }
     const statusCode = collectionResponse.status >= 500 ? 502 : 400;
     return c.json(
       { error: { code: "DISCOGS_ERROR", message: "Discogs collection fetch failed" } },
@@ -367,6 +425,13 @@ router.get("/search", async (c: HonoContext) => {
 
   const searchResponse = await fetchDiscogsJson<DiscogsSearchApiResponse>(searchUrl.toString(), searchAuthHeader);
   if (!searchResponse.ok) {
+    if (searchResponse.status === 429) {
+      if (searchResponse.retryAfter) c.header("Retry-After", searchResponse.retryAfter);
+      return c.json(
+        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
+        429
+      );
+    }
     const statusCode = searchResponse.status >= 500 ? 502 : 400;
     return c.json(
       { error: { code: "DISCOGS_ERROR", message: "Discogs search failed" } },
@@ -430,6 +495,13 @@ router.get("/release/:id", async (c: HonoContext) => {
   );
 
   if (!releaseResponse.ok) {
+    if (releaseResponse.status === 429) {
+      if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
+      return c.json(
+        { error: { code: "DISCOGS_RATE_LIMIT", message: "Discogs rate limit reached. Please retry shortly." } },
+        429
+      );
+    }
     const statusCode = releaseResponse.status >= 500 ? 502 : 400;
     return c.json(
       { error: { code: "DISCOGS_ERROR", message: "Discogs release lookup failed" } },

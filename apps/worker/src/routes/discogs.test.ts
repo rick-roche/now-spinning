@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Hono } from "hono";
 import type { CloudflareBinding } from "../types";
 import { discogsRoutes } from "./discogs";
@@ -733,6 +733,205 @@ describe("Discogs Proxy Routes", () => {
         );
 
         expect(response.status).toBe(200);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
+  describe("429 rate limit handling", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should retry on 429 and succeed on second attempt (search)", async () => {
+      let callCount = 0;
+      const originalFetch = global.fetch;
+      global.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
+        if (urlStr.includes("/database/search")) {
+          callCount++;
+          if (callCount === 1) {
+            return new Response("", { status: 429 });
+          }
+          return new Response(
+            JSON.stringify({ pagination: { page: 1, pages: 1, per_page: 25, items: 1 }, results: [{ id: 1, title: "Album", type: "release" }] }),
+            { status: 200 }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/search?query=test")
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(200);
+        expect(callCount).toBe(2);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should respect numeric Retry-After header and recover (search)", async () => {
+      let callCount = 0;
+      const originalFetch = global.fetch;
+      global.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
+        if (urlStr.includes("/database/search")) {
+          callCount++;
+          if (callCount === 1) {
+            return new Response("", { status: 429, headers: { "Retry-After": "2" } });
+          }
+          return new Response(
+            JSON.stringify({ pagination: { page: 1, pages: 1, per_page: 25, items: 0 }, results: [] }),
+            { status: 200 }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/search?query=test")
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(200);
+        expect(callCount).toBe(2);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should return 429 to client with DISCOGS_RATE_LIMIT after exhausting retries", async () => {
+      const originalFetch = global.fetch;
+      global.fetch = async () => new Response("", { status: 429 });
+
+      try {
+        const app = createTestApp(kvMock);
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/search?query=test")
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(429);
+        const body = (await response.json()) as Record<string, unknown>;
+        expect((body.error as any).code).toBe("DISCOGS_RATE_LIMIT");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should propagate Retry-After header to client after exhausting retries", async () => {
+      const originalFetch = global.fetch;
+      global.fetch = async () => new Response("", { status: 429, headers: { "Retry-After": "5" } });
+
+      try {
+        const app = createTestApp(kvMock);
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/search?query=test")
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(429);
+        expect(response.headers.get("Retry-After")).toBe("5");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should retry on 429 for /release/:id and succeed", async () => {
+      let callCount = 0;
+      const mockReleaseResponse = {
+        id: 123,
+        title: "Test Album",
+        year: 2024,
+        artists: [{ name: "Test Artist" }],
+        tracklist: [],
+      };
+
+      const originalFetch = global.fetch;
+      global.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
+        if (urlStr.includes("/releases/123")) {
+          callCount++;
+          if (callCount === 1) {
+            return new Response("", { status: 429 });
+          }
+          return new Response(JSON.stringify(mockReleaseResponse), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/release/123")
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(200);
+        expect(callCount).toBe(2);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("should retry on 429 for /collection and succeed", async () => {
+      const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
+      const tokens = createTestUserTokens();
+      tokens.discogs = {
+        service: "discogs",
+        accessToken: "access-token-123",
+        accessTokenSecret: "secret-123",
+        storedAt: Date.now(),
+      };
+      kvMock.store.set(tokenKey, JSON.stringify(tokens));
+
+      let identityCallCount = 0;
+      const mockIdentityResponse = { username: "testuser" };
+      const mockCollectionResponse = {
+        pagination: { page: 1, pages: 1, per_page: 25, items: 0 },
+        releases: [],
+      };
+
+      const originalFetch = global.fetch;
+      global.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
+        if (urlStr.includes("/oauth/identity")) {
+          identityCallCount++;
+          if (identityCallCount === 1) {
+            return new Response("", { status: 429 });
+          }
+          return new Response(JSON.stringify(mockIdentityResponse), { status: 200 });
+        }
+        if (urlStr.includes("/users/testuser/collection")) {
+          return new Response(JSON.stringify(mockCollectionResponse), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const { name, value } = getTestSessionCookie();
+        const fetchPromise = app.request(
+          new Request("http://localhost:8787/discogs/collection", {
+            headers: { cookie: `${name}=${value}` },
+          })
+        );
+        await vi.runAllTimersAsync();
+        const response = await fetchPromise;
+        expect(response.status).toBe(200);
+        expect(identityCallCount).toBe(2);
       } finally {
         global.fetch = originalFetch;
       }
