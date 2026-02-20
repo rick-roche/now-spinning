@@ -5,16 +5,13 @@
       "entry": []
     },
     "apps/web": {
-      "entry": ["functions/**/*.ts"],
-      "ignore": ["dist/**", "coverage/**"]
+      "entry": ["functions/**/*.ts"]
     },
     "apps/worker": {
-      "entry": ["wrangler.toml"],
-      "ignore": ["dist/**", ".wrangler/**", "coverage/**"]
+      "entry": ["wrangler.toml"]
     },
     "packages/shared": {
-      "entry": [],
-      "ignore": ["dist/**", "coverage/**"]
+      "entry": []
     }
   },
   "ignoreDependencies": ["wrangler"]

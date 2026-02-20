@@ -44,7 +44,7 @@ export function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 glass-panel border-t border-white/10 px-6 pb-8 pt-4 z-50">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-panel border-t border-white/10 px-6 pb-8 pt-4 z-50">
       <div className="flex justify-between items-center max-w-md mx-auto">
         {navItems.map((item) => {
           const active = isActive(item);

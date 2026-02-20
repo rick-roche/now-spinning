@@ -6,12 +6,16 @@ import { Release } from "../pages/Release";
 import { SessionPage } from "../pages/Session";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { BottomNav } from "../components/BottomNav";
+import { SideNav } from "../components/SideNav";
 
 export function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <div className="min-h-screen flex flex-col pb-24">
+        {/* SideNav is fixed-position, rendered outside the flow */}
+        <SideNav />
+        {/* Content area: offset by sidebar on desktop, padded for bottom nav on mobile */}
+        <div className="min-h-screen flex flex-col md:ml-56 pb-24 md:pb-0">
           <main className="flex-1 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Home />} />

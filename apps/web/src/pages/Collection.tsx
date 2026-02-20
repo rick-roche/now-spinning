@@ -197,7 +197,8 @@ export function Collection() {
   return (
     <>
       {/* Header & Search */}
-      <header className="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md pt-6 pb-2 px-4 border-b border-gray-200 dark:border-accent-dark">
+      <header className="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-accent-dark">
+        <div className="max-w-5xl mx-auto px-4 pt-6 pb-2">
         {/* Filter Toggle */}
         <div className="flex bg-gray-100 dark:bg-accent-dark p-1 rounded-xl mb-4">
           <button
@@ -254,7 +255,7 @@ export function Collection() {
 
         {/* Sort controls — collection mode only */}
         {activeFilter === "collection" && (
-          <div className="flex items-center gap-2 pb-2">
+          <div className="flex items-center gap-2 pb-2 md:pb-3">
             <span className="text-xs text-text-muted shrink-0">Sort:</span>
             <div className="flex gap-1.5 overflow-x-auto hide-scrollbar flex-1">
               {(["artist", "title", "year", "dateAdded"] as SortField[]).map((field) => {
@@ -288,10 +289,12 @@ export function Collection() {
             </button>
           </div>
         )}
+        </div>
       </header>
 
       {/* Collection Grid */}
-      <main className="flex-1 px-4 py-6 mb-20">
+      <main className="flex-1 py-6 mb-20 md:mb-0">
+        <div className="max-w-5xl mx-auto px-4">
         {activeFilter === "collection" ? (
           /* ── My Collection ── */
           loading ? (
@@ -307,7 +310,7 @@ export function Collection() {
             </div>
           ) : filteredItems.length > 0 ? (
             <>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                 {filteredItems.map((item) => (
                   <div
                     key={item.instanceId}
@@ -389,7 +392,7 @@ export function Collection() {
 
             {!searching && searchItems.length > 0 && (
               <>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                   {searchItems.map((item) => (
                     <div
                       key={item.instanceId}
@@ -449,6 +452,7 @@ export function Collection() {
             )}
           </>
         )}
+        </div>
       </main>
     </>
   );

@@ -132,7 +132,8 @@ export function Settings() {
         <button className="text-primary font-medium text-sm invisible">Save</button>
       </header> */}
 
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className="flex-1 overflow-y-auto pb-24 md:pb-12">
+        <div className="max-w-2xl mx-auto">
         <div className="px-4 pt-6 pb-2">
           <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         </div>
@@ -301,6 +302,7 @@ export function Settings() {
             {error}
           </div>
         )}
+        </div>{/* end max-width wrapper */}
       </main>
     </>
   );

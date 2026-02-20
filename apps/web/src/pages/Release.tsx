@@ -140,10 +140,13 @@ export function Release() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-6 pb-32">
+      <main className="flex-1 overflow-y-auto px-6 pb-32 md:pb-12">
+        <div className="md:grid md:grid-cols-[1fr_1fr] md:gap-12 md:max-w-4xl md:mx-auto md:items-start">
+        {/* Left column on desktop: album art + info + start button */}
+        <div>
         {/* Album Art */}
         <div className="mt-2 flex justify-center">
-          <div className="relative aspect-square w-full max-w-[220px]">
+          <div className="relative aspect-square w-full max-w-[220px] md:max-w-sm">
             <div className="absolute inset-0 bg-black/40 rounded-xl translate-y-3 scale-95 blur-2xl" />
             <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/10 shadow-2xl">
               {release.coverUrl ? (
@@ -180,9 +183,10 @@ export function Release() {
             {starting ? "Starting..." : "Start Scrobbling"}
           </button>
         </div>
+        </div>{/* end left column */}
 
-        {/* Tracklist */}
-        <div className="mt-8">
+        {/* Right column on desktop / continuation on mobile: tracklist */}
+        <div className="mt-8 md:mt-4">
           {groupedTracks.map((group) => (
             <div key={group.key} className="mb-6">
               <div className="flex items-center justify-between mb-3 px-1">
@@ -213,7 +217,8 @@ export function Release() {
               </div>
             </div>
           ))}
-        </div>
+        </div>{/* end right column */}
+        </div>{/* end desktop grid */}
       </main>
 
       {error && (

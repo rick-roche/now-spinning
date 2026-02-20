@@ -287,10 +287,13 @@ export function SessionPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-6 pb-32">
+      <main className="flex-1 overflow-y-auto px-6 pb-32 md:pb-12">
+        <div className="md:grid md:grid-cols-[1fr_1fr] md:gap-12 md:max-w-4xl md:mx-auto md:items-start">
+        {/* Left column on desktop: album art + track info + progress + controls */}
+        <div>
         {/* Album Art */}
         <div className="mt-4 flex justify-center">
-          <div className="relative group aspect-square w-full max-w-[220px]">
+          <div className="relative group aspect-square w-full max-w-[220px] md:max-w-sm">
             <div className="absolute inset-0 bg-black/40 rounded-xl translate-y-4 scale-95 blur-2xl"></div>
             <div className="relative w-full h-full rounded-xl overflow-hidden border border-white/10 shadow-2xl">
               {session.release.coverUrl ? (
@@ -365,9 +368,10 @@ export function SessionPage() {
             <span className="text-[10px] uppercase font-bold tracking-widest">Stop Session</span>
           </button>
         </div>
+        </div>{/* end left column */}
 
-        {/* Upcoming Tracks */}
-        <div className="mt-12">
+        {/* Right column on desktop / continuation on mobile: upcoming tracks */}
+        <div className="mt-12 md:mt-4">
           <div className="flex items-center justify-between mb-4 px-1">
             <h3 className="text-xs uppercase font-bold tracking-[0.2em] opacity-40">
               Coming up
@@ -409,7 +413,8 @@ export function SessionPage() {
                 );
               })}
           </div>
-        </div>
+        </div>{/* end right column */}
+        </div>{/* end desktop grid */}
       </main>
 
       {error && (
