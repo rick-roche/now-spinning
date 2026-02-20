@@ -6,7 +6,7 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "skipLibCheck": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "types": ["vitest/globals", "@testing-library/jest-dom", "@cloudflare/workers-types"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -22,5 +22,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts", "vitest.d.ts", "vitest.setup.ts"]
+  "include": ["src", "functions", "vite.config.ts", "vitest.config.ts", "vitest.d.ts", "vitest.setup.ts", "src/functions/**/*"]
 }

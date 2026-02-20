@@ -30,10 +30,14 @@ router.get("/start", async (c: HonoContext) => {
     return c.json({ error: { code: "CONFIG_ERROR", message: "Last.fm API key not configured" } }, 500);
   }
 
+  const callbackUrl = c.env.LASTFM_CALLBACK_URL;
+  if (!callbackUrl) {
+    return c.json({ error: { code: "CONFIG_ERROR", message: "Last.fm callback URL not configured" } }, 500);
+  }
+
   const stateToken = generateRandomString(32);
   await storeOAuthState(kv, "lastfm", stateToken, { sessionId });
 
-  const callbackUrl = c.env.LASTFM_CALLBACK_URL;
   const params = new URLSearchParams({ api_key: apiKey, cb: callbackUrl });
   const redirectUrl = `${LASTFM_AUTH_URL}?${params.toString()}`;
   return c.json({ redirectUrl });

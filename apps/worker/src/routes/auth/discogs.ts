@@ -33,9 +33,13 @@ router.post("/start", async (c: HonoContext) => {
     return c.json({ error: { code: "CONFIG_ERROR", message: "Discogs consumer key not configured" } }, 500);
   }
 
+  const callbackUrl = c.env.DISCOGS_CALLBACK_URL;
+  if (!callbackUrl) {
+    return c.json({ error: { code: "CONFIG_ERROR", message: "Discogs callback URL not configured" } }, 500);
+  }
+
   const nonce = generateRandomString(32);
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const callbackUrl = c.env.DISCOGS_CALLBACK_URL;
 
   const oauthParams = {
     oauth_consumer_key: consumerKey,

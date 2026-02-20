@@ -5,7 +5,7 @@
       "entry": []
     },
     "apps/web": {
-      "entry": [],
+      "entry": ["functions/**/*.ts"],
       "ignore": ["dist/**", "coverage/**"]
     },
     "apps/worker": {

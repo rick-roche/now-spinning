@@ -1,0 +1,6 @@
+name = "now-spinning"
+compatibility_date = "2026-02-01"
+
+[[services]]
+binding = "API"
+service = "now-spinning-api"

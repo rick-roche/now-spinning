@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { getApiUrl } from "../lib/api";
-import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
+import type { APIError, DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
 
 export function Release() {
   const { id } = useParams<{ id: string }>();
@@ -27,10 +27,12 @@ export function Release() {
           throw new Error("Failed to load release");
         }
 
-        const data = (await response.json()) as DiscogsReleaseResponse<NormalizedRelease>;
+        const data: DiscogsReleaseResponse<NormalizedRelease> = await response.json();
         setRelease(data.release);
       } catch (err) {
-        setError((err as Error).message);
+         
+        const error: unknown = err;
+        setError(error instanceof Error ? error.message : String(error));
       } finally {
         setLoading(false);
       }
@@ -81,13 +83,15 @@ export function Release() {
       });
 
       if (!response.ok) {
-        const data = (await response.json()) as { error?: { message?: string } };
+        const data: APIError = await response.json();
         throw new Error(data.error?.message ?? "Failed to start session");
       }
 
       void navigate("/session");
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     } finally {
       setStarting(false);
     }

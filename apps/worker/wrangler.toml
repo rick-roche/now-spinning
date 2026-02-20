@@ -19,9 +19,9 @@ kv_namespaces = [
 ]
 
 [env.production.vars]
-PUBLIC_APP_ORIGIN = "https://now-spinning.pages.dev"
-LASTFM_CALLBACK_URL = "https://now-spinning-api.rickroche.workers.dev/api/auth/lastfm/callback"
-DISCOGS_CALLBACK_URL = "https://now-spinning-api.rickroche.workers.dev/api/auth/discogs/callback"
+PUBLIC_APP_ORIGIN = "https://now-spinning.rickroche.com"
+LASTFM_CALLBACK_URL = "https://now-spinning.rickroche.com/api/auth/lastfm/callback"
+DISCOGS_CALLBACK_URL = "https://now-spinning.rickroche.com/api/auth/discogs/callback"
 DEV_MODE = "false"
 
 

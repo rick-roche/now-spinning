@@ -51,12 +51,15 @@ export function Collection() {
         throw new Error("Failed to load collection");
       }
 
-      const data = (await response.json()) as DiscogsCollectionResponse;
+       
+      const data: DiscogsCollectionResponse = await response.json();
       setItems((prev) => (append ? [...prev, ...data.items] : data.items));
       setPage(data.page);
       setPages(data.pages);
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -71,13 +74,16 @@ export function Collection() {
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
-        const data = (await response.json()) as AuthStatusResponse;
+         
+        const data: AuthStatusResponse = await response.json();
         setAuthStatus(data);
         if (data.discogsConnected) {
           await loadCollection(1, false);
         }
       } catch (err) {
-        setError((err as Error).message);
+         
+        const error: unknown = err;
+        setError(error instanceof Error ? error.message : String(error));
       } finally {
         setLoadingStatus(false);
       }
@@ -131,13 +137,15 @@ export function Collection() {
         if (!response.ok) {
           throw new Error("Failed to search Discogs");
         }
-
-        const data = (await response.json()) as DiscogsSearchResponse;
+         
+        const data: DiscogsSearchResponse = await response.json();
         setSearchItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setSearchPage(data.page);
         setSearchPages(data.pages);
       } catch (err) {
-        setSearchError((err as Error).message);
+         
+        const error: unknown = err;
+        setSearchError(error instanceof Error ? error.message : String(error));
       } finally {
         setSearching(false);
         setSearchingMore(false);

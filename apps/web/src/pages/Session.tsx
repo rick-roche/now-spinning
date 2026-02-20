@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { getApiUrl } from "../lib/api";
-import type { Session, SessionActionResponse, SessionCurrentResponse } from "@repo/shared";
+import type { APIError, Session, SessionActionResponse, SessionCurrentResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
   if (!value || typeof value !== "object") return false;
@@ -38,7 +38,9 @@ export function SessionPage() {
       }
       setSession(raw.session);
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
@@ -95,7 +97,7 @@ export function SessionPage() {
         if (!response.ok) {
           let message = "Session action failed";
           try {
-            const data = (await response.json()) as { error?: { message?: string } };
+            const data: APIError = await response.json();
             message = data.error?.message ?? message;
           } catch {
             // ignore JSON parse error on non-JSON error responses

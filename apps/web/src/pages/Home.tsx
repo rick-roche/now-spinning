@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import type { AuthStatusResponse } from "@repo/shared";
 
-interface OAuthStartResponse {
-  redirectUrl: string;
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
 
 export function Home() {
@@ -19,15 +20,17 @@ export function Home() {
       try {
         const response = await fetch(getApiUrl("/api/auth/status"));
         if (!response.ok) throw new Error("Failed to fetch auth status");
-        const data = (await response.json()) as AuthStatusResponse;
-        if (cancelled) return;
+         
+        const data: AuthStatusResponse = await response.json();
         setAuthStatus(data);
         if (data.discogsConnected) {
           void navigate("/collection");
           return;
         }
       } catch (err) {
-        console.error(err);
+         
+        const error: unknown = err;
+        console.error(getErrorMessage(error));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -41,24 +44,30 @@ export function Home() {
   const handleConnectDiscogs = async () => {
     try {
       const response = await fetch(getApiUrl("/api/auth/discogs/start"), { method: "POST" });
-      const data = (await response.json()) as OAuthStartResponse;
+       
+      const data: { redirectUrl?: string } = await response.json();
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-      console.error(err);
+       
+      const error: unknown = err;
+      console.error(getErrorMessage(error));
     }
   };
 
   const handleConnectLastFm = async () => {
     try {
       const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
-      const data = (await response.json()) as OAuthStartResponse;
+       
+      const data: { redirectUrl?: string } = await response.json();
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-      console.error(err);
+       
+      const error: unknown = err;
+      console.error(getErrorMessage(error));
     }
   };
 

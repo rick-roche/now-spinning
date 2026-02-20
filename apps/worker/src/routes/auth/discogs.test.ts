@@ -61,6 +61,31 @@ describe("Discogs OAuth Routes", () => {
       expect((body.error as any).code).toBe("CONFIG_ERROR");
     });
 
+    it("should return error if Discogs callback URL not configured", async () => {
+      const mockEnv: CloudflareBinding = {
+        NOW_SPINNING_KV: kvMock as unknown as KVNamespace,
+        DEV_MODE: "true",
+        DISCOGS_CONSUMER_KEY: "test-key",
+        DISCOGS_CONSUMER_SECRET: "test-secret",
+        PUBLIC_APP_ORIGIN: "http://localhost:5173",
+      } as CloudflareBinding;
+
+      const app = new Hono<{ Bindings: CloudflareBinding }>()
+        .use("*", async (c, next) => {
+          c.env = mockEnv;
+          await next();
+        })
+        .route("/auth/discogs", discogsRoutes);
+
+      const response = await app.request(
+        new Request("http://localhost:8787/auth/discogs/start", { method: "POST" })
+      );
+
+      expect(response.status).toBe(500);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect((body.error as any).code).toBe("CONFIG_ERROR");
+    });
+
     it("should return redirect URL with OAuth token after successful fetch", async () => {
       const mockRequestTokenResponse = `oauth_token=test-request-token&oauth_token_secret=test-request-secret&oauth_callback_confirmed=true`;
 

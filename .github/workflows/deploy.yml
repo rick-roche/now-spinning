@@ -44,8 +44,6 @@ jobs:
 
       - name: Build projects
         run: pnpm build
-        env:
-          VITE_API_BASE_URL: https://now-spinning-api.rickroche.workers.dev
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
@@ -71,4 +69,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name now-spinning --branch main
+          command: pages deploy dist --project-name now-spinning --branch main
+          workingDirectory: apps/web

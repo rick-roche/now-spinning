@@ -3,10 +3,6 @@ import { Icon } from "../components/Icon";
 import { getApiUrl } from "../lib/api";
 import type { AuthStatusResponse } from "@repo/shared";
 
-interface OAuthStartResponse {
-  redirectUrl: string;
-}
-
 export function Settings() {
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,10 +17,14 @@ export function Settings() {
         if (!response.ok) {
           throw new Error("Failed to fetch auth status");
         }
-        const data = (await response.json()) as AuthStatusResponse;
+         
+        const data: AuthStatusResponse = await response.json();
+         
         setAuthStatus(data);
       } catch (err) {
-        setError((err as Error).message);
+         
+        const error: unknown = err;
+        setError(error instanceof Error ? error.message : String(error));
       } finally {
         setLoading(false);
       }
@@ -36,12 +36,16 @@ export function Settings() {
   const handleConnectLastFm = async () => {
     try {
       const response = await fetch(getApiUrl("/api/auth/lastfm/start"));
-      const data = (await response.json()) as OAuthStartResponse;
-      if (data.redirectUrl) {
+         
+        const data: { redirectUrl?: string } = await response.json();
+         
+        if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -50,12 +54,16 @@ export function Settings() {
       const response = await fetch(getApiUrl("/api/auth/discogs/start"), {
         method: "POST",
       });
-      const data = (await response.json()) as OAuthStartResponse;
-      if (data.redirectUrl) {
+         
+        const data: { redirectUrl?: string } = await response.json();
+         
+        if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       }
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -64,7 +72,9 @@ export function Settings() {
       await fetch(getApiUrl("/api/auth/lastfm/disconnect"), { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -73,7 +83,9 @@ export function Settings() {
       await fetch(getApiUrl("/api/auth/discogs/disconnect"), { method: "POST" });
       setAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
     } catch (err) {
-      setError((err as Error).message);
+       
+      const error: unknown = err;
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
