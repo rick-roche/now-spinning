@@ -30,3 +30,15 @@ export const SessionParamSchema = z.object({
 });
 
 export type SessionParam = z.infer<typeof SessionParamSchema>;
+
+/**
+ * Session scrobble-current request body.
+ * Requires elapsed time to validate scrobble eligibility.
+ * Threshold percent is optional and defaults to 50%.
+ */
+export const SessionScrobbleCurrentRequestSchema = z.object({
+  elapsedMs: z.number().min(0, "Elapsed time must be non-negative"),
+  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+});
+
+export type SessionScrobbleCurrentRequest = z.infer<typeof SessionScrobbleCurrentRequestSchema>;

@@ -25,6 +25,8 @@ export {
   SessionStartRequestSchema,
   SessionIdSchema,
   SessionParamSchema,
+  SessionScrobbleCurrentRequestSchema,
   type SessionId,
   type SessionParam,
+  type SessionScrobbleCurrentRequest,
 } from "./session.schema.js";

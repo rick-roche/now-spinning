@@ -231,4 +231,99 @@ describe("Session Routes", () => {
       expect(body.error.code).toBe("SESSION_NOT_FOUND");
     });
   });
+
+  describe("POST /session/:id/scrobble-current", () => {
+    it("should reject if Last.fm is not connected", async () => {
+      const kvMock = createKVMock();
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/${TEST_SESSION_ID}/scrobble-current`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: `${name}=${value}`,
+          },
+          body: JSON.stringify({ elapsedMs: 60000 }),
+        })
+      );
+
+      expect(response.status).toBe(401);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
+    });
+
+    it("should return 404 if session does not exist", async () => {
+      const kvMock = createKVMock();
+      const tokens = createTestUserTokens();
+      kvMock.store.set(kvUserTokensKey(TEST_SESSION_ID), JSON.stringify(tokens));
+
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/nonexistent-id/scrobble-current`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: `${name}=${value}`,
+          },
+          body: JSON.stringify({ elapsedMs: 60000 }),
+        })
+      );
+
+      expect(response.status).toBe(404);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("SESSION_NOT_FOUND");
+    });
+
+    it("should reject request without elapsedMs", async () => {
+      const kvMock = createKVMock();
+      const tokens = createTestUserTokens();
+      kvMock.store.set(kvUserTokensKey(TEST_SESSION_ID), JSON.stringify(tokens));
+
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/${TEST_SESSION_ID}/scrobble-current`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: `${name}=${value}`,
+          },
+          body: JSON.stringify({}),
+        })
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("should reject request with negative elapsedMs", async () => {
+      const kvMock = createKVMock();
+      const tokens = createTestUserTokens();
+      kvMock.store.set(kvUserTokensKey(TEST_SESSION_ID), JSON.stringify(tokens));
+
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/${TEST_SESSION_ID}/scrobble-current`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: `${name}=${value}`,
+          },
+          body: JSON.stringify({ elapsedMs: -1000 }),
+        })
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+  });
 });

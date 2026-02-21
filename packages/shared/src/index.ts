@@ -16,6 +16,10 @@ export {
   pauseSession,
   resumeSession,
 } from "./session/engine.js";
+export {
+  isEligibleToScrobble,
+  getScrobbleThresholdMs,
+} from "./session/eligibility.js";
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
@@ -70,6 +74,8 @@ export {
   SessionStartRequestSchema,
   SessionIdSchema,
   SessionParamSchema,
+  SessionScrobbleCurrentRequestSchema,
   type SessionId,
   type SessionParam,
+  type SessionScrobbleCurrentRequest,
 } from "./validation/index.js";

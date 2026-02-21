@@ -1,197 +1,186 @@
-# agents.md — Now Spinning Vinyl Scrobbler
+# AGENTS.md — Now Spinning Vinyl Scrobbler
 
-This repository is built to be agent-friendly: small, testable modules; clear boundaries between UI and backend; and strict security rules (no secrets in the client).
+This file is the repo-wide operating guide for coding agents.
 
-## Project summary
+Use it as the first read, then load only the docs needed for the current task.
 
-"Now Spinning" lets a user pick a Discogs release (from collection or search), start a “Now Playing” session, and scrobble tracks to Last.fm as vinyl is listened to. It is mobile-first and hosted on Cloudflare Pages (SPA) + Cloudflare Workers (API).
+## 1) Project Snapshot
 
-## Non-negotiables
+Now Spinning is a mobile-first app that lets users pick a Discogs release, start a listening session, and scrobble vinyl tracks to Last.fm.
 
-1. **No secrets in the client**
-   - Discogs / Last.fm secrets and token exchanges must happen in the Worker only.
-   - The SPA never receives service secrets.
-2. **Server-side token storage**
-   - Store external tokens/session keys server-side (KV in MVP; D1 optional later).
-   - Associate tokens to an internal `user_id` tied to an HttpOnly cookie.
-3. **Type safety and tests**
-   - Core logic must be pure & tested (normalization, session transitions, scrobble eligibility).
-4. **Repo hygiene**
-   - `pnpm` only.
-   - `vitest` for tests.
-   - `knip` must pass in CI.
-5. **Mobile UX first**
-   - Any UI work must verify on a narrow viewport and touch interactions.
+- Frontend: Cloudflare Pages SPA (`apps/web`)
+- Backend: Cloudflare Worker API (`apps/worker`)
+- Shared logic/contracts: TypeScript package (`packages/shared`)
 
----
+## 2) Non-Negotiable Rules
 
-## Roles (agent responsibilities)
+1. No secrets in client code
+- Discogs/Last.fm secrets and token exchange happen in Worker only.
+- SPA must never receive service secrets.
 
-### 1) API/Worker Agent
-Owns:
-- Worker routing & middleware (auth, validation, rate limiting)
-- OAuth flows (Discogs & Last.fm)
-- Token storage (KV) and session storage primitives
-- Proxying Discogs API and calling Last.fm API (signing/idempotency)
-- Centralized error mapping to stable API responses
+2. Server-side token storage
+- Store external tokens/session keys server-side (KV in MVP, D1 optional later).
+- Bind tokens to an internal `user_id` via HttpOnly cookie.
 
-Delivers:
-- Worker endpoints in `/apps/worker/src/routes`
-- `shared` types used by both UI & Worker
-- Vitest tests for pure helpers (signing, hashing, validation)
+3. Shared pure logic and tests
+- Keep normalization/session/scrobble logic pure in `packages/shared`.
+- Add/update Vitest coverage for behavior changes.
 
----
+4. Tooling and hygiene
+- Use `pnpm` only.
+- `vitest` for tests.
+- `knip` must remain clean.
 
-### 2) Data/Normalization Agent
-Owns:
-- Converting Discogs responses into stable internal models:
-  - `NormalizedRelease`, `NormalizedTrack`
-  - Side detection and ordering heuristics
-  - Handling missing/odd durations and positions
-- Track ordering rules (A1, A2 … B1 …; fallback strategies)
+5. Mobile UX first
+- UI changes must be verified on narrow viewport and touch targets.
 
-Delivers:
-- Pure functions in `/packages/shared/src/normalize`
-- Exhaustive test fixtures and edge-case coverage
+## 3) Instruction Hierarchy And Scope
 
----
+Follow this precedence order when instructions differ:
 
-### 3) Session/Scrobble Engine Agent
-Owns:
-- Session state model
-- Transition functions:
-  - start/pause/resume/next/prev/end
-- Scrobble eligibility rules (thresholds, missing durations)
-- Idempotency + duplicate prevention
-- Retry strategy (on interaction and on app load)
+1. Direct user request
+2. Closest nested `AGENTS.md` for the target path
+3. This root `AGENTS.md` (repo-wide defaults)
+4. Task-specific docs (`SPEC.md`, `PLAN.md`, quality plans)
+5. File-local conventions already present in code/tests
 
-Delivers:
-- Pure session engine in `/packages/shared/src/session`
-- Integration points in Worker routes
-- Tests for transitions + idempotency
+Guidance for future refinement:
+- Keep this root file focused on durable repo-wide rules.
+- Put narrower, folder-specific guidance in nested `AGENTS.md` files only when a subtree truly needs different rules.
+- Avoid duplicate instructions across files.
 
----
+Current scoped files:
+- `apps/web/AGENTS.md`
+- `apps/worker/AGENTS.md`
+- `packages/shared/AGENTS.md`
 
-### 4) UI/UX Agent
-Owns:
-- SPA routes/screens and mobile-first interaction
-- State management for:
-  - auth status
-  - browsing/search
-  - session controls
-- Radix Themes layout patterns, accessible components, touch targets
-- Offline-tolerant client queue (only for UI-level retries; tokens stay server-side)
+## 4) Repo Boundaries
 
-Delivers:
-- Screens in `/apps/web/src/pages`
-- Components in `/apps/web/src/components`
-- UX acceptance notes and mobile screenshots (or short GIF)
+- `apps/web`: UI routes, components, client state, API client calls
+- `apps/worker`: auth/OAuth, route validation, token/session storage, third-party API calls
+- `packages/shared`: contracts, domain types, normalization, session/scrobble engine
 
----
+Boundary constraints:
+- Web must not import Worker-only code.
+- Worker must not import Web code.
+- Cross-app contracts belong in `packages/shared`.
 
-### 5) Quality/Tooling Agent
-Owns:
-- pnpm workspace config, TS configs, Vite/Vitest setup
-- knip configuration and maintaining it as repo evolves
-- CI pipeline (install → typecheck → test → knip → build)
-- Contributor docs: README, local dev, env vars
+## 5) Agent Role Map
 
-Delivers:
-- `.github/workflows/ci.yml`
-- `knip.json`, `tsconfig.*`, `vitest.config.*`
-- Scripts in root `package.json`
+### API/Worker Agent
+Owns Worker routing/middleware, OAuth flows, token/session storage, Discogs/Last.fm integration, and stable error responses.
 
----
+Primary paths:
+- `apps/worker/src/routes`
+- `apps/worker/src/middleware`
+- `apps/worker/src/utils`
 
-## Workflow
+### Data/Normalization Agent
+Owns Discogs-to-internal normalization and track ordering heuristics.
 
-### A) How work is requested
-Work is requested as a small, well-defined change with:
-- a goal statement (“what user value is unlocked”)
-- constraints (security, stack rules)
-- acceptance criteria
-- test expectations
+Primary paths:
+- `packages/shared/src/normalize`
+- `packages/shared/src/domain/release.ts`
 
-### B) Branching / commits
-- Prefer small PRs; avoid “mega PRs”.
-- Commit messages should describe intent.
-- Each PR should include:
-  - what changed
-  - why it changed
-  - how to test locally
-  - test evidence (`pnpm test`, `pnpm typecheck`, `pnpm knip`)
+### Session/Scrobble Engine Agent
+Owns session state transitions, eligibility rules, idempotency, and retry strategy.
 
-### C) Design before code (for risky pieces)
-Before implementing:
-- confirm API contract and types in `packages/shared`
-- write a minimal test for the core logic
-- then wire UI/Worker around it
+Primary paths:
+- `packages/shared/src/session`
+- `packages/shared/src/domain/session.ts`
 
-### D) Review checklist (applies to all PRs)
-- No secrets leaked to client (check network responses & env usage)
-- Input validation in Worker routes
-- Errors are stable and user-readable
-- Tests added/updated
-- knip passes
-- Mobile UX verified
+### UI/UX Agent
+Owns mobile-first screens, interaction flows, and accessibility.
 
----
+Primary paths:
+- `apps/web/src/pages`
+- `apps/web/src/components`
+- `apps/web/src/lib`
 
-## Definitions
+### Quality/Tooling Agent
+Owns workspace scripts/config, CI, and dead-code/type safety guardrails.
 
-### Definition of Ready (DoR)
-A task is ready for an agent when it includes:
-1. **User outcome**: what the user can do after this change
-2. **Scope**: what is included and explicitly excluded
-3. **Acceptance criteria**: bullet list, measurable
-4. **API/types impact**: does `packages/shared` change?
-5. **Test plan**: what tests must be added/updated
+Primary paths:
+- `.github/workflows`
+- `package.json`
+- `knip.json`
+- `tsconfig.base.json`
 
-If any are missing, the agent should propose a minimal spec update (SPEC.md) and proceed with sensible defaults rather than blocking.
+## 6) Task Intake Template (Definition Of Ready)
 
-### Definition of Done (DoD)
-A task is done when:
-- Implementation matches acceptance criteria
-- Typecheck passes: `pnpm typecheck`
-- Tests pass: `pnpm test`
-- knip passes: `pnpm knip`
-- `pnpm validate` passes (or CI equivalent if validate isn't available)
-- No new lint/dead code issues introduced
-- Any new env vars are documented
-- UI changes include mobile verification evidence (notes + screenshot)
+A task is ready when it includes:
 
----
+1. User outcome
+2. Scope (in + out)
+3. Acceptance criteria (measurable)
+4. API/type impact (`packages/shared` change or not)
+5. Test plan
 
-## Repo conventions
+If missing, propose a minimal update to `SPEC.md` and proceed with sensible defaults.
 
-### Packages and boundaries
-- `/apps/web` is the SPA (Cloudflare Pages).
-- `/apps/worker` is the API backend (Cloudflare Workers).
-- `/packages/shared` contains shared types and pure logic:
-  - normalization
-  - session engine
-  - API contracts (request/response types)
-- UI never imports Worker-only code; Worker never imports UI code.
+## 7) Execution Protocol
 
-### Error handling conventions
-- Worker returns a consistent error shape:
-  - `{ error: { code: string, message: string, requestId?: string } }`
-- UI maps `code` to user-facing messages and retry actions.
+1. Confirm impacted boundary (`web`, `worker`, `shared`, tooling).
+2. For risky logic, update/add tests first in `packages/shared`.
+3. Implement smallest viable change.
+4. Validate with project commands.
+5. Report: what changed, why, how to test.
 
-### Testing conventions
-- Pure logic tested in `/packages/shared`.
-- Worker routes get lightweight tests where feasible; heavy logic stays pure in shared.
+## 8) Definition Of Done
 
----
+A task is done when all are true:
 
-## Commands (expected to work)
+- Acceptance criteria met
+- `pnpm typecheck` passes
+- `pnpm test` passes
+- `pnpm knip` passes
+- `pnpm validate` passes (or CI equivalent if unavailable locally)
+- No new lint/dead-code issues
+- New env vars documented
+- UI changes include mobile verification notes (and screenshot/GIF when requested)
+
+## 9) Error And Security Conventions
+
+Worker error response shape:
+
+```json
+{ "error": { "code": "string", "message": "string", "requestId": "optional" } }
+```
+
+Required practices:
+- Validate inputs at Worker route edges.
+- Map internal failures to stable, user-readable error codes/messages.
+- Keep OAuth/token operations server-side only.
+
+## 10) Canonical Commands
+
+Run from workspace root:
 
 - `pnpm i`
-- `pnpm dev` (runs SPA + Worker locally)
+- `pnpm dev`
 - `pnpm test`
 - `pnpm typecheck`
+- `pnpm lint`
 - `pnpm knip`
 - `pnpm build`
 - `pnpm validate`
 
-If you add/modify commands, update this section.
+If scripts change, update this section and `README.md` in the same PR.
+
+## 11) Progressive-Disclosure Doc Map
+
+Load only what is needed:
+
+- Product/architecture/security details: `SPEC.md`
+- Current implementation status: `PLAN.md`
+- Local setup and commands: `README.md`
+
+## 12) PR Checklist
+
+Every PR should include:
+
+- What changed
+- Why it changed
+- How to test locally
+- Evidence of checks run (`pnpm test`, `pnpm typecheck`, `pnpm knip`, and/or `pnpm validate`)
+- Confirmation that no client-side secret exposure was introduced

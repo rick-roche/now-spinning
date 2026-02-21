@@ -1,8 +1,8 @@
 # Now Spinning — Implementation Plan
 
-**Current milestone:** M3 (Session MVP)  
-**Status:** � Complete  
-**Last updated:** 2026-02-16
+**Current milestone:** M4 (Quality & Polish)  
+**Status:** In progress  
+**Last updated:** 2026-02-21
 
 ---
 
@@ -201,22 +201,24 @@
 
 **Owners:** Session/Scrobble Engine Agent, API/Worker Agent, UI/UX Agent (see [AGENTS.md](AGENTS.md))
 
-**Goal:** Start sessions from release detail, send now playing on start + next, and allow manual scrobble on next with pause/resume controls.
+**Goal:** Start sessions from release detail, send now playing on start + next, and support pause/resume, auto-advance, and scrobble timing.
 
 ### Implementation steps
 
 - [x] 1. Shared session contracts + engine transitions
 - [x] 2. Session engine tests (create/pause/resume/advance)
-- [x] 3. Worker session routes (start/pause/resume/next/current)
-- [x] 4. Last.fm now playing + scrobble integration
-- [x] 5. Session UI screen + release start CTA
+- [x] 3. Worker session routes (start/pause/resume/next/end/current)
+- [x] 4. Last.fm now playing + scrobble integration (start/next/resume)
+- [x] 5. Scrobble-current endpoint for threshold-based scrobbles
+- [x] 6. Session UI screen + release start CTA
 
 ### Acceptance criteria
 
 **Functionality:**
 - [x] Start session from a release detail screen
-- [x] Now playing is sent on session start and track advance
-- [x] Manual scrobble occurs on “next”
+- [x] Now playing is sent on session start, track advance, and resume
+- [x] Auto-advance when durations are known (client-side)
+- [x] Scrobble delay threshold respected via scrobble-current
 - [x] Basic pause/resume controls update session state
 
 **Quality:**
@@ -228,9 +230,11 @@
 ## Next milestones
 
 ### M4: Quality
-- Auto-advance when durations known
-- Offline queue & retry
-- History (optional)
+- [x] Auto-advance when durations known
+- [x] Side-completion notifications
+- [x] Scrobble delay settings
+- [ ] Offline queue & retry
+- [ ] History (optional)
 
 ---
 
@@ -245,32 +249,43 @@
   - Corrected Last.fm MD5 signature test expectations
   - Fixed React hook dependency warnings in Collection.tsx
 - **2026-02-16:** M4 auto-advance started. Client-side timer advances when durations are known.
+- **2026-02-21:** Scrobble delay setting and scrobble-current endpoint implemented; side-completion modal added; now playing sent on resume.
 
 ---
 
 ## M4: Quality & Polish
 
-**Next priority:** Auto-advance, offline resilience, and history tracking.
+**Next priority:** Offline resilience, session history, and tightening scrobble eligibility on transitions.
 
 ### Implementation roadmap
 
 - [x] 1. Auto-advance when durations known
   - Use track durations to auto-schedule next track
   - Client-side timer management (Option A from SPEC)
-- [ ] 2. Offline queue & retry
+- [x] 2. Scrobble threshold settings
+  - User-configurable % of track
+  - Default threshold aligned with eligibility rules
+- [x] 3. Notify on side completion
+  - Pause on side changes and prompt to continue
+- [ ] 4. Offline queue & retry
   - Store pending actions in localStorage
   - Retry on reconnect and app load
   - Handle transient network failures gracefully
-- [ ] 3. Session history (optional)
+- [ ] 5. Session history (optional)
   - Store sessions server-side in D1 (or localStorage MVP)
   - Add "replay" + "recent sessions" UI
-- [ ] 4. Scrobble threshold settings
-  - User-configurable % of track or minimum seconds
-  - Implement conservative defaults
+- [ ] 6. Scrobble eligibility on transitions
+  - Only scrobble on next/end if threshold met or already scrobbled
+- [ ] 7. Wire auto-advance toggle
+  - Make Settings toggle control the client timer
+- [ ] 8. Manual scrobble action
+  - Add UI control for scrobble-current
 
 ### Definition of Done for M4
 
 - Auto-advance executes when track duration elapsed
+- Side-completion pauses at side boundaries
+- Scrobble delay setting applied consistently
 - Offline actions queue and retry on network recovery
 - Network errors show user-friendly banners with retry
 - Tests cover offline/retry flows

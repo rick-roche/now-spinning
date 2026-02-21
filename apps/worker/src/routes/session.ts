@@ -10,11 +10,13 @@ import {
   createSession,
   endSession,
   ErrorCode,
+  isEligibleToScrobble,
   normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
   SessionStartRequestSchema,
   SessionParamSchema,
+  SessionScrobbleCurrentRequestSchema,
   type DiscogsReleaseApiResponse,
   type NormalizedRelease,
   type Session,
@@ -322,7 +324,129 @@ router.post(
       return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
     }
 
+    const tokens = await loadStoredTokens(kv, userId);
     const updated = resumeSession(session, Date.now());
+    await storeSession(kv, updated);
+
+    // Send Now Playing notification when resuming playback
+    if (updated.state !== "ended") {
+      const npResult = await sendNowPlaying(
+        c.env,
+        tokens.lastfm!.accessToken,
+        updated.release,
+        updated.currentIndex
+      );
+      if (!npResult.ok) {
+        console.error("[POST /:id/resume] Failed to send now playing:", npResult.message);
+      }
+    }
+
+    const response: SessionActionResponse = { session: updated };
+    return c.json(response);
+  }
+);
+
+router.post(
+  "/:id/scrobble-current",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+
+    // Validate param
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
+        400
+      );
+    }
+
+    // Validate body
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"),
+        400
+      );
+    }
+    const bodyResult = SessionScrobbleCurrentRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)),
+        400
+      );
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const { elapsedMs, thresholdPercent } = bodyResult.data;
+
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+    }
+
+    const currentIndex = session.currentIndex;
+    if (currentIndex < 0 || currentIndex >= session.tracks.length) {
+      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
+    }
+
+    const currentTrack = session.tracks[currentIndex];
+    if (!currentTrack) {
+      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track not found"), 500);
+    }
+
+    // Check if already scrobbled (idempotent)
+    if (currentTrack.status === "scrobbled") {
+      const response: SessionActionResponse = { session };
+      return c.json(response);
+    }
+
+    // thresholdPercent passed from frontend, already defaults to 50 in schema
+
+    // Get track duration in milliseconds from release track data
+    const releaseTrack = session.release.tracks[currentIndex];
+    const durationMs = releaseTrack?.durationSec ? releaseTrack.durationSec * 1000 : null;
+
+    // Check eligibility
+    const eligible = isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent);
+    
+    if (!eligible) {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Track has not been played long enough to scrobble"),
+        400
+      );
+    }
+
+    const tokens = await loadStoredTokens(kv, userId);
+    const currentStartedAt = currentTrack.startedAt ?? Date.now();
+
+    // Scrobble the track
+    const scrobbleResult = await scrobbleTrack(
+      c.env,
+      tokens.lastfm!.accessToken,
+      session.release,
+      currentIndex,
+      Math.floor(currentStartedAt / 1000)
+    );
+    if (!scrobbleResult.ok) {
+      console.error("[POST /:id/scrobble-current] Failed to scrobble track:", scrobbleResult.message);
+      return c.json(
+        createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"),
+        502
+      );
+    }
+
+    // Mark track as scrobbled
+    const updatedTrack = { ...currentTrack, status: "scrobbled" as const, scrobbledAt: Date.now() };
+    const updatedTracks = [...session.tracks];
+    updatedTracks[currentIndex] = updatedTrack;
+    const updated = { ...session, tracks: updatedTracks };
+    
     await storeSession(kv, updated);
 
     const response: SessionActionResponse = { session: updated };
@@ -363,20 +487,26 @@ router.post(
       return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
     }
     
-    const previousStartedAt = session.tracks[previousIndex]?.startedAt ?? now;
+    const previousTrack = session.tracks[previousIndex];
+    const previousStartedAt = previousTrack?.startedAt ?? now;
+    const wasAlreadyScrobbled = previousTrack?.status === "scrobbled";
+    
     const updated = advanceSession(session, now);
 
     await storeSession(kv, updated);
 
-    const scrobbleResult = await scrobbleTrack(
-      c.env,
-      tokens.lastfm!.accessToken,
-      updated.release,
-      previousIndex,
-      Math.floor(previousStartedAt / 1000)
-    );
-    if (!scrobbleResult.ok) {
-      console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+    // Only scrobble if not already scrobbled (e.g., by proactive scrobble-current endpoint)
+    if (!wasAlreadyScrobbled) {
+      const scrobbleResult = await scrobbleTrack(
+        c.env,
+        tokens.lastfm!.accessToken,
+        updated.release,
+        previousIndex,
+        Math.floor(previousStartedAt / 1000)
+      );
+      if (!scrobbleResult.ok) {
+        console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+      }
     }
 
     if (updated.state !== "ended") {
@@ -423,12 +553,15 @@ router.post(
 
     const now = Date.now();
     const currentIndex = session.currentIndex;
-    const currentStartedAt = session.tracks[currentIndex]?.startedAt ?? now;
+    const currentTrack = session.tracks[currentIndex];
+    const currentStartedAt = currentTrack?.startedAt ?? now;
+    const wasAlreadyScrobbled = currentTrack?.status === "scrobbled";
 
     const updated = endSession(session);
     await storeSession(kv, updated);
 
-    if (session.state !== "ended") {
+    // Only scrobble if session wasn't already ended and track wasn't already scrobbled
+    if (session.state !== "ended" && !wasAlreadyScrobbled) {
       const scrobbleResult = await scrobbleTrack(
         c.env,
         tokens.lastfm!.accessToken,

@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { Icon } from "../components/Icon";
 import { apiFetch } from "../lib/api";
 import { getApiErrorMessage } from "../lib/errors";
+import {
+  getScrobbleDelay,
+  setScrobbleDelay,
+  getNotifyOnSideCompletion,
+  setNotifyOnSideCompletion,
+} from "../lib/settings";
 import type { AuthStatusResponse } from "@repo/shared";
 
 export function Settings() {
@@ -10,6 +16,10 @@ export function Settings() {
   const [connectingDiscogs, setConnectingDiscogs] = useState(false);
   const [connectingLastFm, setConnectingLastFm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scrobbleDelayPercent, setScrobbleDelayPercent] = useState(() => getScrobbleDelay());
+  const [notifyOnSideCompletion, setNotifyOnSideCompletionState] = useState(() =>
+    getNotifyOnSideCompletion()
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -123,20 +133,33 @@ export function Settings() {
           <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3 px-1">
             Scrobbling
           </h2>
-          <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark overflow-hidden opacity-60 pointer-events-none">
+          <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-border-dark overflow-hidden">
             {/* Scrobble Delay Slider */}
             <div className="p-4 border-b border-slate-100 dark:border-border-dark">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm font-medium">Scrobble Delay</span>
-                <span className="text-primary font-bold">50%</span>
+                <span className="text-primary font-bold">{scrobbleDelayPercent}%</span>
               </div>
               <div className="relative w-full h-6 flex items-center">
-                <div className="absolute w-full h-1 bg-slate-200 dark:bg-border-dark rounded-full"></div>
-                <div className="absolute w-1/2 h-1 bg-primary rounded-full"></div>
-                <div className="absolute left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-primary rounded-full shadow-lg"></div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={scrobbleDelayPercent}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    setScrobbleDelayPercent(value);
+                    setScrobbleDelay(value);
+                  }}
+                  className="absolute w-full h-1 rounded-full appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${scrobbleDelayPercent}%, rgb(226, 232, 240) ${scrobbleDelayPercent}%, rgb(226, 232, 240) 100%)`
+                  }}
+                />
               </div>
               <p className="text-[11px] text-slate-500 mt-2">
-                Scrobble will be sent after half the track duration.
+                Scrobble will be sent after {scrobbleDelayPercent}% of track duration.
               </p>
             </div>
 
@@ -158,12 +181,20 @@ export function Settings() {
                 <p className="text-xs text-slate-500">Alert when the record side finishes</p>
               </div>
               <label className="relative inline-flex items-center">
-                <input disabled className="sr-only peer" type="checkbox" />
+                <input
+                  checked={notifyOnSideCompletion}
+                  onChange={(e) => {
+                    const value = e.target.checked;
+                    setNotifyOnSideCompletionState(value);
+                    setNotifyOnSideCompletion(value);
+                  }}
+                  className="sr-only peer"
+                  type="checkbox"
+                />
                 <div className="w-11 h-6 bg-slate-200 dark:bg-border-dark rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
               </label>
             </div>
           </div>
-          <p className="text-center text-[10px] text-slate-400 mt-2">Coming Soon</p>
         </section>
 
         {/* Accounts Section */}

@@ -1,6 +1,6 @@
 # Now Spinning — Vinyl Scrobbler
 
-CI: ![CI](https://img.shields.io/github/actions/workflow/status/rick-roche/now-spinning/ci.yml) | Deploy: ![Deploy](https://img.shields.io/github/actions/workflow/status/rick-roche/now-spinning/deploy.yml)
+[![CI](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml) [![Deploy](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml)
 
 
 A mobile-first app for scrobbling vinyl listening sessions to [last.fm](https://www.last.fm/).
@@ -121,7 +121,7 @@ now-spinning/
 - **Frontend:** React SPA with Vite, Radix Themes, React Router
 - **Backend:** Cloudflare Workers with Hono
 - **Shared:** TypeScript types and pure logic (normalization, session engine)
-- **Storage:** Cloudflare KV (for tokens/sessions, to be added in M1)
+- **Storage:** Cloudflare KV (tokens + sessions)
 - **Hosting:** Cloudflare Pages (SPA) + Workers (API on `/api/*` route)
 
 ### Security principles

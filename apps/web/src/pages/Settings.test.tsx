@@ -233,7 +233,7 @@ describe("Settings Page", () => {
       expect(screen.getByText("Scrobbling")).toBeInTheDocument();
       expect(screen.getByText("Scrobble Delay")).toBeInTheDocument();
       expect(
-        screen.getByText("Scrobble will be sent after half the track duration.")
+        screen.getByText("Scrobble will be sent after 50% of track duration.")
       ).toBeInTheDocument();
     });
   });

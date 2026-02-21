@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { SideCompletionModal } from "../components/SideCompletionModal";
 import { apiFetch } from "../lib/api";
+import { getScrobbleDelay, getNotifyOnSideCompletion } from "../lib/settings";
+import { getScrobbleThresholdMs } from "@repo/shared";
 import type { APIError, Session, SessionActionResponse, SessionCurrentResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -19,11 +22,28 @@ export function SessionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showSideCompletionModal, setShowSideCompletionModal] = useState(false);
+  const [sideCompletionInfo, setSideCompletionInfo] = useState<{
+    currentSide: string;
+    nextSide: string;
+    currentTitle: string;
+    nextTitle: string;
+  } | null>(null);
   const autoAdvanceTimerRef = useRef<number | null>(null);
+  const scrobbleTimerRef = useRef<number | null>(null);
+  const sessionRef = useRef<Session | null>(null);
   const localElapsedRef = useRef(0);
   const localStartRef = useRef<number | null>(null);
   const lastTrackKeyRef = useRef<string | null>(null);
   const storageKeyRef = useRef<string | null>(null);
+  const scrobbledTracksRef = useRef<Set<string>>(new Set());
+
+  const getSideFromTrack = useCallback((track: Session["release"]["tracks"][number] | undefined) => {
+    if (!track) return null;
+    if (track.side) return track.side;
+    const match = track.position?.trim().match(/^[A-Za-z]/);
+    return match ? match[0].toUpperCase() : null;
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,6 +106,49 @@ export function SessionPage() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  const handleScrobbleCurrent = useCallback(
+    async (elapsedMs: number, thresholdPercent: number) => {
+      const currentSession = sessionRef.current;
+      if (!currentSession) return;
+
+      const trackKey = `${currentSession.id}:${currentSession.currentIndex}`;
+      if (scrobbledTracksRef.current.has(trackKey)) {
+        return; // Already scrobbled this track
+      }
+
+      try {
+        const response = await apiFetch(`/api/session/${currentSession.id}/scrobble-current`, {
+          method: "POST",
+          body: JSON.stringify({ elapsedMs, thresholdPercent }),
+        });
+        if (response.ok) {
+          scrobbledTracksRef.current.add(trackKey);
+          const raw: unknown = await response.json();
+          if (isSessionActionResponse(raw)) {
+            setSession(raw.session);
+          }
+        }
+      } catch {
+        // Silently handle errors
+      }
+    },
+    [] // No dependencies - uses sessionRef
+  );
+
+  // Auto-pause on unmount if session is still running
+  useEffect(() => {
+    return () => {
+      const currentSession = sessionRef.current;
+      if (currentSession && currentSession.state === "running") {
+        // Fire and forget - pause the session
+        void apiFetch(`/api/session/${currentSession.id}/pause`, { method: "POST" });
+      }
+    };
+  }, []);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   const handleAction = useCallback(
     async (action: "pause" | "resume" | "next" | "end") => {
       if (!session) return;
@@ -121,6 +184,50 @@ export function SessionPage() {
     [session]
   );
 
+  const getSideCompletionInfo = useCallback(() => {
+    if (!session) return null;
+    const current = session.release.tracks[session.currentIndex];
+    const next = session.release.tracks[session.currentIndex + 1];
+    if (!current || !next) return null;
+
+    const currentSide = getSideFromTrack(current);
+    const nextSide = getSideFromTrack(next);
+    if (!currentSide || !nextSide || currentSide === nextSide) return null;
+
+    return {
+      currentSide,
+      nextSide,
+      currentTitle: current.title || "Unknown",
+      nextTitle: next.title || "Unknown",
+    };
+  }, [getSideFromTrack, session]);
+
+  const handleNext = useCallback(async () => {
+    if (!session) return;
+
+    const info = getSideCompletionInfo();
+    if (info && getNotifyOnSideCompletion()) {
+      setSideCompletionInfo(info);
+      setShowSideCompletionModal(true);
+      if (session.state === "running") {
+        await handleAction("pause");
+      }
+      return;
+    }
+
+    await handleAction("next");
+  }, [getSideCompletionInfo, handleAction, session]);
+
+  const handleSideCompletionContinue = useCallback(async () => {
+    setShowSideCompletionModal(false);
+    setSideCompletionInfo(null);
+    await handleAction("next");
+  }, [handleAction]);
+
+  const handleSideCompletionPause = useCallback(() => {
+    setShowSideCompletionModal(false);
+  }, []);
+
   useEffect(() => {
     if (!session) return;
 
@@ -128,6 +235,12 @@ export function SessionPage() {
     if (lastTrackKeyRef.current !== trackKey) {
       lastTrackKeyRef.current = trackKey;
       storageKeyRef.current = `now-spinning:session-timer:${trackKey}`;
+      
+      // Clear scrobble timer when changing tracks
+      if (scrobbleTimerRef.current !== null) {
+        window.clearTimeout(scrobbleTimerRef.current);
+        scrobbleTimerRef.current = null;
+      }
 
       try {
         const stored = sessionStorage.getItem(storageKeyRef.current);
@@ -212,12 +325,12 @@ export function SessionPage() {
     const remainingMs = durationSec * 1000 - elapsedMs;
 
     if (remainingMs <= 0) {
-      void handleAction("next");
+      void handleNext();
       return;
     }
 
     autoAdvanceTimerRef.current = window.setTimeout(() => {
-      void handleAction("next");
+      void handleNext();
     }, remainingMs);
 
     return () => {
@@ -226,7 +339,80 @@ export function SessionPage() {
         autoAdvanceTimerRef.current = null;
       }
     };
-  }, [session, handleAction]);
+  }, [session, handleNext]);
+
+  const trackIdentifier = useMemo(
+    () => (session ? `${session.id}:${session.currentIndex}` : null),
+    [session]
+  );
+
+  // Scrobble threshold timer - only rerun when track changes, not every second
+  useEffect(() => {
+    if (!sessionRef.current) return;
+    if (sessionRef.current.state !== "running") return;
+
+    // Clear any existing scrobble timer
+    if (scrobbleTimerRef.current !== null) {
+      window.clearInterval(scrobbleTimerRef.current);
+      scrobbleTimerRef.current = null;
+    }
+
+    const trackKey = `${sessionRef.current.id}:${sessionRef.current.currentIndex}`;
+    if (scrobbledTracksRef.current.has(trackKey)) {
+      return; // Already scrobbled
+    }
+
+    const currentTrack = sessionRef.current.release.tracks[sessionRef.current.currentIndex];
+    if (!currentTrack) return;
+
+    const durationSec = currentTrack.durationSec;
+    const durationMs = durationSec && durationSec > 0 ? durationSec * 1000 : null;
+    
+    const thresholdPercent = getScrobbleDelay();
+    const thresholdMs = getScrobbleThresholdMs(durationMs, thresholdPercent);
+    
+    if (!thresholdMs) return;
+
+    // Set up a recurring check every 100ms to see if we've hit the threshold
+    // This way we don't depend on nowMs and avoid re-triggering the effect
+    const intervalHandle = window.setInterval(() => {
+      const currentSession = sessionRef.current;
+      if (!currentSession || currentSession.state !== "running") {
+        window.clearInterval(intervalHandle);
+        return;
+      }
+
+      const elapsedMs =
+        localElapsedRef.current +
+        (localStartRef.current ? Date.now() - localStartRef.current : 0);
+
+      const trackKey2 = `${currentSession.id}:${currentSession.currentIndex}`;
+      if (scrobbledTracksRef.current.has(trackKey2)) {
+        window.clearInterval(intervalHandle);
+        return;
+      }
+
+      const currentTrack2 = currentSession.release.tracks[currentSession.currentIndex];
+      if (!currentTrack2) return;
+
+      const durationSec2 = currentTrack2.durationSec;
+      const durationMs2 = durationSec2 && durationSec2 > 0 ? durationSec2 * 1000 : null;
+      const thresholdMs2 = getScrobbleThresholdMs(durationMs2, thresholdPercent);
+
+      if (!thresholdMs2) return;
+
+      if (elapsedMs >= thresholdMs2) {
+        void handleScrobbleCurrent(elapsedMs, thresholdPercent);
+        window.clearInterval(intervalHandle);
+      }
+    }, 100);
+
+    scrobbleTimerRef.current = intervalHandle;
+
+    return () => {
+      window.clearInterval(intervalHandle);
+    };
+  }, [trackIdentifier, handleScrobbleCurrent]); // Re-run when track changes
 
   if (loading) {
     return (
@@ -346,7 +532,7 @@ export function SessionPage() {
         {/* Session Controls */}
         <div className="mt-8 flex items-center justify-between gap-4">
           <button
-            onClick={() => void handleAction("next")}
+            onClick={() => void handleNext()}
             className="flex-1 flex flex-col items-center gap-2 py-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
           >
             <Icon name="skip_next" className="text-white/80" />
@@ -424,6 +610,18 @@ export function SessionPage() {
             {error}
           </div>
         </div>
+      )}
+
+      {sideCompletionInfo && (
+        <SideCompletionModal
+          currentSide={sideCompletionInfo.currentSide}
+          nextSide={sideCompletionInfo.nextSide}
+          currentTrackTitle={sideCompletionInfo.currentTitle}
+          nextTrackTitle={sideCompletionInfo.nextTitle}
+          isOpen={showSideCompletionModal}
+          onContinue={handleSideCompletionContinue}
+          onPause={handleSideCompletionPause}
+        />
       )}
     </>
   );
