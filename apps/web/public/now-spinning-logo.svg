@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" role="img" aria-labelledby="title desc">
+  <title id="title">Now Spinning logo</title>
+  <desc id="desc">Now Spinning wordmark with a vinyl record icon.</desc>
+  <defs>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" />
+      <stop offset="100%" stop-color="#4ade80" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="90" cy="100" r="68" fill="url(#accent)" opacity="0.18" />
+  <circle cx="90" cy="100" r="56" fill="#0f172a" />
+  <circle cx="90" cy="100" r="36" fill="none" stroke="#4b5563" stroke-width="4" />
+  <circle cx="90" cy="100" r="13" fill="#f3f4f6" />
+
+  <path d="M132 52l38-18-14 52" fill="none" stroke="#d1d5db" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" />
+  <circle cx="140" cy="61" r="6" fill="#f3f4f6" />
+  <path d="M141 95a15 15 0 0 1 15 15" fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-width="6" />
+  <path d="M141 81a29 29 0 0 1 29 29" fill="none" stroke="#22d3ee" stroke-linecap="round" stroke-width="6" />
+
+  <text x="200" y="88" fill="#0f172a" font-family="'Trebuchet MS', 'Segoe UI', sans-serif" font-size="52" font-weight="800" letter-spacing="1">
+    NOW
+  </text>
+  <text x="200" y="146" fill="#111827" font-family="'Trebuchet MS', 'Segoe UI', sans-serif" font-size="64" font-weight="900" letter-spacing="1.2">
+    SPINNING
+  </text>
+</svg>

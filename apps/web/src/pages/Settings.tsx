@@ -304,8 +304,6 @@ export function Settings() {
           </div>
           <p className="text-center text-[10px] text-slate-500 mt-6 leading-relaxed">
             Designed for vinyl enthusiasts.
-            <br />
-            Handcrafted with passion for analog sound.
           </p>
         </section>
 

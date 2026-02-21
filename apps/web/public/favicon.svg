@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Now Spinning favicon</title>
+  <desc id="desc">Simple vinyl record mark optimized for small favicon sizes.</desc>
+  <rect width="64" height="64" rx="14" fill="#0f172a" />
+  <circle cx="29" cy="35" r="16" fill="none" stroke="#22d3ee" stroke-width="5" />
+  <circle cx="29" cy="35" r="4" fill="#f8fafc" />
+  <path d="M42 17l12-6-5 18" fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" />
+  <circle cx="45" cy="22" r="3" fill="#f8fafc" />
+</svg>
