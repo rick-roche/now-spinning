@@ -13,11 +13,12 @@ const fetchMock = createFetchMock();
 
 describe("Collection Page", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.useRealTimers();
+    fetchMock.mockReset();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("displays loading state when loading collection", async () => {
@@ -759,6 +760,10 @@ describe("Collection Page", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Global Search" })).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("No matches found")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Global Search" }));

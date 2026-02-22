@@ -16,7 +16,7 @@ export const DiscogsCollectionSortDirSchema = z.enum(["asc", "desc"]);
 export const DiscogsCollectionQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   perPage: z.coerce.number().int().min(5).max(100).default(25),
-  query: z.string().trim().optional().default(""),
+  query: z.string().trim().default(""),
   sortBy: DiscogsCollectionSortFieldSchema.default("dateAdded"),
   sortDir: DiscogsCollectionSortDirSchema.default("desc"),
 });
