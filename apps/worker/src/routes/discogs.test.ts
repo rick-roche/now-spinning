@@ -110,8 +110,8 @@ describe("Discogs Proxy Routes", () => {
         ],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/oauth/identity")) {
           return new Response(JSON.stringify(mockIdentityResponse), { status: 200 });
@@ -140,7 +140,7 @@ describe("Discogs Proxy Routes", () => {
         expect(body.items[0]!.title).toBe("Test Album");
         expect(body.items[0]!.artist).toBe("Test Artist");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -162,8 +162,8 @@ describe("Discogs Proxy Routes", () => {
         releases: [],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         capturedUrls.push(urlStr);
         if (urlStr.includes("/oauth/identity")) {
@@ -190,7 +190,7 @@ describe("Discogs Proxy Routes", () => {
         expect(collectionUrl).toContain("page=2");
         expect(collectionUrl).toContain("per_page=10");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -205,9 +205,9 @@ describe("Discogs Proxy Routes", () => {
       };
       kvMock.store.set(tokenKey, JSON.stringify(tokens));
 
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Unauthorized", { status: 401 });
+      globalThis.fetch = async () => new Response("Unauthorized", { status: 401 });
 
       try {
         const app = createTestApp(kvMock);
@@ -223,7 +223,7 @@ describe("Discogs Proxy Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -256,8 +256,8 @@ describe("Discogs Proxy Routes", () => {
       };
 
       let callCount = 0;
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/oauth/identity")) {
           callCount++;
@@ -292,7 +292,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response2.status).toBe(200);
         expect(callCount).toBe(call1Count);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });
@@ -348,8 +348,8 @@ describe("Discogs Proxy Routes", () => {
         ],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/database/search")) {
           return new Response(JSON.stringify(mockSearchResponse), { status: 200 });
@@ -371,7 +371,7 @@ describe("Discogs Proxy Routes", () => {
         expect(body.items[0]!.title).toBe("Test Album");
         expect(body.items[0]!.artist).toBe("Test Artist");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -382,8 +382,8 @@ describe("Discogs Proxy Routes", () => {
         results: [],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         capturedUrls.push(urlStr);
         if (urlStr.includes("/database/search")) {
@@ -405,7 +405,7 @@ describe("Discogs Proxy Routes", () => {
         expect(searchUrl).toContain("page=3");
         expect(searchUrl).toContain("per_page=50");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -431,8 +431,8 @@ describe("Discogs Proxy Routes", () => {
         ],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/database/search")) {
           return new Response(JSON.stringify(mockSearchResponse), { status: 200 });
@@ -452,14 +452,14 @@ describe("Discogs Proxy Routes", () => {
         expect(body.items.length).toBe(1);
         expect(body.items[0]!.title).toBe("Release Result");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should send Authorization header with app credentials", async () => {
       let capturedInit: RequestInit | undefined;
-      const originalFetch = global.fetch;
-      global.fetch = async (input: string | Request | URL, init?: RequestInit) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (input: string | Request | URL, init?: RequestInit) => {
         const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
         if (urlStr.includes("/database/search")) {
           capturedInit = init;
@@ -482,14 +482,14 @@ describe("Discogs Proxy Routes", () => {
         expect(headers["Authorization"]).toBe("Discogs key=test-key, secret=test-secret");
         expect(headers["User-Agent"]).toBe("NowSpinning/0.0.1 +now-spinning.dev");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should handle Discogs search errors", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Server error", { status: 500 });
+      globalThis.fetch = async () => new Response("Server error", { status: 500 });
 
       try {
         const app = createTestApp(kvMock);
@@ -502,7 +502,7 @@ describe("Discogs Proxy Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -520,9 +520,9 @@ describe("Discogs Proxy Routes", () => {
       };
 
       let callCount = 0;
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => {
+      globalThis.fetch = async () => {
         callCount++;
         return new Response(JSON.stringify(mockSearchResponse), { status: 200 });
       };
@@ -544,7 +544,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response2.status).toBe(200);
         expect(callCount).toBe(call1Count);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });
@@ -601,8 +601,8 @@ describe("Discogs Proxy Routes", () => {
         ],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/releases/123")) {
           return new Response(JSON.stringify(mockReleaseResponse), { status: 200 });
@@ -621,14 +621,14 @@ describe("Discogs Proxy Routes", () => {
         const body = (await response.json()) as { release: { title: string } };
         expect(body.release.title).toBe("Test Album");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should send Authorization header with app credentials", async () => {
       let capturedInit: RequestInit | undefined;
-      const originalFetch = global.fetch;
-      global.fetch = async (input: string | Request | URL, init?: RequestInit) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (input: string | Request | URL, init?: RequestInit) => {
         const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
         if (urlStr.includes("/releases/")) {
           capturedInit = init;
@@ -651,14 +651,14 @@ describe("Discogs Proxy Routes", () => {
         expect(headers["Authorization"]).toBe("Discogs key=test-key, secret=test-secret");
         expect(headers["User-Agent"]).toBe("NowSpinning/0.0.1 +now-spinning.dev");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should handle Discogs release lookup errors", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Not found", { status: 404 });
+      globalThis.fetch = async () => new Response("Not found", { status: 404 });
 
       try {
         const app = createTestApp(kvMock);
@@ -671,7 +671,7 @@ describe("Discogs Proxy Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -685,9 +685,9 @@ describe("Discogs Proxy Routes", () => {
       };
 
       let callCount = 0;
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => {
+      globalThis.fetch = async () => {
         callCount++;
         return new Response(JSON.stringify(mockReleaseResponse), { status: 200 });
       };
@@ -709,7 +709,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response2.status).toBe(200);
         expect(callCount).toBe(call1Count);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -722,8 +722,8 @@ describe("Discogs Proxy Routes", () => {
         tracklist: [],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("/releases/0123")) {
           return new Response(JSON.stringify(mockReleaseResponse), { status: 200 });
@@ -740,7 +740,7 @@ describe("Discogs Proxy Routes", () => {
 
         expect(response.status).toBe(200);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });
@@ -756,8 +756,8 @@ describe("Discogs Proxy Routes", () => {
 
     it("should retry on 429 and succeed on second attempt (search)", async () => {
       let callCount = 0;
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
         if (urlStr.includes("/database/search")) {
           callCount++;
@@ -782,14 +782,14 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(200);
         expect(callCount).toBe(2);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should respect numeric Retry-After header and recover (search)", async () => {
       let callCount = 0;
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
         if (urlStr.includes("/database/search")) {
           callCount++;
@@ -814,14 +814,14 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(200);
         expect(callCount).toBe(2);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should return 429 to client with DISCOGS_RATE_LIMIT after exhausting retries", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("", { status: 429 });
+      globalThis.fetch = async () => new Response("", { status: 429 });
 
       try {
         const app = createTestApp(kvMock);
@@ -834,14 +834,14 @@ describe("Discogs Proxy Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_RATE_LIMIT");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should propagate Retry-After header to client after exhausting retries", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("", { status: 429, headers: { "Retry-After": "5" } });
+      globalThis.fetch = async () => new Response("", { status: 429, headers: { "Retry-After": "5" } });
 
       try {
         const app = createTestApp(kvMock);
@@ -853,7 +853,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(429);
         expect(response.headers.get("Retry-After")).toBe("5");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -867,8 +867,8 @@ describe("Discogs Proxy Routes", () => {
         tracklist: [],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
         if (urlStr.includes("/releases/123")) {
           callCount++;
@@ -890,7 +890,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(200);
         expect(callCount).toBe(2);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -912,8 +912,8 @@ describe("Discogs Proxy Routes", () => {
         releases: [],
       };
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : (url as Request).url;
         if (urlStr.includes("/oauth/identity")) {
           identityCallCount++;
@@ -941,7 +941,7 @@ describe("Discogs Proxy Routes", () => {
         expect(response.status).toBe(200);
         expect(identityCallCount).toBe(2);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });

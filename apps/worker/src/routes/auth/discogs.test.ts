@@ -89,8 +89,8 @@ describe("Discogs OAuth Routes", () => {
     it("should return redirect URL with OAuth token after successful fetch", async () => {
       const mockRequestTokenResponse = `oauth_token=test-request-token&oauth_token_secret=test-request-secret&oauth_callback_confirmed=true`;
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("request_token")) {
           return new Response(mockRequestTokenResponse, {
@@ -128,14 +128,14 @@ describe("Discogs OAuth Routes", () => {
           expect(parsed.oauth_token_secret).toBe("test-request-secret");
         }
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should preserve Discogs API 4xx status codes", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Bad request", { status: 400 });
+      globalThis.fetch = async () => new Response("Bad request", { status: 400 });
 
       try {
         const app = createTestApp(kvMock);
@@ -152,14 +152,14 @@ describe("Discogs OAuth Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should return rate-limit error when Discogs returns 429", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Too many requests", { status: 429 });
+      globalThis.fetch = async () => new Response("Too many requests", { status: 429 });
 
       try {
         const app = createTestApp(kvMock);
@@ -176,14 +176,14 @@ describe("Discogs OAuth Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_RATE_LIMIT");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should handle Discogs API errors (5xx)", async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Server error", { status: 500 });
+      globalThis.fetch = async () => new Response("Server error", { status: 500 });
 
       try {
         const app = createTestApp(kvMock);
@@ -200,13 +200,13 @@ describe("Discogs OAuth Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should handle fetch network errors", async () => {
-      const originalFetch = global.fetch;
-      global.fetch = async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async () => {
         throw new Error("Network timeout");
       };
 
@@ -225,15 +225,15 @@ describe("Discogs OAuth Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
     it("should set session cookie on successful start", async () => {
       const mockRequestTokenResponse = `oauth_token=token123&oauth_token_secret=secret123&oauth_callback_confirmed=true`;
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("request_token")) {
           return new Response(mockRequestTokenResponse, {
@@ -256,7 +256,7 @@ describe("Discogs OAuth Routes", () => {
         expect(setCookieHeader).toContain("HttpOnly");
         expect(setCookieHeader).toContain("Secure");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });
@@ -321,8 +321,8 @@ describe("Discogs OAuth Routes", () => {
 
       const mockAccessTokenResponse = `oauth_token=access-token-123&oauth_token_secret=access-secret-123`;
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("access_token")) {
           return new Response(mockAccessTokenResponse, {
@@ -363,7 +363,7 @@ describe("Discogs OAuth Routes", () => {
         const deletedState = kvMock.store.get(stateKey);
         expect(deletedState).toBeUndefined();
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -413,9 +413,9 @@ describe("Discogs OAuth Routes", () => {
       });
       kvMock.store.set(stateKey, stateValue);
 
-      const originalFetch = global.fetch;
+      const originalFetch = globalThis.fetch;
        
-      global.fetch = async () => new Response("Unauthorized", { status: 401 });
+      globalThis.fetch = async () => new Response("Unauthorized", { status: 401 });
 
       try {
         const app = createTestApp(kvMock);
@@ -432,7 +432,7 @@ describe("Discogs OAuth Routes", () => {
         const body = (await response.json()) as TestErrorResponse;
         expect(body.error.code).toBe("DISCOGS_ERROR");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -448,8 +448,8 @@ describe("Discogs OAuth Routes", () => {
 
       const mockAccessTokenResponse = `oauth_token=access-token&oauth_token_secret=access-secret`;
 
-      const originalFetch = global.fetch;
-      global.fetch = async (url: string | Request | URL) => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
         const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr.includes("access_token")) {
           return new Response(mockAccessTokenResponse, {
@@ -472,7 +472,7 @@ describe("Discogs OAuth Routes", () => {
         const setCookieHeader = response.headers.get("set-cookie");
         expect(setCookieHeader).toContain("now_spinning_session");
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });

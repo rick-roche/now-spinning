@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "concurrently -n WORKER,WEB -c auto \"pnpm -C apps/worker dev\" \"pnpm -C apps/web dev\"",
@@ -15,20 +15,21 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "knip": "knip",
-    "validate": "pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm knip",
+    "outdated": "pnpm -r outdated",
+    "validate": "pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run test && pnpm run knip",
     "clean": "pnpm -r clean || true"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^9.39.3",
     "@testing-library/jest-dom": "^6.9.1",
-    "@vitest/coverage-v8": "^2.1.9",
-    "concurrently": "^9.0.0",
-    "eslint": "^9.39.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.3",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "knip": "^5.40.0",
-    "typescript": "^5.7.3",
-    "typescript-eslint": "^8.55.0",
-    "wrangler": "^4.65.0"
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "knip": "^5.85.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.0",
+    "wrangler": "^4.67.0"
   }
 }

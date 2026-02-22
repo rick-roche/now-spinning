@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.11"
+          node-version: "20.19.0"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -46,6 +46,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
 
       - name: Run tests
         run: pnpm test

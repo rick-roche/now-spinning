@@ -15,6 +15,7 @@ export default tseslint.config(
       "**/build/**",
       "**/.cache/**",
       "pnpm-lock.yaml",
+      "**/scripts/**",
     ],
   },
 
