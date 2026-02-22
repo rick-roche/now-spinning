@@ -18,7 +18,7 @@
     "js-md5": "^0.8.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241218.0",
+    "@cloudflare/workers-types": "^4.20260228.0",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18",
     "wrangler": "^4.65.0"

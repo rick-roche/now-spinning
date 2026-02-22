@@ -207,7 +207,7 @@ export function Collection() {
             onClick={switchToCollection}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeFilter === "collection"
-                ? "bg-white dark:bg-background-dark shadow-sm text-primary"
+                ? "bg-white dark:bg-background-dark shadow-xs text-primary"
                 : "text-text-muted hover:text-white"
             }`}
           >
@@ -217,7 +217,7 @@ export function Collection() {
             onClick={switchToSearch}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
               activeFilter === "search"
-                ? "bg-white dark:bg-background-dark shadow-sm text-primary"
+                ? "bg-white dark:bg-background-dark shadow-xs text-primary"
                 : "text-text-muted hover:text-white"
             }`}
           >
@@ -230,7 +230,7 @@ export function Collection() {
           <label className="flex items-center bg-gray-100 dark:bg-accent-dark rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-primary transition-all">
             <Icon name="search" className="text-text-muted mr-3" />
             <input
-              className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-text-muted p-0 outline-none"
+              className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-text-muted p-0 outline-hidden"
               placeholder={
                 activeFilter === "collection" ? "Search collection..." : "Search Discogs..."
               }

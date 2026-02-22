@@ -4,7 +4,6 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: "class",
   theme: {
     extend: {
       colors: {
@@ -20,12 +19,12 @@ export default {
         "display": ["Spline Sans", "sans-serif"],
       },
       borderRadius: {
-        "DEFAULT": "0.25rem",
-        "lg": "0.5rem",
-        "xl": "0.75rem",
+        DEFAULT: "0.25rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
         "2xl": "1rem",
         "3xl": "1.5rem",
-        "full": "9999px",
+        full: "9999px",
       },
     },
   },

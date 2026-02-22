@@ -119,8 +119,8 @@ export function Home() {
         {/* Service Cards */}
         <div className="space-y-4">
           {/* Discogs Card */}
-          <div className="group relative overflow-hidden flex flex-col items-stretch justify-start rounded-xl border border-primary/10 bg-white dark:bg-white/5 shadow-sm hover:shadow-md transition-all duration-300">
-            <div className="aspect-[21/9] w-full bg-primary/5 overflow-hidden">
+          <div className="group relative overflow-hidden flex flex-col items-stretch justify-start rounded-xl border border-primary/10 bg-white dark:bg-white/5 shadow-xs hover:shadow-md transition-all duration-300">
+            <div className="aspect-21/9 w-full bg-primary/5 overflow-hidden">
               <div
                 className="w-full h-full bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
                 style={{
@@ -160,8 +160,8 @@ export function Home() {
           </div>
 
           {/* Last.fm Card */}
-          <div className="group relative overflow-hidden flex flex-col items-stretch justify-start rounded-xl border border-primary/10 bg-white dark:bg-white/5 shadow-sm hover:shadow-md transition-all duration-300">
-            <div className="aspect-[21/9] w-full bg-primary/5 overflow-hidden">
+          <div className="group relative overflow-hidden flex flex-col items-stretch justify-start rounded-xl border border-primary/10 bg-white dark:bg-white/5 shadow-xs hover:shadow-md transition-all duration-300">
+            <div className="aspect-21/9 w-full bg-primary/5 overflow-hidden">
               <div
                 className="w-full h-full bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
                 style={{
