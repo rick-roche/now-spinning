@@ -4,10 +4,17 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { normalizeDiscogsRelease, createAPIError, ErrorCode } from "@repo/shared";
+import {
+  normalizeDiscogsRelease,
+  createAPIError,
+  ErrorCode,
+  DiscogsCollectionQuerySchema,
+} from "@repo/shared";
 import type {
   DiscogsCollectionResponse,
   DiscogsCollectionItem,
+  DiscogsCollectionSortDir,
+  DiscogsCollectionSortField,
   DiscogsReleaseApiResponse,
   DiscogsReleaseResponse,
   DiscogsSearchItem,
@@ -24,8 +31,10 @@ import type { CloudflareBinding } from "../types.js";
 import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials, createAppAuthHeader } from "../utils/discogs.js";
 
 type HonoContext = Context<{ Bindings: CloudflareBinding }>;
-const CACHE_TTL_SECONDS = 600;
-const CACHE_VERSION = "v2";
+const CACHE_TTL_SECONDS = 3600;
+const COLLECTION_SNAPSHOT_TTL_SECONDS = 43_200;
+const CACHE_VERSION = "v3";
+const COLLECTION_INDEX_PER_PAGE = 100;
 
 const RATE_LIMIT_MAX_RETRIES = 3;
 const RATE_LIMIT_INITIAL_BACKOFF_MS = 500;
@@ -98,6 +107,16 @@ interface DiscogsSearchResult {
   type?: string;
   artist?: string;
 }
+
+interface DiscogsCollectionSnapshot {
+  items: DiscogsCollectionItem[];
+}
+
+type SnapshotLoadResult =
+  | { ok: true; snapshot: DiscogsCollectionSnapshot }
+  | { ok: false; status: number; retryAfter?: string | null };
+
+const snapshotBuildInFlight = new Map<string, Promise<SnapshotLoadResult>>();
 
 function createOAuthHeader(params: {
   consumerKey: string;
@@ -189,6 +208,62 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
   };
 }
 
+function compareCollectionItems(
+  a: DiscogsCollectionItem,
+  b: DiscogsCollectionItem,
+  sortBy: DiscogsCollectionSortField
+): number {
+  if (sortBy === "title") {
+    return a.title.localeCompare(b.title);
+  }
+  if (sortBy === "artist") {
+    return a.artist.localeCompare(b.artist);
+  }
+  if (sortBy === "year") {
+    return (a.year ?? 0) - (b.year ?? 0);
+  }
+
+  const aTimestamp = a.dateAdded ? Date.parse(a.dateAdded) : NaN;
+  const bTimestamp = b.dateAdded ? Date.parse(b.dateAdded) : NaN;
+  const aValid = Number.isFinite(aTimestamp);
+  const bValid = Number.isFinite(bTimestamp);
+
+  if (aValid && bValid) {
+    return aTimestamp - bTimestamp;
+  }
+  if (aValid && !bValid) {
+    return 1;
+  }
+  if (!aValid && bValid) {
+    return -1;
+  }
+  return 0;
+}
+
+function sortCollectionItems(
+  items: DiscogsCollectionItem[],
+  sortBy: DiscogsCollectionSortField,
+  sortDir: DiscogsCollectionSortDir
+): DiscogsCollectionItem[] {
+  return [...items].sort((a, b) => {
+    const cmp = compareCollectionItems(a, b, sortBy);
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+}
+
+function filterCollectionItems(items: DiscogsCollectionItem[], query: string): DiscogsCollectionItem[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return items;
+  }
+
+  return items.filter(
+    (item) =>
+      item.title.toLowerCase().includes(normalizedQuery) ||
+      item.artist.toLowerCase().includes(normalizedQuery)
+  );
+}
+
 async function fetchDiscogsJson<T>(
   url: string,
   authHeader?: string
@@ -240,6 +315,89 @@ async function fetchDiscogsJson<T>(
   return { ok: false, status: 429 };
 }
 
+function createCollectionUrl(
+  username: string,
+  page: number,
+  perPage: number,
+  sortBy?: DiscogsCollectionSortField,
+  sortDir?: DiscogsCollectionSortDir
+): string {
+  const collectionUrl = new URL(
+    `${DISCOGS_API_BASE}/users/${encodeURIComponent(username)}/collection/folders/0/releases`
+  );
+  collectionUrl.searchParams.set("page", page.toString());
+  collectionUrl.searchParams.set("per_page", perPage.toString());
+
+  if (sortBy && sortDir) {
+    const upstreamSortBy: Record<DiscogsCollectionSortField, string> = {
+      dateAdded: "added",
+      title: "title",
+      artist: "artist",
+      year: "year",
+    };
+    collectionUrl.searchParams.set("sort", upstreamSortBy[sortBy]);
+    collectionUrl.searchParams.set("sort_order", sortDir);
+  }
+
+  return collectionUrl.toString();
+}
+
+async function loadCollectionSnapshot(params: {
+  kv: KVNamespace;
+  sessionId: string;
+  username: string;
+  authHeader: string;
+}): Promise<SnapshotLoadResult> {
+  const { kv, sessionId, username, authHeader } = params;
+  const snapshotCacheKey = `discogs:collection:index:${CACHE_VERSION}:${sessionId}`;
+  const cachedSnapshot = await kv.get<DiscogsCollectionSnapshot>(snapshotCacheKey, "json");
+  if (cachedSnapshot?.items) {
+    return { ok: true, snapshot: cachedSnapshot };
+  }
+
+  const inFlight = snapshotBuildInFlight.get(snapshotCacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const buildPromise: Promise<SnapshotLoadResult> = (async () => {
+    const snapshotItems: DiscogsCollectionItem[] = [];
+    let nextPage = 1;
+    let totalPages = 1;
+
+    while (nextPage <= totalPages) {
+      const pageUrl = createCollectionUrl(username, nextPage, COLLECTION_INDEX_PER_PAGE);
+      const pageResponse = await fetchDiscogsJson<DiscogsCollectionApiResponse>(pageUrl, authHeader);
+      if (!pageResponse.ok) {
+        return pageResponse;
+      }
+
+      const pageData = pageResponse.data;
+      const pageItems = (pageData.releases ?? [])
+        .map((release) => normalizeCollectionItem(release))
+        .filter((item): item is DiscogsCollectionItem => item !== null);
+
+      snapshotItems.push(...pageItems);
+      totalPages = Math.max(1, pageData.pagination?.pages ?? totalPages);
+      nextPage += 1;
+    }
+
+    const snapshot: DiscogsCollectionSnapshot = { items: snapshotItems };
+    await kv.put(snapshotCacheKey, JSON.stringify(snapshot), {
+      expirationTtl: COLLECTION_SNAPSHOT_TTL_SECONDS,
+    });
+
+    return { ok: true, snapshot };
+  })();
+
+  snapshotBuildInFlight.set(snapshotCacheKey, buildPromise);
+  try {
+    return await buildPromise;
+  } finally {
+    snapshotBuildInFlight.delete(snapshotCacheKey);
+  }
+}
+
 const router = new Hono<{ Bindings: CloudflareBinding }>();
 
 router.get("/collection", async (c: HonoContext) => {
@@ -258,17 +416,17 @@ router.get("/collection", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
-  const page = Math.max(1, Number.parseInt(c.req.query("page") ?? "1", 10) || 1);
-  const perPage = Math.min(
-    50,
-    Math.max(5, Number.parseInt(c.req.query("perPage") ?? "25", 10) || 25)
-  );
-
-  const cacheKey = `discogs:collection:${CACHE_VERSION}:${sessionId}:${page}:${perPage}`;
-  const cached = await kv.get<DiscogsCollectionResponse>(cacheKey, "json");
-  if (cached) {
-    return c.json(cached);
+  const parsedQuery = DiscogsCollectionQuerySchema.safeParse({
+    page: c.req.query("page"),
+    perPage: c.req.query("perPage"),
+    query: c.req.query("query"),
+    sortBy: c.req.query("sortBy"),
+    sortDir: c.req.query("sortDir"),
+  });
+  if (!parsedQuery.success) {
+    return c.json(createAPIError(ErrorCode.INVALID_QUERY, "Invalid collection query parameters"), 400);
   }
+  const { page, perPage, query, sortBy, sortDir } = parsedQuery.data;
 
   const authHeader = createOAuthHeader({
     consumerKey,
@@ -307,40 +465,91 @@ router.get("/collection", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs username not available"), 502);
   }
 
-  const collectionUrl = new URL(
-    `${DISCOGS_API_BASE}/users/${encodeURIComponent(username)}/collection/folders/0/releases`
-  );
-  collectionUrl.searchParams.set("page", page.toString());
-  collectionUrl.searchParams.set("per_page", perPage.toString());
+  const normalizedQuery = query.toLowerCase();
+  const hasQuery = normalizedQuery.length > 0;
+  const useDiscogsDirectPath = !hasQuery && sortBy === "dateAdded" && sortDir === "desc";
 
-  const collectionResponse = await fetchDiscogsJson<DiscogsCollectionApiResponse>(
-    collectionUrl.toString(),
-    authHeader
-  );
+  if (useDiscogsDirectPath) {
+    const cacheKey = `discogs:collection:${CACHE_VERSION}:${sessionId}:${page}:${perPage}:${sortBy}:${sortDir}`;
+    const cached = await kv.get<DiscogsCollectionResponse>(cacheKey, "json");
+    if (cached) {
+      return c.json(cached);
+    }
 
-  if (!collectionResponse.ok) {
-    if (collectionResponse.status === 429) {
-      if (collectionResponse.retryAfter) c.header("Retry-After", collectionResponse.retryAfter);
+    const collectionResponse = await fetchDiscogsJson<DiscogsCollectionApiResponse>(
+      createCollectionUrl(username, page, perPage, sortBy, sortDir),
+      authHeader
+    );
+
+    if (!collectionResponse.ok) {
+      if (collectionResponse.status === 429) {
+        if (collectionResponse.retryAfter) c.header("Retry-After", collectionResponse.retryAfter);
+        return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
+      }
+      const statusCode = collectionResponse.status >= 500 ? 502 : 400;
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), statusCode);
+    }
+
+    const rawData = collectionResponse.data;
+    const items = (rawData.releases ?? [])
+      .map((release) => normalizeCollectionItem(release))
+      .filter((item): item is DiscogsCollectionItem => item !== null);
+
+    const response: DiscogsCollectionResponse = {
+      page: rawData.pagination?.page ?? page,
+      pages: rawData.pagination?.pages ?? page,
+      perPage: rawData.pagination?.per_page ?? perPage,
+      totalItems: rawData.pagination?.items ?? items.length,
+      items,
+    };
+
+    await kv.put(cacheKey, JSON.stringify(response), {
+      expirationTtl: CACHE_TTL_SECONDS,
+    });
+
+    return c.json(response);
+  }
+
+  const searchCacheKey =
+    `discogs:collection:search:${CACHE_VERSION}:${sessionId}:${page}:${perPage}:` +
+    `${sortBy}:${sortDir}:${normalizedQuery}`;
+  const cachedSearch = await kv.get<DiscogsCollectionResponse>(searchCacheKey, "json");
+  if (cachedSearch) {
+    return c.json(cachedSearch);
+  }
+
+  const snapshotResult = await loadCollectionSnapshot({
+    kv,
+    sessionId,
+    username,
+    authHeader,
+  });
+  if (!snapshotResult.ok) {
+    if (snapshotResult.status === 429) {
+      if (snapshotResult.retryAfter) c.header("Retry-After", snapshotResult.retryAfter);
       return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
-    const statusCode = collectionResponse.status >= 500 ? 502 : 400;
+    const statusCode = snapshotResult.status >= 500 ? 502 : 400;
     return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), statusCode);
   }
 
-  const rawData = collectionResponse.data;
-  const items = (rawData.releases ?? [])
-    .map((release) => normalizeCollectionItem(release))
-    .filter((item): item is DiscogsCollectionItem => item !== null);
+  const filteredItems = filterCollectionItems(snapshotResult.snapshot.items, query);
+  const sortedItems = sortCollectionItems(filteredItems, sortBy, sortDir);
+  const totalItems = sortedItems.length;
+  const pages = Math.max(1, Math.ceil(totalItems / perPage));
+  const currentPage = Math.min(page, pages);
+  const start = (currentPage - 1) * perPage;
+  const items = sortedItems.slice(start, start + perPage);
 
   const response: DiscogsCollectionResponse = {
-    page: rawData.pagination?.page ?? page,
-    pages: rawData.pagination?.pages ?? page,
-    perPage: rawData.pagination?.per_page ?? perPage,
-    totalItems: rawData.pagination?.items ?? items.length,
+    page: currentPage,
+    pages,
+    perPage,
+    totalItems,
     items,
   };
 
-  await kv.put(cacheKey, JSON.stringify(response), {
+  await kv.put(searchCacheKey, JSON.stringify(response), {
     expirationTtl: CACHE_TTL_SECONDS,
   });
 

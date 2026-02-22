@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { apiFetch } from "../lib/api";
 import type {
   AuthStatusResponse,
   DiscogsCollectionItem,
+  DiscogsCollectionSortField,
   DiscogsCollectionResponse,
   DiscogsSearchItem,
   DiscogsSearchResponse,
 } from "@repo/shared";
 
-type SortField = "dateAdded" | "title" | "artist" | "year";
+type SortField = DiscogsCollectionSortField;
+const COLLECTION_QUERY_DEBOUNCE_MS = 300;
 
 export function Collection() {
   const navigate = useNavigate();
@@ -33,38 +35,61 @@ export function Collection() {
   const [searchingMore, setSearchingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [debouncedCollectionQuery, setDebouncedCollectionQuery] = useState("");
+  const collectionRequestIdRef = useRef(0);
+  const collectionLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const [sortBy, setSortBy] = useState<SortField>("artist");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<SortField>("dateAdded");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const loadCollection = useCallback(async (nextPage: number, append: boolean) => {
+    const requestId = ++collectionRequestIdRef.current;
+
     try {
-      setError(null);
-      if (append) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
+      if (requestId === collectionRequestIdRef.current) {
+        setError(null);
+        if (append) {
+          setLoadingMore(true);
+        } else {
+          setLoading(true);
+        }
       }
 
-      const response = await apiFetch(`/api/discogs/collection?page=${nextPage}`);
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        sortBy,
+        sortDir,
+      });
+      const trimmedQuery = debouncedCollectionQuery.trim();
+      if (trimmedQuery) {
+        params.set("query", trimmedQuery);
+      }
+
+      const response = await apiFetch(`/api/discogs/collection?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to load collection");
       }
 
        
       const data: DiscogsCollectionResponse = await response.json();
-      setItems((prev) => (append ? [...prev, ...data.items] : data.items));
-      setPage(data.page);
-      setPages(data.pages);
+      if (requestId === collectionRequestIdRef.current) {
+        setItems((prev) => (append ? [...prev, ...data.items] : data.items));
+        setPage(data.page);
+        setPages(data.pages);
+      }
     } catch (err) {
        
       const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
+      if (requestId === collectionRequestIdRef.current) {
+        setError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === collectionRequestIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  }, []);
+  }, [debouncedCollectionQuery, sortBy, sortDir]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,9 +103,6 @@ export function Collection() {
          
         const data: AuthStatusResponse = await response.json();
         setAuthStatus(data);
-        if (data.discogsConnected) {
-          await loadCollection(1, false);
-        }
       } catch (err) {
         if (controller.signal.aborted) return;
         const error: unknown = err;
@@ -92,32 +114,66 @@ export function Collection() {
 
     void fetchStatus();
     return () => controller.abort();
-  }, [loadCollection]);
+  }, []);
 
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const filtered = !normalizedQuery
-      ? items
-      : items.filter(
-          (item) =>
-            item.title.toLowerCase().includes(normalizedQuery) ||
-            item.artist.toLowerCase().includes(normalizedQuery)
-        );
+  useEffect(() => {
+    if (activeFilter !== "collection") {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedCollectionQuery(query);
+    }, COLLECTION_QUERY_DEBOUNCE_MS);
 
-    return [...filtered].sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === "title") {
-        cmp = a.title.localeCompare(b.title);
-      } else if (sortBy === "artist") {
-        cmp = a.artist.localeCompare(b.artist);
-      } else if (sortBy === "year") {
-        cmp = (a.year ?? 0) - (b.year ?? 0);
-      } else {
-        cmp = (a.dateAdded ?? "").localeCompare(b.dateAdded ?? "");
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [query, activeFilter]);
+
+  useEffect(() => {
+    if (!authStatus?.discogsConnected || activeFilter !== "collection") {
+      return;
+    }
+    void loadCollection(1, false);
+  }, [authStatus?.discogsConnected, activeFilter, debouncedCollectionQuery, sortBy, sortDir, loadCollection]);
+
+  useEffect(() => {
+    if (activeFilter !== "collection" || loading || loadingMore || page >= pages) {
+      return;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const sentinel = collectionLoadMoreSentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    let requesting = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (!firstEntry?.isIntersecting || requesting) {
+          return;
+        }
+
+        requesting = true;
+        void loadCollection(page + 1, true).finally(() => {
+          requesting = false;
+        });
+      },
+      {
+        root: null,
+        rootMargin: "300px 0px",
+        threshold: 0.1,
       }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [items, query, sortBy, sortDir]);
+    );
+
+    observer.observe(sentinel);
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeFilter, loading, loadingMore, page, pages, loadCollection]);
 
   const runSearch = useCallback(
     async (nextPage: number, append: boolean) => {
@@ -310,10 +366,10 @@ export function Collection() {
             <div className="text-center py-12">
               <p className="text-red-500">{error}</p>
             </div>
-          ) : filteredItems.length > 0 ? (
+          ) : items.length > 0 ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                {filteredItems.map((item) => (
+                {items.map((item) => (
                   <div
                     key={item.instanceId}
                     className="group relative cursor-pointer"
@@ -346,17 +402,20 @@ export function Collection() {
               </div>
 
               {canLoadMoreCollection && !loading && (
-                <div className="mt-6 flex justify-center">
-                  <button
-                    onClick={() => {
-                      void loadCollection(page + 1, true);
-                    }}
-                    disabled={loadingMore}
-                    className="bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
-                  >
-                    {loadingMore ? "Loading..." : "Load more"}
-                  </button>
-                </div>
+                <>
+                  <div ref={collectionLoadMoreSentinelRef} data-testid="collection-load-more-sentinel" className="h-1" />
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      onClick={() => {
+                        void loadCollection(page + 1, true);
+                      }}
+                      disabled={loadingMore}
+                      className="bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
+                    >
+                      {loadingMore ? "Loading..." : "Load more"}
+                    </button>
+                  </div>
+                </>
               )}
             </>
           ) : (

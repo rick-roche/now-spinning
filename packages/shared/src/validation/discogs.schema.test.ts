@@ -10,6 +10,13 @@ describe("DiscogsCollectionQuerySchema", () => {
   it("applies defaults when fields are omitted", () => {
     const result = DiscogsCollectionQuerySchema.safeParse({});
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.page).toBe(1);
+      expect(result.data.perPage).toBe(25);
+      expect(result.data.query).toBe("");
+      expect(result.data.sortBy).toBe("dateAdded");
+      expect(result.data.sortDir).toBe("desc");
+    }
   });
 
   it("coerces string page to number", () => {
@@ -41,6 +48,24 @@ describe("DiscogsCollectionQuerySchema", () => {
     if (result.success) {
       expect(result.data.perPage).toBe(50);
     }
+  });
+
+  it("trims collection query", () => {
+    const result = DiscogsCollectionQuerySchema.safeParse({ query: "  Beatles  " });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.query).toBe("Beatles");
+    }
+  });
+
+  it("rejects invalid sortBy value", () => {
+    const result = DiscogsCollectionQuerySchema.safeParse({ sortBy: "genre" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid sortDir value", () => {
+    const result = DiscogsCollectionQuerySchema.safeParse({ sortDir: "sideways" });
+    expect(result.success).toBe(false);
   });
 });
 

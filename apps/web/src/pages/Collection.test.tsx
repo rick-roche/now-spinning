@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Collection } from "./Collection";
@@ -267,6 +267,28 @@ describe("Collection Page", () => {
             ],
           } as DiscogsCollectionResponse),
         })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Abbey Road",
+                artist: "Beatles",
+                year: null,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
       );
 
     render(
@@ -282,8 +304,10 @@ describe("Collection Page", () => {
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "Abbey" } });
 
-    expect(screen.getByText("Abbey Road")).toBeInTheDocument();
-    expect(screen.queryByText("Another Album")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Abbey Road")).toBeInTheDocument();
+      expect(screen.queryByText("Another Album")).not.toBeInTheDocument();
+    });
   });
 
   it("filters collection by artist", async () => {
@@ -324,6 +348,28 @@ describe("Collection Page", () => {
             ],
           } as DiscogsCollectionResponse),
         })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Album 1",
+                artist: "The Beatles",
+                year: null,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
       );
 
     render(
@@ -339,8 +385,10 @@ describe("Collection Page", () => {
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "Beatles" } });
 
-    expect(screen.getByText("Album 1")).toBeInTheDocument();
-    expect(screen.queryByText("Album 2")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Album 1")).toBeInTheDocument();
+      expect(screen.queryByText("Album 2")).not.toBeInTheDocument();
+    });
   });
 
   it("shows load more button when there are more pages", async () => {
@@ -383,6 +431,107 @@ describe("Collection Page", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
     });
+  });
+
+  it("auto-loads next collection page when sentinel intersects", async () => {
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    let observerCallback: IntersectionObserverCallback | null = null;
+
+    class MockIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = "0px";
+      readonly thresholds = [0];
+      disconnect = vi.fn();
+      observe = vi.fn();
+      takeRecords = vi.fn(() => []);
+      unobserve = vi.fn();
+
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallback = callback;
+      }
+    }
+
+    globalThis.IntersectionObserver = MockIntersectionObserver;
+
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 2,
+            perPage: 20,
+            totalItems: 2,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Album 1",
+                artist: "Artist 1",
+                year: null,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 2,
+            pages: 2,
+            perPage: 20,
+            totalItems: 2,
+            items: [
+              {
+                instanceId: "inst-2",
+                releaseId: "rel-2",
+                title: "Album 2",
+                artist: "Artist 2",
+                year: null,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
+      );
+
+    try {
+      render(
+        <BrowserRouter>
+          <Collection />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Album 1")).toBeInTheDocument();
+      });
+
+      const sentinel = screen.getByTestId("collection-load-more-sentinel");
+      expect(observerCallback).not.toBeNull();
+
+      await act(async () => {
+        observerCallback?.(
+          [{ isIntersecting: true, target: sentinel } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Album 2")).toBeInTheDocument();
+      });
+    } finally {
+      globalThis.IntersectionObserver = originalIntersectionObserver;
+    }
   });
 
   it("hides load more button on last page", async () => {
@@ -456,6 +605,18 @@ describe("Collection Page", () => {
             ],
           } as DiscogsCollectionResponse),
         })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 0,
+            items: [],
+          } as DiscogsCollectionResponse),
+        })
       );
 
     render(
@@ -471,7 +632,9 @@ describe("Collection Page", () => {
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "xyz" } });
 
-    expect(screen.getByText("No matches found")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("No matches found")).toBeInTheDocument();
+    });
   });
 
   it("displays error when loading collection fails", async () => {
@@ -862,6 +1025,28 @@ describe("Collection Page", () => {
             ],
           } as DiscogsCollectionResponse),
         })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "My Record",
+                artist: "My Artist",
+                year: null,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
       );
 
     render(
@@ -879,6 +1064,8 @@ describe("Collection Page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "My Collection" }));
     expect(screen.getByPlaceholderText("Search collection...")).toBeInTheDocument();
-    expect(screen.getByText("My Record")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("My Record")).toBeInTheDocument();
+    });
   });
 });

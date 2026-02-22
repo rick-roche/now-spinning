@@ -2,6 +2,9 @@
  * Discogs collection contracts - shared between Worker and SPA.
  */
 
+export type DiscogsCollectionSortField = "dateAdded" | "title" | "artist" | "year";
+export type DiscogsCollectionSortDir = "asc" | "desc";
+
 export interface DiscogsCollectionItem {
   instanceId: string;
   releaseId: string;
