@@ -7,6 +7,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-html-encoding-sniffer.cjs",
     "dev": "concurrently -n WORKER,WEB -c auto \"pnpm -C apps/worker dev\" \"pnpm -C apps/web dev\"",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
