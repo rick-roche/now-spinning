@@ -38,6 +38,8 @@ export type {
 } from "./contracts/auth.js";
 export type {
   DiscogsCollectionItem,
+  DiscogsCollectionSortDir,
+  DiscogsCollectionSortField,
   DiscogsCollectionResponse,
   DiscogsReleaseResponse,
   DiscogsSearchItem,
@@ -62,6 +64,8 @@ export {
 } from "./validation/index.js";
 export {
   DiscogsCollectionQuerySchema,
+  DiscogsCollectionSortFieldSchema,
+  DiscogsCollectionSortDirSchema,
   DiscogsSearchQuerySchema,
   DiscogsReleaseIdSchema,
   DiscogsReleaseParamSchema,

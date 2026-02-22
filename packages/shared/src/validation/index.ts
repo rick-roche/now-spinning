@@ -12,6 +12,8 @@ export {
 
 export {
   DiscogsCollectionQuerySchema,
+  DiscogsCollectionSortFieldSchema,
+  DiscogsCollectionSortDirSchema,
   DiscogsSearchQuerySchema,
   DiscogsReleaseIdSchema,
   DiscogsReleaseParamSchema,

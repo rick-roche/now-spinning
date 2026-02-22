@@ -194,6 +194,260 @@ describe("Discogs Proxy Routes", () => {
       }
     });
 
+    it("should filter collection across all pages when query is provided", async () => {
+      const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
+      const tokens = createTestUserTokens();
+      tokens.discogs = {
+        service: "discogs",
+        accessToken: "access-token-123",
+        accessTokenSecret: "secret-123",
+        storedAt: Date.now(),
+      };
+      kvMock.store.set(tokenKey, JSON.stringify(tokens));
+
+      const capturedUrls: string[] = [];
+      const mockIdentityResponse = { username: "testuser" };
+      const pageOneResponse = {
+        pagination: { page: 1, pages: 2, per_page: 100, items: 2 },
+        releases: [
+          {
+            id: 1,
+            basic_information: {
+              id: 1,
+              title: "Alpha Album",
+              artists: [{ name: "Artist A" }],
+            },
+          },
+        ],
+      };
+      const pageTwoResponse = {
+        pagination: { page: 2, pages: 2, per_page: 100, items: 2 },
+        releases: [
+          {
+            id: 2,
+            basic_information: {
+              id: 2,
+              title: "Beta Album",
+              artists: [{ name: "Artist B" }],
+            },
+          },
+        ],
+      };
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        capturedUrls.push(urlStr);
+        const parsed = new URL(urlStr);
+
+        if (urlStr.includes("/oauth/identity")) {
+          return new Response(JSON.stringify(mockIdentityResponse), { status: 200 });
+        }
+        if (
+          urlStr.includes("/users/testuser/collection") &&
+          parsed.searchParams.get("page") === "1"
+        ) {
+          return new Response(JSON.stringify(pageOneResponse), { status: 200 });
+        }
+        if (
+          urlStr.includes("/users/testuser/collection") &&
+          parsed.searchParams.get("page") === "2"
+        ) {
+          return new Response(JSON.stringify(pageTwoResponse), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const { name, value } = getTestSessionCookie();
+
+        const response = await app.request(
+          new Request(
+            "http://localhost:8787/discogs/collection?query=beta&sortBy=title&sortDir=asc&page=1&perPage=25",
+            {
+              headers: { cookie: `${name}=${value}` },
+            }
+          )
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as TestListResponse;
+        expect(body.totalItems).toBe(1);
+        expect(body.items.length).toBe(1);
+        expect(body.items[0]!.title).toBe("Beta Album");
+
+        const collectionCalls = capturedUrls.filter((url) => url.includes("/users/testuser/collection"));
+        expect(collectionCalls.some((url) => url.includes("page=1") && url.includes("per_page=100"))).toBe(true);
+        expect(collectionCalls.some((url) => url.includes("page=2") && url.includes("per_page=100"))).toBe(true);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("should sort unfiltered collection from snapshot cache path", async () => {
+      const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
+      const tokens = createTestUserTokens();
+      tokens.discogs = {
+        service: "discogs",
+        accessToken: "access-token-123",
+        accessTokenSecret: "secret-123",
+        storedAt: Date.now(),
+      };
+      kvMock.store.set(tokenKey, JSON.stringify(tokens));
+
+      const mockIdentityResponse = { username: "testuser" };
+      const capturedUrls: string[] = [];
+      const pageOneResponse = {
+        pagination: { page: 1, pages: 2, per_page: 100, items: 2 },
+        releases: [
+          {
+            id: 1,
+            basic_information: {
+              id: 1,
+              title: "Zulu Album",
+              artists: [{ name: "Artist Z" }],
+            },
+          },
+        ],
+      };
+      const pageTwoResponse = {
+        pagination: { page: 2, pages: 2, per_page: 100, items: 2 },
+        releases: [
+          {
+            id: 2,
+            basic_information: {
+              id: 2,
+              title: "Alpha Album",
+              artists: [{ name: "Artist A" }],
+            },
+          },
+        ],
+      };
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        capturedUrls.push(urlStr);
+        const parsed = new URL(urlStr);
+        if (urlStr.includes("/oauth/identity")) {
+          return new Response(JSON.stringify(mockIdentityResponse), { status: 200 });
+        }
+        if (
+          urlStr.includes("/users/testuser/collection") &&
+          parsed.searchParams.get("page") === "1"
+        ) {
+          return new Response(JSON.stringify(pageOneResponse), { status: 200 });
+        }
+        if (
+          urlStr.includes("/users/testuser/collection") &&
+          parsed.searchParams.get("page") === "2"
+        ) {
+          return new Response(JSON.stringify(pageTwoResponse), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const { name, value } = getTestSessionCookie();
+
+        const response = await app.request(
+          new Request("http://localhost:8787/discogs/collection?sortBy=title&sortDir=asc&perPage=5&page=1", {
+            headers: { cookie: `${name}=${value}` },
+          })
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as TestListResponse;
+        expect(body.totalItems).toBe(2);
+        expect(body.items.length).toBe(2);
+        expect(body.items[0]!.title).toBe("Alpha Album");
+
+        const collectionCalls = capturedUrls.filter((url) => url.includes("/users/testuser/collection"));
+        expect(collectionCalls.some((url) => url.includes("page=1") && url.includes("per_page=100"))).toBe(true);
+        expect(collectionCalls.some((url) => url.includes("page=2") && url.includes("per_page=100"))).toBe(true);
+        expect(collectionCalls.some((url) => url.includes("sort=title"))).toBe(false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("should map default dateAdded descending sort to Discogs added sort key", async () => {
+      const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
+      const tokens = createTestUserTokens();
+      tokens.discogs = {
+        service: "discogs",
+        accessToken: "access-token-123",
+        accessTokenSecret: "secret-123",
+        storedAt: Date.now(),
+      };
+      kvMock.store.set(tokenKey, JSON.stringify(tokens));
+
+      const capturedUrls: string[] = [];
+      const mockIdentityResponse = { username: "testuser" };
+      const mockCollectionResponse = {
+        pagination: { page: 1, pages: 1, per_page: 25, items: 0 },
+        releases: [],
+      };
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (url: string | Request | URL) => {
+        const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        capturedUrls.push(urlStr);
+        if (urlStr.includes("/oauth/identity")) {
+          return new Response(JSON.stringify(mockIdentityResponse), { status: 200 });
+        }
+        if (urlStr.includes("/users/testuser/collection")) {
+          return new Response(JSON.stringify(mockCollectionResponse), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      };
+
+      try {
+        const app = createTestApp(kvMock);
+        const { name, value } = getTestSessionCookie();
+
+        const response = await app.request(
+          new Request("http://localhost:8787/discogs/collection?sortBy=dateAdded&sortDir=desc", {
+            headers: { cookie: `${name}=${value}` },
+          })
+        );
+
+        expect(response.status).toBe(200);
+        const collectionUrl = capturedUrls.find((url) => url.includes("/users/testuser/collection"));
+        expect(collectionUrl).toContain("sort=added");
+        expect(collectionUrl).toContain("sort_order=desc");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("should reject invalid collection sort parameters", async () => {
+      const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
+      const tokens = createTestUserTokens();
+      tokens.discogs = {
+        service: "discogs",
+        accessToken: "access-token-123",
+        accessTokenSecret: "secret-123",
+        storedAt: Date.now(),
+      };
+      kvMock.store.set(tokenKey, JSON.stringify(tokens));
+
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request("http://localhost:8787/discogs/collection?sortBy=genre", {
+          headers: { cookie: `${name}=${value}` },
+        })
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("INVALID_QUERY");
+    });
+
     it("should handle Discogs API errors", async () => {
       const tokenKey = kvUserTokensKey(TEST_SESSION_ID);
       const tokens = createTestUserTokens();
