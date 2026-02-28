@@ -73,6 +73,14 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
 
+  // Session page has intentional use of setState in effect for API sync
+  {
+    files: ["apps/web/src/pages/Session.tsx"],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
+
   // Relax strict type-safety rules for test files (mocks are inherently untyped)
   {
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/test-utils.ts"],

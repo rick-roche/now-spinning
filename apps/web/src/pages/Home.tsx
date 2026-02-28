@@ -1,92 +1,83 @@
 import { useEffect, useState } from "react";
-import { apiFetch } from "../lib/api";
-import { getErrorMessage, getApiErrorMessage } from "../lib/errors";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { LoadingState } from "../components/LoadingState";
+import { useApiMutation } from "../hooks/useApiMutation";
+import { useApiQuery } from "../hooks/useApiQuery";
 import type { AuthStatusResponse } from "@repo/shared";
 
 export function Home() {
   const navigate = useNavigate();
-  const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [connectingDiscogs, setConnectingDiscogs] = useState(false);
-  const [connectingLastFm, setConnectingLastFm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const {
+    data: authStatus,
+    loading,
+    error: authError,
+  } = useApiQuery<AuthStatusResponse>("/api/auth/status", {
+    errorMessage: "Failed to fetch auth status",
+    retry: 0,
+  });
+
+  const {
+    mutate: connectDiscogs,
+    loading: connectingDiscogs,
+    error: discogsError,
+    reset: resetDiscogsError,
+  } = useApiMutation<{ redirectUrl?: string }, void>(
+    () => ({ url: "/api/auth/discogs/start", method: "POST" }),
+    {
+      onSuccess: (data) => {
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          setActionError("Discogs redirect was not provided.");
+        }
+      },
+    }
+  );
+
+  const {
+    mutate: connectLastFm,
+    loading: connectingLastFm,
+    error: lastFmError,
+    reset: resetLastFmError,
+  } = useApiMutation<{ redirectUrl?: string }, void>(
+    () => ({ url: "/api/auth/lastfm/start", method: "GET" }),
+    {
+      onSuccess: (data) => {
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          setActionError("Last.fm redirect was not provided.");
+        }
+      },
+    }
+  );
 
   useEffect(() => {
-    const controller = new AbortController();
-    const fetchStatus = async () => {
-      try {
-        setError(null);
-        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
-        if (!response.ok) throw new Error("Failed to fetch auth status");
-         
-        const data: AuthStatusResponse = await response.json();
-        setAuthStatus(data);
-        if (data.discogsConnected) {
-          void navigate("/collection");
-          return;
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        const error: unknown = err;
-        console.error(getErrorMessage(error));
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-    void fetchStatus();
-    return () => controller.abort();
-  }, [navigate]);
+    if (authStatus?.discogsConnected) {
+      void navigate("/collection");
+    }
+  }, [authStatus, navigate]);
 
   const handleConnectDiscogs = async () => {
-    try {
-      setConnectingDiscogs(true);
-      setError(null);
-      const response = await apiFetch("/api/auth/discogs/start", { method: "POST" });
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to start Discogs authentication");
-        throw new Error(message);
-      }
-      const data: { redirectUrl?: string } = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      }
-    } catch (err) {
-      const error: unknown = err;
-      setError(getErrorMessage(error));
-    } finally {
-      setConnectingDiscogs(false);
-    }
+    setActionError(null);
+    resetDiscogsError();
+    await connectDiscogs(undefined);
   };
 
   const handleConnectLastFm = async () => {
-    try {
-      setConnectingLastFm(true);
-      setError(null);
-      const response = await apiFetch("/api/auth/lastfm/start");
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
-        throw new Error(message);
-      }
-      const data: { redirectUrl?: string } = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      }
-    } catch (err) {
-      const error: unknown = err;
-      setError(getErrorMessage(error));
-    } finally {
-      setConnectingLastFm(false);
-    }
+    setActionError(null);
+    resetLastFmError();
+    await connectLastFm(undefined);
   };
 
+  const error = actionError ?? authError ?? discogsError ?? lastFmError;
+
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Icon name="sync" className="text-4xl text-primary animate-spin" />
-      </div>
-    );
+    return <LoadingState fullScreen message="Loading authentication..." />;
   }
 
   // Navigation to /collection has been triggered; render nothing while redirect resolves
@@ -202,8 +193,8 @@ export function Home() {
         </div>
 
         {error && (
-          <div className="mt-6 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm">
-            {error}
+          <div className="mt-6">
+            <ErrorMessage message={error} />
           </div>
         )}
 

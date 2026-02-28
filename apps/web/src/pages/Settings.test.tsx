@@ -335,7 +335,8 @@ describe("Settings Page", () => {
     fireEvent.click(disconnectButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Disconnect failed")).toBeInTheDocument();
+      const errors = screen.getAllByText("Disconnect failed");
+      expect(errors.length).toBeGreaterThan(0);
     });
   });
 

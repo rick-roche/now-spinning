@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Callout, Container, Flex, Heading, Text } from "@radix-ui/themes";
+import { ErrorMessage } from "./ErrorMessage";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -43,43 +43,38 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       const isDev = import.meta.env.DEV;
       
       return (
-        <Container size="2" style={{ paddingTop: "2rem" }}>
-          <Flex direction="column" gap="4">
-            <Callout.Root color="red" size="3">
-              <Callout.Text>
-                <Heading size="4" mb="2">Something went wrong</Heading>
-                <Text size="2">
-                  The application encountered an unexpected error. 
-                  This has been logged and you can try reloading the page.
-                </Text>
-              </Callout.Text>
-            </Callout.Root>
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-4">
+            <ErrorMessage
+              message="The application encountered an unexpected error. You can try reloading the page."
+            />
 
             {isDev && this.state.error && (
-              <Callout.Root color="gray" size="2">
-                <Callout.Text>
-                  <Text size="1" style={{ fontFamily: "monospace", wordBreak: "break-word" }}>
-                    {this.state.error.message}
-                    {this.state.error.stack && (
-                      <pre style={{ marginTop: "0.5rem", fontSize: "0.75rem", overflow: "auto" }}>
-                        {this.state.error.stack}
-                      </pre>
-                    )}
-                  </Text>
-                </Callout.Text>
-              </Callout.Root>
+              <div className="bg-slate-900/80 text-slate-100 rounded-lg p-4 text-xs font-mono overflow-auto">
+                <div className="font-semibold mb-2">Debug details</div>
+                <div>{this.state.error.message}</div>
+                {this.state.error.stack && (
+                  <pre className="mt-2 whitespace-pre-wrap">{this.state.error.stack}</pre>
+                )}
+              </div>
             )}
 
-            <Flex gap="3" justify="center">
-              <Button variant="soft" onClick={this.handleReload}>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleReload}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors focus-ring"
+              >
                 Reload Page
-              </Button>
-              <Button variant="outline" onClick={this.handleReset}>
+              </button>
+              <button
+                onClick={this.handleReset}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-primary/40 text-primary hover:bg-primary/10 transition-colors focus-ring"
+              >
                 Go to Home
-              </Button>
-            </Flex>
-          </Flex>
-        </Container>
+              </button>
+            </div>
+          </div>
+        </div>
       );
     }
 

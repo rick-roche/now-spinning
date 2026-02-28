@@ -299,7 +299,10 @@ describe("Home Page", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start", { credentials: "include" });
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start", {
+        credentials: "include",
+        method: "GET",
+      });
     });
   });
 
