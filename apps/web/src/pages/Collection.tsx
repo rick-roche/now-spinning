@@ -78,32 +78,32 @@ export function Collection() {
       nextSortBy: SortField,
       nextSortDir: "asc" | "desc"
     ) => {
-      const params = new URLSearchParams(searchParams);
-      params.set("filter", nextFilter);
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("filter", nextFilter);
 
-      if (nextQuery) {
-        params.set("query", nextQuery);
-      } else {
-        params.delete("query");
-      }
+        if (nextQuery) {
+          params.set("query", nextQuery);
+        } else {
+          params.delete("query");
+        }
 
-      if (nextSortBy !== DEFAULT_SORT_BY) {
-        params.set("sortBy", nextSortBy);
-      } else {
-        params.delete("sortBy");
-      }
+        if (nextSortBy !== DEFAULT_SORT_BY) {
+          params.set("sortBy", nextSortBy);
+        } else {
+          params.delete("sortBy");
+        }
 
-      if (nextSortDir !== DEFAULT_SORT_DIR) {
-        params.set("sortDir", nextSortDir);
-      } else {
-        params.delete("sortDir");
-      }
+        if (nextSortDir !== DEFAULT_SORT_DIR) {
+          params.set("sortDir", nextSortDir);
+        } else {
+          params.delete("sortDir");
+        }
 
-      if (params.toString() !== searchParams.toString()) {
-        setSearchParams(params, { replace: true });
-      }
+        return params.toString() === prev.toString() ? prev : params;
+      }, { replace: true });
     },
-    [searchParams, setSearchParams]
+    [setSearchParams]
   );
 
   const collectionRequestConfig = useCallback(
@@ -346,8 +346,33 @@ export function Collection() {
     }
     if (nextFilter === "search") {
       setHasSearched(nextQuery.trim().length > 0);
+      if (!nextQuery.trim()) {
+        setSearchItems([]);
+        setSearchPage(1);
+        setSearchPages(1);
+        setSearchError(null);
+      }
+    } else {
+      if (submittedSearchQuery) {
+        setSubmittedSearchQuery("");
+      }
+      if (hasSearched) {
+        setHasSearched(false);
+      }
+      if (searchItems.length) {
+        setSearchItems([]);
+      }
+      if (searchPage !== 1) {
+        setSearchPage(1);
+      }
+      if (searchPages !== 1) {
+        setSearchPages(1);
+      }
+      if (searchError) {
+        setSearchError(null);
+      }
     }
-  }, [activeFilter, query, searchParams, sortBy, sortDir, submittedCollectionQuery, submittedSearchQuery]);
+  }, [activeFilter, hasSearched, query, searchError, searchItems.length, searchPage, searchPages, searchParams, sortBy, sortDir, submittedCollectionQuery, submittedSearchQuery]);
 
   useEffect(() => {
     if (!authStatus?.discogsConnected || activeFilter !== "collection") {

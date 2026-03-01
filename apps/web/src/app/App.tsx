@@ -15,6 +15,9 @@ function ScrollToTopOnNavigate({ targetRef }: { targetRef: RefObject<HTMLElement
   const location = useLocation();
 
   useLayoutEffect(() => {
+    if (!location.pathname.startsWith("/release/")) {
+      return;
+    }
     const node = targetRef.current;
     if (!node) {
       return;
