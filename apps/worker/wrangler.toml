@@ -8,6 +8,7 @@ kv_namespaces = [
 
 [placement]
 mode = "smart"
+region = "azure:northeurope"
 
 [vars]
 PUBLIC_APP_ORIGIN = "http://localhost:5173"
