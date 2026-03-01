@@ -67,7 +67,6 @@ export function Release() {
     }));
   }, [release]);
 
-
   const handleStartSession = async () => {
     if (!release) return;
     resetStartError();
