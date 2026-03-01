@@ -66,6 +66,7 @@ export function Collection() {
   );
   const collectionRequestIdRef = useRef(0);
   const collectionLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const lastParamsKeyRef = useRef<string | null>(null);
 
   const [sortBy, setSortBy] = useState<SortField>(initialSortBy);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(initialSortDir);
@@ -98,7 +99,9 @@ export function Collection() {
         params.delete("sortDir");
       }
 
-      setSearchParams(params, { replace: true });
+      if (params.toString() !== searchParams.toString()) {
+        setSearchParams(params, { replace: true });
+      }
     },
     [searchParams, setSearchParams]
   );
@@ -307,6 +310,46 @@ export function Collection() {
   );
 
   useEffect(() => {
+    const paramsKey = searchParams.toString();
+    if (lastParamsKeyRef.current === paramsKey) {
+      return;
+    }
+    lastParamsKeyRef.current = paramsKey;
+
+    const paramFilter = searchParams.get("filter");
+    const nextFilter: "collection" | "search" =
+      paramFilter === "search" ? "search" : "collection";
+    const nextQuery = searchParams.get("query") ?? "";
+    const paramSortBy = searchParams.get("sortBy");
+    const nextSortBy = SORT_FIELDS.includes(paramSortBy as SortField)
+      ? (paramSortBy as SortField)
+      : DEFAULT_SORT_BY;
+    const nextSortDir = searchParams.get("sortDir") === "asc" ? "asc" : DEFAULT_SORT_DIR;
+
+    if (nextFilter !== activeFilter) {
+      setActiveFilter(nextFilter);
+    }
+    if (nextQuery !== query) {
+      setQuery(nextQuery);
+    }
+    if (nextFilter === "collection" && nextQuery !== submittedCollectionQuery) {
+      setSubmittedCollectionQuery(nextQuery);
+    }
+    if (nextFilter === "search" && nextQuery !== submittedSearchQuery) {
+      setSubmittedSearchQuery(nextQuery);
+    }
+    if (nextSortBy !== sortBy) {
+      setSortBy(nextSortBy);
+    }
+    if (nextSortDir !== sortDir) {
+      setSortDir(nextSortDir);
+    }
+    if (nextFilter === "search") {
+      setHasSearched(nextQuery.trim().length > 0);
+    }
+  }, [activeFilter, query, searchParams, sortBy, sortDir, submittedCollectionQuery, submittedSearchQuery]);
+
+  useEffect(() => {
     if (!authStatus?.discogsConnected || activeFilter !== "collection") {
       return;
     }
@@ -328,6 +371,11 @@ export function Collection() {
     setQuery("");
     setSubmittedCollectionQuery("");
     setSubmittedSearchQuery("");
+    setSearchItems([]);
+    setSearchPage(1);
+    setSearchPages(1);
+    setSearchError(null);
+    setHasSearched(false);
     syncSearchParams("collection", "", sortBy, sortDir);
   };
 
@@ -336,6 +384,11 @@ export function Collection() {
     setQuery("");
     setSubmittedCollectionQuery("");
     setSubmittedSearchQuery("");
+    setSearchItems([]);
+    setSearchPage(1);
+    setSearchPages(1);
+    setSearchError(null);
+    setHasSearched(false);
     syncSearchParams("search", "", sortBy, sortDir);
   };
 
