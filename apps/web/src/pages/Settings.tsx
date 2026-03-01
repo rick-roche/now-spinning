@@ -72,26 +72,34 @@ export function Settings() {
 
   const {
     mutate: disconnectLastFm,
+    loading: disconnectingLastFm,
     error: disconnectLastFmError,
     reset: resetDisconnectLastFmError,
   } = useApiMutation<{ success: boolean }, void>(
     () => ({ url: "/api/auth/lastfm/disconnect", method: "POST" }),
     {
       onSuccess: () => {
-        setOptimisticAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
+        setOptimisticAuthStatus((prev) => {
+          const base = prev ?? authData ?? { lastfmConnected: false, discogsConnected: false };
+          return { ...base, lastfmConnected: false };
+        });
       },
     }
   );
 
   const {
     mutate: disconnectDiscogs,
+    loading: disconnectingDiscogs,
     error: disconnectDiscogsError,
     reset: resetDisconnectDiscogsError,
   } = useApiMutation<{ success: boolean }, void>(
     () => ({ url: "/api/auth/discogs/disconnect", method: "POST" }),
     {
       onSuccess: () => {
-        setOptimisticAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
+        setOptimisticAuthStatus((prev) => {
+          const base = prev ?? authData ?? { lastfmConnected: false, discogsConnected: false };
+          return { ...base, discogsConnected: false };
+        });
       },
     }
   );
@@ -258,12 +266,13 @@ export function Settings() {
                     ? handleDisconnectDiscogs()
                     : handleConnectDiscogs())
                 }
-                disabled={loading || connectingDiscogs}
+                aria-label={authStatus?.discogsConnected ? "Disconnect Discogs" : "Connect Discogs"}
+                disabled={loading || connectingDiscogs || disconnectingDiscogs}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
                 {authStatus?.discogsConnected
                   ? "Disconnect"
-                  : connectingDiscogs
+                  : connectingDiscogs || disconnectingDiscogs
                     ? "Connecting..."
                     : "Connect"}
               </button>
@@ -295,12 +304,13 @@ export function Settings() {
                     ? handleDisconnectLastFm()
                     : handleConnectLastFm())
                 }
-                disabled={loading || connectingLastFm}
+                aria-label={authStatus?.lastfmConnected ? "Disconnect Last.fm" : "Connect Last.fm"}
+                disabled={loading || connectingLastFm || disconnectingLastFm}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
                 {authStatus?.lastfmConnected
                   ? "Disconnect"
-                  : connectingLastFm
+                  : connectingLastFm || disconnectingLastFm
                     ? "Connecting..."
                     : "Connect"}
               </button>
