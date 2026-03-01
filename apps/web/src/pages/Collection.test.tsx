@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Collection } from "./Collection";
 import type {
@@ -15,6 +15,7 @@ describe("Collection Page", () => {
   beforeEach(() => {
     vi.useRealTimers();
     fetchMock.mockReset();
+    window.history.replaceState({}, "", "/collection");
   });
 
   afterEach(() => {
@@ -348,6 +349,7 @@ describe("Collection Page", () => {
 
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "Abbey" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
 
     await waitFor(() => {
       expect(screen.getByText("Abbey Road")).toBeInTheDocument();
@@ -429,6 +431,7 @@ describe("Collection Page", () => {
 
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "Beatles" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
 
     await waitFor(() => {
       expect(screen.getByText("Album 1")).toBeInTheDocument();
@@ -676,6 +679,7 @@ describe("Collection Page", () => {
 
     const input = screen.getByPlaceholderText("Search collection...");
     fireEvent.change(input, { target: { value: "xyz" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
 
     await waitFor(() => {
       expect(screen.getByText("No matches found.")).toBeInTheDocument();
@@ -944,6 +948,51 @@ describe("Collection Page", () => {
     await waitFor(() => {
       expect(screen.getByText("Abbey Road")).toBeInTheDocument();
     });
+  });
+
+  it("restores global search mode and query from URL params", async () => {
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            query: "Beatles",
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Abbey Road",
+                artist: "The Beatles",
+                year: 1969,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsSearchResponse),
+        })
+      );
+
+    render(
+      <MemoryRouter initialEntries={["/collection?filter=search&query=Beatles"]}>
+        <Collection />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Abbey Road")).toBeInTheDocument();
+    });
+
+    expect(screen.getByPlaceholderText("Search Discogs...")).toHaveValue("Beatles");
   });
 
   it("shows empty state in global search when no results found", async () => {

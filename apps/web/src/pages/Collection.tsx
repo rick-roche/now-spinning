@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CollectionSkeleton } from "../components/CollectionSkeleton";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { Icon } from "../components/Icon";
@@ -16,10 +16,22 @@ import type {
 import { DiscogsCollectionQuerySchema, DiscogsSearchQuerySchema } from "@repo/shared";
 
 type SortField = DiscogsCollectionSortField;
-const COLLECTION_QUERY_DEBOUNCE_MS = 300;
+const DEFAULT_SORT_BY: SortField = "dateAdded";
+const DEFAULT_SORT_DIR: "asc" | "desc" = "desc";
+const SORT_FIELDS: SortField[] = ["artist", "title", "year", "dateAdded"];
 
 export function Collection() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialFilter: "collection" | "search" =
+    searchParams.get("filter") === "search" ? "search" : "collection";
+  const initialQuery = searchParams.get("query") ?? "";
+  const initialSortByParam = searchParams.get("sortBy");
+  const initialSortBy = SORT_FIELDS.includes(initialSortByParam as SortField)
+    ? (initialSortByParam as SortField)
+    : DEFAULT_SORT_BY;
+  const initialSortDir = searchParams.get("sortDir") === "asc" ? "asc" : DEFAULT_SORT_DIR;
   const {
     data: authStatus,
     loading: loadingStatus,
@@ -35,8 +47,11 @@ export function Collection() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"collection" | "search">("collection");
+  const [query, setQuery] = useState(initialQuery);
+  const [submittedCollectionQuery, setSubmittedCollectionQuery] = useState(
+    initialFilter === "collection" ? initialQuery : ""
+  );
+  const [activeFilter, setActiveFilter] = useState<"collection" | "search">(initialFilter);
 
   // Global Discogs search state
   const [searchItems, setSearchItems] = useState<DiscogsSearchItem[]>([]);
@@ -45,13 +60,48 @@ export function Collection() {
   const [searching, setSearching] = useState(false);
   const [searchingMore, setSearchingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [debouncedCollectionQuery, setDebouncedCollectionQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(initialFilter === "search" && initialQuery.length > 0);
+  const [submittedSearchQuery, setSubmittedSearchQuery] = useState(
+    initialFilter === "search" ? initialQuery : ""
+  );
   const collectionRequestIdRef = useRef(0);
   const collectionLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const [sortBy, setSortBy] = useState<SortField>("dateAdded");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<SortField>(initialSortBy);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(initialSortDir);
+
+  const syncSearchParams = useCallback(
+    (
+      nextFilter: "collection" | "search",
+      nextQuery: string,
+      nextSortBy: SortField,
+      nextSortDir: "asc" | "desc"
+    ) => {
+      const params = new URLSearchParams(searchParams);
+      params.set("filter", nextFilter);
+
+      if (nextQuery) {
+        params.set("query", nextQuery);
+      } else {
+        params.delete("query");
+      }
+
+      if (nextSortBy !== DEFAULT_SORT_BY) {
+        params.set("sortBy", nextSortBy);
+      } else {
+        params.delete("sortBy");
+      }
+
+      if (nextSortDir !== DEFAULT_SORT_DIR) {
+        params.set("sortDir", nextSortDir);
+      } else {
+        params.delete("sortDir");
+      }
+
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
 
   const collectionRequestConfig = useCallback(
     (vars: { page: number; query: string; sortBy: SortField; sortDir: "asc" | "desc" }) => {
@@ -91,81 +141,60 @@ export function Collection() {
     { page: number; query: string }
   >(searchRequestConfig);
 
-  const loadCollection = useCallback(async (nextPage: number, append: boolean) => {
-    const requestId = ++collectionRequestIdRef.current;
+  const loadCollection = useCallback(
+    async (nextPage: number, append: boolean, collectionQuery: string, collectionSortBy: SortField, collectionSortDir: "asc" | "desc") => {
+      const requestId = ++collectionRequestIdRef.current;
 
-    try {
-      if (requestId === collectionRequestIdRef.current) {
-        setError(null);
-        if (append) {
-          setLoadingMore(true);
-        } else {
-          setLoading(true);
+      try {
+        if (requestId === collectionRequestIdRef.current) {
+          setError(null);
+          if (append) {
+            setLoadingMore(true);
+          } else {
+            setLoading(true);
+          }
+        }
+
+        const trimmedQuery = collectionQuery.trim();
+        const queryResult = DiscogsCollectionQuerySchema.safeParse({
+          page: nextPage,
+          query: trimmedQuery,
+          sortBy: collectionSortBy,
+          sortDir: collectionSortDir,
+        });
+
+        if (!queryResult.success) {
+          throw new Error("Invalid collection filter settings");
+        }
+
+        const data = await fetchCollection({
+          page: queryResult.data.page,
+          query: queryResult.data.query,
+          sortBy: queryResult.data.sortBy,
+          sortDir: queryResult.data.sortDir,
+        });
+
+        if (!data) {
+          throw new Error("Failed to load collection");
+        }
+
+        if (requestId === collectionRequestIdRef.current) {
+          setItems((prev) => (append ? [...prev, ...data.items] : data.items));
+          setPage(data.page);
+          setPages(data.pages);
+        }
+      } catch (err) {
+        const error: unknown = err;
+        if (requestId === collectionRequestIdRef.current) {
+          setError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (requestId === collectionRequestIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
         }
       }
-
-      const trimmedQuery = debouncedCollectionQuery.trim();
-      const queryResult = DiscogsCollectionQuerySchema.safeParse({
-        page: nextPage,
-        query: trimmedQuery,
-        sortBy,
-        sortDir,
-      });
-
-      if (!queryResult.success) {
-        throw new Error("Invalid collection filter settings");
-      }
-
-      const data = await fetchCollection({
-        page: queryResult.data.page,
-        query: queryResult.data.query,
-        sortBy: queryResult.data.sortBy,
-        sortDir: queryResult.data.sortDir,
-      });
-
-      if (!data) {
-        throw new Error("Failed to load collection");
-      }
-
-      if (requestId === collectionRequestIdRef.current) {
-        setItems((prev) => (append ? [...prev, ...data.items] : data.items));
-        setPage(data.page);
-        setPages(data.pages);
-      }
-    } catch (err) {
-       
-      const error: unknown = err;
-      if (requestId === collectionRequestIdRef.current) {
-        setError(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      if (requestId === collectionRequestIdRef.current) {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    }
-  }, [debouncedCollectionQuery, sortBy, sortDir, fetchCollection]);
-
-
-  useEffect(() => {
-    if (activeFilter !== "collection") {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setDebouncedCollectionQuery(query);
-    }, COLLECTION_QUERY_DEBOUNCE_MS);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [query, activeFilter]);
-
-  useEffect(() => {
-    if (!authStatus?.discogsConnected || activeFilter !== "collection") {
-      return;
-    }
-    void loadCollection(1, false);
-  }, [authStatus?.discogsConnected, activeFilter, debouncedCollectionQuery, sortBy, sortDir, loadCollection]);
+  }, [fetchCollection]);
 
   useEffect(() => {
     if (activeFilter !== "collection" || loading || loadingMore || page >= pages) {
@@ -189,7 +218,7 @@ export function Collection() {
         }
 
         requesting = true;
-        void loadCollection(page + 1, true).finally(() => {
+        void loadCollection(page + 1, true, submittedCollectionQuery, sortBy, sortDir).finally(() => {
           requesting = false;
         });
       },
@@ -204,11 +233,11 @@ export function Collection() {
     return () => {
       observer.disconnect();
     };
-  }, [activeFilter, loading, loadingMore, page, pages, loadCollection]);
+  }, [activeFilter, loading, loadingMore, page, pages, loadCollection, submittedCollectionQuery, sortBy, sortDir]);
 
   const runSearch = useCallback(
-    async (nextPage: number, append: boolean) => {
-      const trimmed = query.trim();
+    async (nextPage: number, append: boolean, searchQuery: string) => {
+      const trimmed = searchQuery.trim();
       if (!trimmed) return;
 
       try {
@@ -244,7 +273,6 @@ export function Collection() {
         setSearchPage(data.page);
         setSearchPages(data.pages);
       } catch (err) {
-         
         const error: unknown = err;
         setSearchError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -252,20 +280,63 @@ export function Collection() {
         setSearchingMore(false);
       }
     },
-    [query, fetchSearch]
+    [fetchSearch]
   );
 
-  const switchToSearch = () => {
-    setActiveFilter("search");
-    setQuery("");
-    setSearchItems([]);
-    setHasSearched(false);
-    setSearchError(null);
-  };
+  const submitSearch = useCallback(
+    (overrides?: { sortBy?: SortField; sortDir?: "asc" | "desc" }) => {
+      const trimmedQuery = query.trim();
+      if (activeFilter === "search" && !trimmedQuery) {
+        return;
+      }
+
+      const nextSortBy = overrides?.sortBy ?? sortBy;
+      const nextSortDir = overrides?.sortDir ?? sortDir;
+
+      if (activeFilter === "collection") {
+        setSubmittedCollectionQuery(trimmedQuery);
+        if (nextSortBy !== sortBy) setSortBy(nextSortBy);
+        if (nextSortDir !== sortDir) setSortDir(nextSortDir);
+        syncSearchParams("collection", trimmedQuery, nextSortBy, nextSortDir);
+      } else {
+        setSubmittedSearchQuery(trimmedQuery);
+        syncSearchParams("search", trimmedQuery, nextSortBy, nextSortDir);
+      }
+    },
+    [activeFilter, query, sortBy, sortDir, syncSearchParams]
+  );
+
+  useEffect(() => {
+    if (!authStatus?.discogsConnected || activeFilter !== "collection") {
+      return;
+    }
+    void loadCollection(1, false, submittedCollectionQuery, sortBy, sortDir);
+  }, [authStatus?.discogsConnected, activeFilter, loadCollection, submittedCollectionQuery, sortBy, sortDir]);
+
+  useEffect(() => {
+    if (!authStatus?.discogsConnected || activeFilter !== "search") {
+      return;
+    }
+    if (!submittedSearchQuery.trim()) {
+      return;
+    }
+    void runSearch(1, false, submittedSearchQuery);
+  }, [authStatus?.discogsConnected, activeFilter, runSearch, submittedSearchQuery]);
 
   const switchToCollection = () => {
     setActiveFilter("collection");
     setQuery("");
+    setSubmittedCollectionQuery("");
+    setSubmittedSearchQuery("");
+    syncSearchParams("collection", "", sortBy, sortDir);
+  };
+
+  const switchToSearch = () => {
+    setActiveFilter("search");
+    setQuery("");
+    setSubmittedCollectionQuery("");
+    setSubmittedSearchQuery("");
+    syncSearchParams("search", "", sortBy, sortDir);
   };
 
   const canLoadMoreCollection = page < pages;
@@ -354,20 +425,18 @@ export function Collection() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && activeFilter === "search") {
-                  void runSearch(1, false);
+                if (e.key === "Enter") {
+                  submitSearch();
                 }
               }}
             />
-            {activeFilter === "search" && query.trim().length > 0 && (
-              <button
-                onClick={() => void runSearch(1, false)}
-                className="ml-2 p-1 rounded-full hover:bg-primary/10 text-primary transition-colors"
-                aria-label="Search Discogs"
-              >
-                <Icon name="arrow_forward" className="text-sm" />
-              </button>
-            )}
+            <button
+              onClick={() => submitSearch()}
+              className="ml-2 p-1 rounded-full hover:bg-primary/10 text-primary transition-colors"
+              aria-label={activeFilter === "collection" ? "Search collection" : "Search Discogs"}
+            >
+              <Icon name="arrow_forward" className="text-sm" />
+            </button>
           </label>
         </div>
 
@@ -386,7 +455,10 @@ export function Collection() {
                 return (
                   <button
                     key={field}
-                    onClick={() => setSortBy(field)}
+                    onClick={() => {
+                      setSortBy(field);
+                      submitSearch({ sortBy: field });
+                    }}
                     className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       sortBy === field
                         ? "bg-primary text-white"
@@ -399,7 +471,11 @@ export function Collection() {
               })}
             </div>
             <button
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              onClick={() => {
+                const nextDir = sortDir === "asc" ? "desc" : "asc";
+                setSortDir(nextDir);
+                submitSearch({ sortDir: nextDir });
+              }}
               className="shrink-0 p-1.5 rounded-full bg-gray-100 dark:bg-accent-dark text-gray-600 dark:text-white hover:bg-primary/10 hover:text-primary transition-colors"
               aria-label={sortDir === "asc" ? "Sort descending" : "Sort ascending"}
             >
@@ -467,7 +543,7 @@ export function Collection() {
                   <div className="mt-6 flex justify-center">
                     <button
                       onClick={() => {
-                        void loadCollection(page + 1, true);
+                        void loadCollection(page + 1, true, submittedCollectionQuery, sortBy, sortDir);
                       }}
                       disabled={loadingMore}
                       className="bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
@@ -561,7 +637,7 @@ export function Collection() {
                   <div className="mt-6 flex justify-center">
                     <button
                       onClick={() => {
-                        void runSearch(searchPage + 1, true);
+                        void runSearch(searchPage + 1, true, submittedSearchQuery);
                       }}
                       disabled={searchingMore}
                       className="bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
