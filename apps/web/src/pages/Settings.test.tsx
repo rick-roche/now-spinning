@@ -42,6 +42,36 @@ describe("Settings Page", () => {
     });
   });
 
+  it("exits loading state after auth loads", async () => {
+    let resolveFetch: (value: { ok: boolean; json: () => AuthStatusResponse }) => void;
+
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    render(<Settings />);
+
+    expect(screen.getByText("Loading settings...")).toBeInTheDocument();
+
+    resolveFetch!({
+      ok: true,
+      json: () =>
+        ({
+          lastfmConnected: false,
+          discogsConnected: false,
+        } satisfies AuthStatusResponse),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Settings")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Loading settings...")).not.toBeInTheDocument();
+  });
+
   it("displays auth status when loaded", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
@@ -81,7 +111,7 @@ describe("Settings Page", () => {
     await waitFor(() => {
       const connectedTexts = screen.getAllByText("Connected");
       expect(connectedTexts.length).toBeGreaterThan(0);
-      expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Disconnect/ })).toBeInTheDocument();
     });
   });
 
@@ -100,7 +130,7 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const connectButtons = screen.getAllByRole("button", { name: "Connect" });
+      const connectButtons = screen.getAllByRole("button", { name: /Connect/ });
       expect(connectButtons.length).toBeGreaterThan(0);
     });
   });
@@ -160,7 +190,7 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
+      const disconnectButton = screen.getByRole("button", { name: /Disconnect/ });
       expect(disconnectButton).toBeInTheDocument();
     });
   });
@@ -181,7 +211,7 @@ describe("Settings Page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      const connectButtons = screen.getAllByRole("button", { name: "Connect" });
+      const connectButtons = screen.getAllByRole("button", { name: /Connect/ });
       expect(connectButtons.length).toBeGreaterThan(0);
     });
 
@@ -253,6 +283,7 @@ describe("Settings Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
+          json: () => Promise.resolve({ success: true }),
         })
       );
 
@@ -263,13 +294,12 @@ describe("Settings Page", () => {
       expect(connectedTexts.length).toBeGreaterThan(0);
     });
 
-    const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
+    const disconnectButton = screen.getByRole("button", { name: "Disconnect Last.fm" });
     fireEvent.click(disconnectButton);
 
-    // After disconnect, button should change to "Connect"
+    // After disconnect, Last.fm specifically should switch to connect state.
     await waitFor(() => {
-      const connectButtons = screen.getAllByRole("button", { name: "Connect" });
-      expect(connectButtons.length).toBeGreaterThan(0);
+      expect(screen.getByRole("button", { name: "Connect Last.fm" })).toBeInTheDocument();
     });
   });
 
@@ -288,6 +318,7 @@ describe("Settings Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
+          json: () => Promise.resolve({ success: true }),
         })
       );
 
@@ -298,13 +329,12 @@ describe("Settings Page", () => {
       expect(connectedTexts.length).toBe(1);
     });
 
-    const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
+    const disconnectButton = screen.getByRole("button", { name: "Disconnect Discogs" });
     fireEvent.click(disconnectButton);
 
-    // After disconnect, button should change to "Connect"
+    // After disconnect, Discogs specifically should switch to connect state.
     await waitFor(() => {
-      const connectButtons = screen.getAllByRole("button", { name: "Connect" });
-      expect(connectButtons.length).toBeGreaterThan(0);
+      expect(screen.getByRole("button", { name: "Connect Discogs" })).toBeInTheDocument();
     });
   });
 
@@ -331,11 +361,12 @@ describe("Settings Page", () => {
       expect(connectedTexts.length).toBeGreaterThan(0);
     });
 
-    const disconnectButton = screen.getByRole("button", { name: "Disconnect" });
+    const disconnectButton = screen.getByRole("button", { name: "Disconnect Last.fm" });
     fireEvent.click(disconnectButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Disconnect failed")).toBeInTheDocument();
+      const errors = screen.getAllByText("Disconnect failed");
+      expect(errors.length).toBeGreaterThan(0);
     });
   });
 

@@ -1,47 +1,49 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { apiFetch } from "../lib/api";
-import type { APIError, DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { ReleaseSkeleton } from "../components/ReleaseSkeleton";
+import { useApiMutation } from "../hooks/useApiMutation";
+import { useApiQuery } from "../hooks/useApiQuery";
+import { formatDurationSec } from "../lib/format";
+import type { DiscogsReleaseResponse, NormalizedRelease, SessionStartResponse } from "@repo/shared";
+import { DiscogsReleaseIdSchema } from "@repo/shared";
 
 export function Release() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [release, setRelease] = useState<NormalizedRelease | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
+  const releaseIdResult = DiscogsReleaseIdSchema.safeParse(id ?? "");
+  const releaseId = releaseIdResult.success ? releaseIdResult.data : null;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const loadRelease = async () => {
-      if (!id) {
-        setError("Missing release id.");
-        setLoading(false);
-        return;
-      }
+  const { data, loading, error, refetch } = useApiQuery<DiscogsReleaseResponse<NormalizedRelease>>(
+    releaseId ? `/api/discogs/release/${releaseId}` : "",
+    {
+      enabled: Boolean(releaseId),
+      errorMessage: "Failed to load release",
+      retry: 0,
+    }
+  );
 
-      try {
-        setLoading(true);
-        const response = await apiFetch(`/api/discogs/release/${id}`, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error("Failed to load release");
-        }
+  const release = data?.release ?? null;
 
-        const data: DiscogsReleaseResponse<NormalizedRelease> = await response.json();
-        setRelease(data.release);
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        const error: unknown = err;
-        setError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-
-    void loadRelease();
-    return () => controller.abort();
-  }, [id]);
+  const {
+    mutate: startSession,
+    loading: starting,
+    error: startError,
+    reset: resetStartError,
+  } = useApiMutation<SessionStartResponse, { releaseId: string }>(
+    (vars) => ({
+      url: "/api/session/start",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vars),
+    }),
+    {
+      onSuccess: () => {
+        void navigate("/session");
+      },
+    }
+  );
 
   const groupedTracks = useMemo(() => {
     if (!release) return [];
@@ -65,68 +67,41 @@ export function Release() {
     }));
   }, [release]);
 
-  const formatDuration = (durationSec: number | null) => {
-    if (!durationSec && durationSec !== 0) return "—";
-    const minutes = Math.floor(durationSec / 60);
-    const seconds = durationSec % 60;
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
 
-  const startSession = async () => {
+  const handleStartSession = async () => {
     if (!release) return;
-
-    try {
-      setStarting(true);
-      setError(null);
-      const response = await apiFetch("/api/session/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ releaseId: release.id }),
-      });
-
-      if (!response.ok) {
-        const data: APIError = await response.json();
-        throw new Error(data.error?.message ?? "Failed to start session");
-      }
-
-      void navigate("/session");
-    } catch (err) {
-       
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setStarting(false);
-    }
+    resetStartError();
+    await startSession({ releaseId: release.id });
   };
 
-  if (loading) {
+  const errorMessage = error ?? startError;
+  const releaseIdError = releaseIdResult.success
+    ? null
+    : releaseIdResult.error.issues[0]?.message ?? "Release id is required.";
+
+  if (releaseIdError) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Icon name="sync" className="text-4xl text-primary animate-spin mb-2" />
-          <p className="text-sm text-slate-500">Loading release...</p>
-        </div>
-      </div>
+      <ErrorMessage
+        fullPage
+        message={releaseIdError}
+        onRetry={() => {
+          void navigate("/collection");
+        }}
+      />
     );
   }
 
-  if (error && !release) {
+  if (loading) {
+    return <ReleaseSkeleton />;
+  }
+
+  if (errorMessage && !release) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center max-w-md">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-500/10 text-red-400 mb-4">
-            <Icon name="error" className="text-4xl" />
-          </div>
-          <h2 className="text-xl font-bold mb-2">Couldn&apos;t load release</h2>
-          <p className="text-slate-500 mb-6">{error}</p>
-          <Link
-            to="/collection"
-            className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-          >
-            Back to Collection
-          </Link>
-        </div>
-      </div>
+      <ErrorMessage
+        fullPage
+        message={errorMessage}
+        onRetry={() => void refetch()}
+      />
     );
   }
 
@@ -154,7 +129,7 @@ export function Release() {
               {release.coverUrl ? (
                 <img
                   src={release.coverUrl}
-                  alt={`${release.title} cover`}
+                  alt={`${release.artist} - ${release.title} album cover`}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -177,7 +152,7 @@ export function Release() {
         {/* Start Session Button */}
         <div className="mt-6">
           <button
-            onClick={() => void startSession()}
+            onClick={() => void handleStartSession()}
             disabled={starting}
             className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-primary text-white font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
           >
@@ -212,7 +187,7 @@ export function Release() {
                       ) : null}
                     </div>
                     <span className="text-[10px] opacity-40 shrink-0">
-                      {formatDuration(track.durationSec)}
+                      {formatDurationSec(track.durationSec)}
                     </span>
                   </div>
                 ))}
@@ -223,11 +198,9 @@ export function Release() {
         </div>{/* end desktop grid */}
       </main>
 
-      {error && (
+      {errorMessage && (
         <div className="fixed bottom-24 left-0 right-0 mx-auto max-w-md px-4">
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm">
-            {error}
-          </div>
+          <ErrorMessage message={errorMessage} />
         </div>
       )}
     </>

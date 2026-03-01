@@ -299,8 +299,34 @@ describe("Home Page", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start", { credentials: "include" });
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth/lastfm/start", {
+        credentials: "include",
+        method: "GET",
+      });
     });
+  });
+
+  it("exits loading state after auth loads", async () => {
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => ({ lastfmConnected: false, discogsConnected: false } as AuthStatusResponse),
+      })
+    );
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText("Loading authentication...")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("Get Started")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Loading authentication...")).not.toBeInTheDocument();
   });
 
   it("fetches auth status on mount", async () => {

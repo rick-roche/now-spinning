@@ -56,7 +56,7 @@ describe("Collection Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Loading collection...")).toBeInTheDocument();
+      expect(screen.getByTestId("collection-skeleton")).toBeInTheDocument();
     });
   });
 
@@ -143,6 +143,50 @@ describe("Collection Page", () => {
     });
   });
 
+  it("exits loading state after collection loads", async () => {
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Loaded Album",
+                artist: "Loaded Artist",
+                year: 2024,
+                thumbUrl: "https://example.com/thumb.jpg",
+                formats: ["Vinyl"],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
+      );
+
+    render(
+      <BrowserRouter>
+        <Collection />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Loaded Album")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("collection-skeleton")).not.toBeInTheDocument();
+  });
+
   it("displays collection items with cover image", async () => {
     fetchMock
       .mockImplementationOnce(() =>
@@ -181,7 +225,7 @@ describe("Collection Page", () => {
     );
 
     await waitFor(() => {
-      const img = screen.getByAltText("Album cover");
+      const img = screen.getByAltText("Artist - Album album cover");
       expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     });
   });
@@ -634,7 +678,7 @@ describe("Collection Page", () => {
     fireEvent.change(input, { target: { value: "xyz" } });
 
     await waitFor(() => {
-      expect(screen.getByText("No matches found")).toBeInTheDocument();
+      expect(screen.getByText("No matches found.")).toBeInTheDocument();
     });
   });
 
@@ -655,7 +699,7 @@ describe("Collection Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
+      expect(screen.getByText("Failed to load collection")).toBeInTheDocument();
     });
   });
 
@@ -763,9 +807,8 @@ describe("Collection Page", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("No matches found")).toBeInTheDocument();
+      expect(screen.getByText("No matches found.")).toBeInTheDocument();
     });
-
     fireEvent.click(screen.getByRole("button", { name: "Global Search" }));
 
     expect(screen.getByPlaceholderText("Search Discogs...")).toBeInTheDocument();
@@ -997,7 +1040,7 @@ describe("Collection Page", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => {
-      expect(screen.getByText("Search failed")).toBeInTheDocument();
+      expect(screen.getByText("Failed to search Discogs")).toBeInTheDocument();
     });
   });
 

@@ -79,7 +79,7 @@ describe("Release Page", () => {
 
     renderWithRouter();
 
-    expect(screen.getByText("Loading release...")).toBeInTheDocument();
+    expect(screen.getByTestId("release-skeleton")).toBeInTheDocument();
   });
 
   it("displays error when release id is missing", async () => {
@@ -92,7 +92,7 @@ describe("Release Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Missing release id.")).toBeInTheDocument();
+      expect(screen.getByText("Release ID is required")).toBeInTheDocument();
     });
   });
 
@@ -125,7 +125,7 @@ describe("Release Page", () => {
     renderWithRouter();
 
     await waitFor(() => {
-      const img = screen.getByAltText("The Dark Side of the Moon cover");
+      const img = screen.getByAltText("Pink Floyd - The Dark Side of the Moon album cover");
       expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
     });
   });
@@ -290,6 +290,7 @@ describe("Release Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
+          json: () => Promise.resolve({ session: { id: "sess-123" } }),
         })
       );
 
@@ -318,6 +319,7 @@ describe("Release Page", () => {
       .mockImplementationOnce(() =>
         Promise.resolve({
           ok: true,
+          json: () => Promise.resolve({ session: { id: "sess-123" } }),
         })
       );
 

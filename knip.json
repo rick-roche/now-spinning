@@ -14,5 +14,6 @@
       "entry": []
     }
   },
-  "ignoreDependencies": ["wrangler"]
+  "ignoreDependencies": ["wrangler"],
+  "ignoreBinaries": ["playwright"]
 }

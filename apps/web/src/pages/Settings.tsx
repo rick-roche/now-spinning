@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Icon } from "../components/Icon";
-import { apiFetch } from "../lib/api";
-import { getApiErrorMessage } from "../lib/errors";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { LoadingState } from "../components/LoadingState";
+import { useApiMutation } from "../hooks/useApiMutation";
+import { useApiQuery } from "../hooks/useApiQuery";
 import {
   getScrobbleDelay,
   setScrobbleDelay,
@@ -11,114 +13,143 @@ import {
 import type { AuthStatusResponse } from "@repo/shared";
 
 export function Settings() {
-  const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [connectingDiscogs, setConnectingDiscogs] = useState(false);
-  const [connectingLastFm, setConnectingLastFm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Use authData directly instead of syncing to local state
+  const [optimisticAuthStatus, setOptimisticAuthStatus] = useState<AuthStatusResponse | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [scrobbleDelayPercent, setScrobbleDelayPercent] = useState(() => getScrobbleDelay());
   const [notifyOnSideCompletion, setNotifyOnSideCompletionState] = useState(() =>
     getNotifyOnSideCompletion()
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const fetchAuthStatus = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error("Failed to fetch auth status");
-        }
-         
-        const data: AuthStatusResponse = await response.json();
-         
-        setAuthStatus(data);
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        const error: unknown = err;
-        setError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
+  const {
+    data: authData,
+    loading,
+    error: authError,
+    refetch: refetchAuth,
+  } = useApiQuery<AuthStatusResponse>("/api/auth/status", {
+    errorMessage: "Failed to fetch auth status",
+    retry: 0,
+  });
 
-    void fetchAuthStatus();
-    return () => controller.abort();
-  }, []);
+  // Use optimistic updates for auth status, fall back to API data
+  const authStatus = optimisticAuthStatus ?? authData;
+
+  const {
+    mutate: connectLastFm,
+    loading: connectingLastFm,
+    error: connectLastFmError,
+    reset: resetConnectLastFmError,
+  } = useApiMutation<{ redirectUrl?: string }, void>(
+    () => ({ url: "/api/auth/lastfm/start", method: "GET" }),
+    {
+      onSuccess: (data) => {
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          setActionError("Last.fm redirect was not provided.");
+        }
+      },
+    }
+  );
+
+  const {
+    mutate: connectDiscogs,
+    loading: connectingDiscogs,
+    error: connectDiscogsError,
+    reset: resetConnectDiscogsError,
+  } = useApiMutation<{ redirectUrl?: string }, void>(
+    () => ({ url: "/api/auth/discogs/start", method: "POST" }),
+    {
+      onSuccess: (data) => {
+        if (data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          setActionError("Discogs redirect was not provided.");
+        }
+      },
+    }
+  );
+
+  const {
+    mutate: disconnectLastFm,
+    loading: disconnectingLastFm,
+    error: disconnectLastFmError,
+    reset: resetDisconnectLastFmError,
+  } = useApiMutation<{ success: boolean }, void>(
+    () => ({ url: "/api/auth/lastfm/disconnect", method: "POST" }),
+    {
+      onSuccess: () => {
+        setOptimisticAuthStatus((prev) => {
+          const base = prev ?? authData ?? { lastfmConnected: false, discogsConnected: false };
+          return { ...base, lastfmConnected: false };
+        });
+      },
+    }
+  );
+
+  const {
+    mutate: disconnectDiscogs,
+    loading: disconnectingDiscogs,
+    error: disconnectDiscogsError,
+    reset: resetDisconnectDiscogsError,
+  } = useApiMutation<{ success: boolean }, void>(
+    () => ({ url: "/api/auth/discogs/disconnect", method: "POST" }),
+    {
+      onSuccess: () => {
+        setOptimisticAuthStatus((prev) => {
+          const base = prev ?? authData ?? { lastfmConnected: false, discogsConnected: false };
+          return { ...base, discogsConnected: false };
+        });
+      },
+    }
+  );
 
   const handleConnectLastFm = async () => {
-    try {
-      setConnectingLastFm(true);
-      setError(null);
-      const response = await apiFetch("/api/auth/lastfm/start");
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to start Last.fm authentication");
-        throw new Error(message);
-      }
-      const data: { redirectUrl?: string } = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      }
-    } catch (err) {
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setConnectingLastFm(false);
-    }
+    setActionError(null);
+    resetConnectLastFmError();
+    await connectLastFm(undefined);
   };
 
   const handleConnectDiscogs = async () => {
-    try {
-      setConnectingDiscogs(true);
-      setError(null);
-      const response = await apiFetch("/api/auth/discogs/start", {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to start Discogs authentication");
-        throw new Error(message);
-      }
-      const data: { redirectUrl?: string } = await response.json();
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      }
-    } catch (err) {
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setConnectingDiscogs(false);
-    }
+    setActionError(null);
+    resetConnectDiscogsError();
+    await connectDiscogs(undefined);
   };
 
   const handleDisconnectLastFm = async () => {
-    try {
-      const response = await apiFetch("/api/auth/lastfm/disconnect", { method: "POST" });
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to disconnect Last.fm");
-        throw new Error(message);
-      }
-      setAuthStatus((prev) => (prev ? { ...prev, lastfmConnected: false } : null));
-    } catch (err) {
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    }
+    setActionError(null);
+    resetDisconnectLastFmError();
+    await disconnectLastFm(undefined);
   };
 
   const handleDisconnectDiscogs = async () => {
-    try {
-      const response = await apiFetch("/api/auth/discogs/disconnect", { method: "POST" });
-      if (!response.ok) {
-        const message = await getApiErrorMessage(response, "Failed to disconnect Discogs");
-        throw new Error(message);
-      }
-      setAuthStatus((prev) => (prev ? { ...prev, discogsConnected: false } : null));
-    } catch (err) {
-      const error: unknown = err;
-      setError(error instanceof Error ? error.message : String(error));
-    }
+    setActionError(null);
+    resetDisconnectDiscogsError();
+    await disconnectDiscogs(undefined);
   };
+
+  const error =
+    actionError ??
+    authError ??
+    connectLastFmError ??
+    connectDiscogsError ??
+    disconnectLastFmError ??
+    disconnectDiscogsError;
+
+  if (loading) {
+    return <LoadingState fullScreen message="Loading settings..." />;
+  }
+
+  if (authError && !authStatus) {
+    return (
+      <ErrorMessage
+        fullPage
+        message={authError}
+        onRetry={() => void refetchAuth()}
+      />
+    );
+  }
+
 
   return (
     <>
@@ -127,6 +158,12 @@ export function Settings() {
         <div className="px-4 pt-6 pb-2">
           <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         </div>
+
+        {error && (
+          <div className="px-4 mt-4">
+            <ErrorMessage message={error} />
+          </div>
+        )}
 
         {/* Scrobbling Section */}
         <section className="mt-6 px-4">
@@ -229,12 +266,13 @@ export function Settings() {
                     ? handleDisconnectDiscogs()
                     : handleConnectDiscogs())
                 }
-                disabled={loading || connectingDiscogs}
+                aria-label={authStatus?.discogsConnected ? "Disconnect Discogs" : "Connect Discogs"}
+                disabled={loading || connectingDiscogs || disconnectingDiscogs}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
                 {authStatus?.discogsConnected
                   ? "Disconnect"
-                  : connectingDiscogs
+                  : connectingDiscogs || disconnectingDiscogs
                     ? "Connecting..."
                     : "Connect"}
               </button>
@@ -266,12 +304,13 @@ export function Settings() {
                     ? handleDisconnectLastFm()
                     : handleConnectLastFm())
                 }
-                disabled={loading || connectingLastFm}
+                aria-label={authStatus?.lastfmConnected ? "Disconnect Last.fm" : "Connect Last.fm"}
+                disabled={loading || connectingLastFm || disconnectingLastFm}
                 className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
               >
                 {authStatus?.lastfmConnected
                   ? "Disconnect"
-                  : connectingLastFm
+                  : connectingLastFm || disconnectingLastFm
                     ? "Connecting..."
                     : "Connect"}
               </button>

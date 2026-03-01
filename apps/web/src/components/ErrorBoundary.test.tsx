@@ -47,10 +47,9 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
     expect(
       screen.getByText(
-        /The application encountered an unexpected error. This has been logged/
+        "The application encountered an unexpected error. You can try reloading the page."
       )
     ).toBeInTheDocument();
   });
@@ -143,7 +142,11 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The application encountered an unexpected error. You can try reloading the page."
+      )
+    ).toBeInTheDocument();
   });
 
   it("displays error message correctly", () => {
@@ -159,7 +162,11 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The application encountered an unexpected error. You can try reloading the page."
+      )
+    ).toBeInTheDocument();
   });
 
   it("catches errors from event handlers", () => {
@@ -195,7 +202,11 @@ describe("ErrorBoundary", () => {
     );
 
     // First render shows error
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The application encountered an unexpected error. You can try reloading the page."
+      )
+    ).toBeInTheDocument();
 
     // Rerender should still show error
     rerender(
@@ -204,7 +215,11 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The application encountered an unexpected error. You can try reloading the page."
+      )
+    ).toBeInTheDocument();
   });
 
   it("renders with different child types", () => {
@@ -231,7 +246,11 @@ describe("ErrorBoundary", () => {
     );
 
     // Should catch the error and display error UI
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The application encountered an unexpected error. You can try reloading the page."
+      )
+    ).toBeInTheDocument();
   });
 
   it("provides buttons with correct styling context", () => {

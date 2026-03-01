@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CollectionSkeleton } from "../components/CollectionSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
 import { Icon } from "../components/Icon";
-import { apiFetch } from "../lib/api";
+import { useApiMutation } from "../hooks/useApiMutation";
+import { useApiQuery } from "../hooks/useApiQuery";
 import type {
   AuthStatusResponse,
   DiscogsCollectionItem,
@@ -10,14 +13,22 @@ import type {
   DiscogsSearchItem,
   DiscogsSearchResponse,
 } from "@repo/shared";
+import { DiscogsCollectionQuerySchema, DiscogsSearchQuerySchema } from "@repo/shared";
 
 type SortField = DiscogsCollectionSortField;
 const COLLECTION_QUERY_DEBOUNCE_MS = 300;
 
 export function Collection() {
   const navigate = useNavigate();
-  const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
-  const [loadingStatus, setLoadingStatus] = useState(true);
+  const {
+    data: authStatus,
+    loading: loadingStatus,
+    error: authError,
+    refetch: refetchAuth,
+  } = useApiQuery<AuthStatusResponse>("/api/auth/status", {
+    errorMessage: "Failed to fetch auth status",
+    retry: 0,
+  });
   const [items, setItems] = useState<DiscogsCollectionItem[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -42,6 +53,44 @@ export function Collection() {
   const [sortBy, setSortBy] = useState<SortField>("dateAdded");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const collectionRequestConfig = useCallback(
+    (vars: { page: number; query: string; sortBy: SortField; sortDir: "asc" | "desc" }) => {
+      const params = new URLSearchParams({
+        page: String(vars.page),
+        sortBy: vars.sortBy,
+        sortDir: vars.sortDir,
+      });
+
+      if (vars.query) {
+        params.set("query", vars.query);
+      }
+
+      return {
+        url: `/api/discogs/collection?${params.toString()}`,
+        method: "GET",
+      };
+    },
+    []
+  );
+
+  const { mutate: fetchCollection } = useApiMutation<
+    DiscogsCollectionResponse,
+    { page: number; query: string; sortBy: SortField; sortDir: "asc" | "desc" }
+  >(collectionRequestConfig);
+
+  const searchRequestConfig = useCallback(
+    (vars: { page: number; query: string }) => ({
+      url: `/api/discogs/search?query=${encodeURIComponent(vars.query)}&page=${vars.page}`,
+      method: "GET",
+    }),
+    []
+  );
+
+  const { mutate: fetchSearch } = useApiMutation<
+    DiscogsSearchResponse,
+    { page: number; query: string }
+  >(searchRequestConfig);
+
   const loadCollection = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++collectionRequestIdRef.current;
 
@@ -55,23 +104,29 @@ export function Collection() {
         }
       }
 
-      const params = new URLSearchParams({
-        page: String(nextPage),
+      const trimmedQuery = debouncedCollectionQuery.trim();
+      const queryResult = DiscogsCollectionQuerySchema.safeParse({
+        page: nextPage,
+        query: trimmedQuery,
         sortBy,
         sortDir,
       });
-      const trimmedQuery = debouncedCollectionQuery.trim();
-      if (trimmedQuery) {
-        params.set("query", trimmedQuery);
+
+      if (!queryResult.success) {
+        throw new Error("Invalid collection filter settings");
       }
 
-      const response = await apiFetch(`/api/discogs/collection?${params.toString()}`);
-      if (!response.ok) {
+      const data = await fetchCollection({
+        page: queryResult.data.page,
+        query: queryResult.data.query,
+        sortBy: queryResult.data.sortBy,
+        sortDir: queryResult.data.sortDir,
+      });
+
+      if (!data) {
         throw new Error("Failed to load collection");
       }
 
-       
-      const data: DiscogsCollectionResponse = await response.json();
       if (requestId === collectionRequestIdRef.current) {
         setItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setPage(data.page);
@@ -89,32 +144,8 @@ export function Collection() {
         setLoadingMore(false);
       }
     }
-  }, [debouncedCollectionQuery, sortBy, sortDir]);
+  }, [debouncedCollectionQuery, sortBy, sortDir, fetchCollection]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const fetchStatus = async () => {
-      try {
-        setLoadingStatus(true);
-        const response = await apiFetch("/api/auth/status", { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error("Failed to fetch auth status");
-        }
-         
-        const data: AuthStatusResponse = await response.json();
-        setAuthStatus(data);
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        const error: unknown = err;
-        setError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!controller.signal.aborted) setLoadingStatus(false);
-      }
-    };
-
-    void fetchStatus();
-    return () => controller.abort();
-  }, []);
 
   useEffect(() => {
     if (activeFilter !== "collection") {
@@ -189,14 +220,26 @@ export function Collection() {
           setSearching(true);
         }
 
-        const response = await apiFetch(
-          `/api/discogs/search?query=${encodeURIComponent(trimmed)}&page=${nextPage}`
-        );
-        if (!response.ok) {
+        const queryResult = DiscogsSearchQuerySchema.safeParse({
+          query: trimmed,
+          page: nextPage,
+        });
+
+        if (!queryResult.success) {
+          setSearchError(queryResult.error.issues[0]?.message ?? "Search query is required");
+          setSearching(false);
+          setSearchingMore(false);
+          return;
+        }
+
+        const data = await fetchSearch({
+          query: queryResult.data.query,
+          page: queryResult.data.page ?? nextPage,
+        });
+        if (!data) {
           throw new Error("Failed to search Discogs");
         }
-         
-        const data: DiscogsSearchResponse = await response.json();
+
         setSearchItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setSearchPage(data.page);
         setSearchPages(data.pages);
@@ -209,7 +252,7 @@ export function Collection() {
         setSearchingMore(false);
       }
     },
-    [query]
+    [query, fetchSearch]
   );
 
   const switchToSearch = () => {
@@ -228,7 +271,21 @@ export function Collection() {
   const canLoadMoreCollection = page < pages;
   const canLoadMoreSearch = searchPage < searchPages;
 
-  if (!authStatus?.discogsConnected && !loadingStatus) {
+  if (loadingStatus) {
+    return <CollectionSkeleton />;
+  }
+
+  if (authError && !authStatus) {
+    return (
+      <ErrorMessage
+        fullPage
+        message={authError}
+        onRetry={() => void refetchAuth()}
+      />
+    );
+  }
+
+  if (!authStatus?.discogsConnected) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="text-center max-w-md">
@@ -284,7 +341,10 @@ export function Collection() {
         {/* Search Bar */}
         <div className="relative mb-4">
           <label className="flex items-center bg-gray-100 dark:bg-accent-dark rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-primary transition-all">
-            <Icon name="search" className="text-text-muted mr-3" />
+            <Icon name="search" className="text-text-muted mr-3" aria-hidden="true" />
+            <span className="sr-only">
+              {activeFilter === "collection" ? "Search your collection" : "Search Discogs database"}
+            </span>
             <input
               className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-text-muted p-0 outline-none"
               placeholder={
@@ -363,8 +423,8 @@ export function Collection() {
               </div>
             </div>
           ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-red-500">{error}</p>
+            <div className="py-12">
+              <ErrorMessage message={error} />
             </div>
           ) : items.length > 0 ? (
             <>
@@ -380,7 +440,7 @@ export function Collection() {
                     <div className="aspect-square w-full rounded-lg overflow-hidden vinyl-shadow bg-surface-dark mb-3 relative">
                       {item.thumbUrl ? (
                         <img
-                          alt={`${item.title} cover`}
+                          alt={`${item.artist} - ${item.title} album cover`}
                           className="w-full h-full object-cover"
                           src={item.thumbUrl}
                         />
@@ -421,7 +481,15 @@ export function Collection() {
           ) : (
             <div className="text-center py-12">
               <Icon name="search_off" className="text-4xl text-text-muted mb-2" />
-              <p className="text-sm text-slate-500">No matches found</p>
+              <p className="text-sm text-slate-500">No matches found.</p>
+              {query.trim() && (
+                <button
+                  onClick={() => setQuery("")}
+                  className="mt-4 text-sm font-semibold text-primary hover:underline focus-ring"
+                >
+                  Clear search
+                </button>
+              )}
             </div>
           )
         ) : (
@@ -437,8 +505,8 @@ export function Collection() {
             )}
 
             {searchError && !searching && (
-              <div className="text-center py-12">
-                <p className="text-red-500">{searchError}</p>
+              <div className="py-12">
+                <ErrorMessage message={searchError} />
               </div>
             )}
 
@@ -465,7 +533,7 @@ export function Collection() {
                       <div className="aspect-square w-full rounded-lg overflow-hidden vinyl-shadow bg-surface-dark mb-3 relative">
                         {item.thumbUrl ? (
                           <img
-                            alt={`${item.title} cover`}
+                            alt={`${item.artist} - ${item.title} album cover`}
                             className="w-full h-full object-cover"
                             src={item.thumbUrl}
                           />
@@ -509,6 +577,12 @@ export function Collection() {
               <div className="text-center py-12">
                 <Icon name="search_off" className="text-4xl text-text-muted mb-2" />
                 <p className="text-sm text-slate-500">No results found. Try another search.</p>
+                <button
+                  onClick={() => setQuery("")}
+                  className="mt-4 text-sm font-semibold text-primary hover:underline focus-ring"
+                >
+                  Clear search
+                </button>
               </div>
             )}
           </>
