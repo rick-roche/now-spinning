@@ -139,6 +139,23 @@ describe("SessionPage", () => {
     });
   });
 
+  it("exits loading state after session loads", async () => {
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
+      })
+    );
+
+    renderSessionPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Now Playing")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("session-skeleton")).not.toBeInTheDocument();
+  });
+
   it("displays current track information", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({

@@ -82,6 +82,7 @@ All commands run from the **workspace root**:
 | `pnpm dev`         | Start SPA + Worker in dev mode           |
 | `pnpm build`       | Build all workspaces for production      |
 | `pnpm test`        | Run all tests (Vitest)                   |
+| `pnpm test:e2e`    | Run Playwright smoke tests (web)         |
 | `pnpm typecheck`   | Typecheck all workspaces                 |
 | `pnpm lint`        | Lint code with ESLint                    |
 | `pnpm lint:fix`    | Auto-fix linting issues                  |
@@ -97,6 +98,7 @@ You can also run commands in individual workspaces:
 # In the web app
 pnpm -C apps/web dev
 pnpm -C apps/web build
+pnpm -C apps/web test:e2e
 
 # In the worker
 pnpm -C apps/worker dev

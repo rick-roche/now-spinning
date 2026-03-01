@@ -143,6 +143,50 @@ describe("Collection Page", () => {
     });
   });
 
+  it("exits loading state after collection loads", async () => {
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Loaded Album",
+                artist: "Loaded Artist",
+                year: 2024,
+                thumbUrl: "https://example.com/thumb.jpg",
+                formats: ["Vinyl"],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
+      );
+
+    render(
+      <BrowserRouter>
+        <Collection />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Loaded Album")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("collection-skeleton")).not.toBeInTheDocument();
+  });
+
   it("displays collection items with cover image", async () => {
     fetchMock
       .mockImplementationOnce(() =>

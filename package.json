@@ -10,13 +10,14 @@
     "dev": "concurrently -n WORKER,WEB -c auto \"pnpm -C apps/worker dev\" \"pnpm -C apps/web dev\"",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:e2e": "pnpm -C apps/web test:e2e",
     "test:watch": "pnpm -r test:watch",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "knip": "knip",
     "outdated": "pnpm -r outdated",
-    "validate": "pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run test && pnpm run knip",
+    "validate": "pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run test && pnpm run knip && pnpm run test:e2e",
     "clean": "pnpm -r clean || true"
   },
   "devDependencies": {

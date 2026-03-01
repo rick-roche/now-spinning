@@ -9,6 +9,7 @@ export default defineConfig({
     passWithNoTests: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.{test,spec}.?(c|m)[jt]s?(x)"],
+    exclude: ["e2e/**", "**/node_modules/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "json", "html"],

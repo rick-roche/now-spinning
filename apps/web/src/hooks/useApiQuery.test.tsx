@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useApiQuery } from "./useApiQuery";
 import { createFetchMock } from "../test-utils";
@@ -53,6 +54,25 @@ describe("useApiQuery", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Error: Bad request")).toBeInTheDocument();
+    });
+  });
+
+  it("resolves loading state in StrictMode", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: "Hello" }),
+      })
+    );
+
+    render(
+      <StrictMode>
+        <QueryTest url="/api/test" />
+      </StrictMode>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Data: Hello")).toBeInTheDocument();
     });
   });
 });

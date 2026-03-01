@@ -42,6 +42,36 @@ describe("Settings Page", () => {
     });
   });
 
+  it("exits loading state after auth loads", async () => {
+    let resolveFetch: (value: { ok: boolean; json: () => AuthStatusResponse }) => void;
+
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    render(<Settings />);
+
+    expect(screen.getByText("Loading settings...")).toBeInTheDocument();
+
+    resolveFetch!({
+      ok: true,
+      json: () =>
+        ({
+          lastfmConnected: false,
+          discogsConnected: false,
+        } satisfies AuthStatusResponse),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Settings")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Loading settings...")).not.toBeInTheDocument();
+  });
+
   it("displays auth status when loaded", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({

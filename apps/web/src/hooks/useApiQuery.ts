@@ -126,6 +126,8 @@ export function useApiQuery<T>(
   }, [enabled, fetchData]);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
     };

@@ -159,6 +159,7 @@ Run from workspace root:
 - `pnpm i`
 - `pnpm dev`
 - `pnpm test`
+- `pnpm test:e2e`
 - `pnpm typecheck`
 - `pnpm lint`
 - `pnpm knip`
