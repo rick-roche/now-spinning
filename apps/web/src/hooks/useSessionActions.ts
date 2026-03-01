@@ -44,12 +44,19 @@ export function useSessionActions(
             session.currentIndex + 1,
             session.release.tracks.length - 1
           );
-          if (nextIndex === session.currentIndex) return session;
+          
+          // Mark current track as scrobbled (matching backend behavior)
           const updatedTracks = session.tracks.map((track, index) =>
             index === session.currentIndex
-              ? { ...track, status: "skipped" as SessionTrackStatus }
+              ? { ...track, status: "scrobbled" as SessionTrackStatus, scrobbledAt: Date.now() }
               : track
           );
+          
+          // If already at last track, backend will end the session
+          if (nextIndex === session.currentIndex) {
+            return null;
+          }
+          
           return { ...session, currentIndex: nextIndex, tracks: updatedTracks };
         }
         if (action === "end") {

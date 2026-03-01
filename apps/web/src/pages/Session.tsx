@@ -14,9 +14,14 @@ import { useSessionTimer } from "../hooks/useSessionTimer";
 import { useAutoAdvance } from "../hooks/useAutoAdvance";
 import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
-import type { Session, SessionCurrentResponse } from "@repo/shared";
+import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
+  if (!value || typeof value !== "object") return false;
+  return "session" in value;
+}
+
+function isSessionActionResponse(value: unknown): value is SessionActionResponse {
   if (!value || typeof value !== "object") return false;
   return "session" in value;
 }
@@ -104,7 +109,7 @@ export function SessionPage() {
   }, []);
 
   const { mutate: scrobbleCurrent } = useApiMutation<
-    SessionCurrentResponse,
+    SessionActionResponse,
     { sessionId: string; elapsedMs: number; thresholdPercent: number }
   >((vars) => ({
     url: `/api/session/${vars.sessionId}/scrobble-current`,
@@ -127,7 +132,7 @@ export function SessionPage() {
         thresholdPercent,
       });
 
-      if (raw && isSessionCurrentResponse(raw)) {
+      if (raw && isSessionActionResponse(raw)) {
         setSession(raw.session);
       }
     },

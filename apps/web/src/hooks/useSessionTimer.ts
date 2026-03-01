@@ -65,6 +65,12 @@ export function useSessionTimer(
         localElapsedRef.current = 0;
         localStartRef.current = isRunning ? Date.now() : null;
       }
+      
+      // Update elapsedMs state immediately to reflect the new track's time
+      setElapsedMs(
+        localElapsedRef.current +
+          (localStartRef.current ? Date.now() - localStartRef.current : 0)
+      );
       return;
     }
 

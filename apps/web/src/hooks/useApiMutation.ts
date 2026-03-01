@@ -79,13 +79,6 @@ export function useApiMutation<TData = unknown, TVariables = void>(
               attempt < retry &&
               (!retryOn5xxOnly || response.status >= 500);
 
-            if (shouldRetry) {
-              const delay = retryDelay * Math.pow(2, attempt);
-              await new Promise((resolve) => setTimeout(resolve, delay));
-              attempt++;
-              continue;
-            }
-
             let errorMessage = `Request failed with status ${response.status}`;
             try {
               const errorData: { error?: { message?: string } } =
@@ -95,7 +88,23 @@ export function useApiMutation<TData = unknown, TVariables = void>(
               // Ignore JSON parse error
             }
 
-            throw new Error(errorMessage);
+            if (!shouldRetry) {
+              // Non-retriable HTTP error: set error state and return without going through generic retry path
+              setError(errorMessage);
+              setLoading(false);
+
+              if (onError) {
+                onError(errorMessage);
+              }
+
+              return null;
+            }
+
+            // Retriable error: apply backoff and continue
+            const delay = retryDelay * Math.pow(2, attempt);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            attempt++;
+            continue;
           }
 
           const json: unknown = await response.json();

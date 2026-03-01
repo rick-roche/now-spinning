@@ -1,4 +1,6 @@
-interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
+import type { HTMLAttributes } from "react";
+
+interface IconProps extends HTMLAttributes<HTMLSpanElement> {
   name: string;
   filled?: boolean;
   className?: string;

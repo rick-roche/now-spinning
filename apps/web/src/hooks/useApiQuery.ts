@@ -69,19 +69,25 @@ export function useApiQuery<T>(
             attempt < retry &&
             (!retryOn5xxOnly || response.status >= 500);
 
-          if (shouldRetry) {
-            // Exponential backoff: 1s, 2s, 4s, ...
-            const delay = retryDelay * Math.pow(2, attempt);
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            attempt++;
-            continue;
-          }
-
           const message = await getApiErrorMessage(
             response,
             errorMessage ?? `Request failed with status ${response.status}`
           );
-          throw new Error(message);
+
+          if (!shouldRetry) {
+            // Non-retriable HTTP error: set error and return without going through generic retry path
+            if (mountedRef.current) {
+              setError(message);
+              setLoading(false);
+            }
+            return;
+          }
+
+          // Exponential backoff: 1s, 2s, 4s, ...
+          const delay = retryDelay * Math.pow(2, attempt);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          attempt++;
+          continue;
         }
 
         const json: unknown = await response.json();
@@ -115,6 +121,7 @@ export function useApiQuery<T>(
 
   useEffect(() => {
     if (enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Standard data fetching pattern on mount
       void fetchData();
     }
 
