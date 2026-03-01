@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CollectionSkeleton } from "../components/CollectionSkeleton";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { Icon } from "../components/Icon";
@@ -22,10 +22,13 @@ const SORT_FIELDS: SortField[] = ["artist", "title", "year", "dateAdded"];
 
 export function Collection() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialFilter: "collection" | "search" =
-    searchParams.get("filter") === "search" ? "search" : "collection";
+    searchParams.get("filter") === "search" || location.pathname === "/search"
+      ? "search"
+      : "collection";
   const initialQuery = searchParams.get("query") ?? "";
   const initialSortByParam = searchParams.get("sortBy");
   const initialSortBy = SORT_FIELDS.includes(initialSortByParam as SortField)
@@ -65,6 +68,7 @@ export function Collection() {
     initialFilter === "search" ? initialQuery : ""
   );
   const collectionRequestIdRef = useRef(0);
+  const searchRequestIdRef = useRef(0);
   const collectionLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const lastParamsKeyRef = useRef<string | null>(null);
 
@@ -243,13 +247,17 @@ export function Collection() {
       const trimmed = searchQuery.trim();
       if (!trimmed) return;
 
+      const requestId = ++searchRequestIdRef.current;
+
       try {
-        setSearchError(null);
-        setHasSearched(true);
-        if (append) {
-          setSearchingMore(true);
-        } else {
-          setSearching(true);
+        if (requestId === searchRequestIdRef.current) {
+          setSearchError(null);
+          setHasSearched(true);
+          if (append) {
+            setSearchingMore(true);
+          } else {
+            setSearching(true);
+          }
         }
 
         const queryResult = DiscogsSearchQuerySchema.safeParse({
@@ -258,9 +266,11 @@ export function Collection() {
         });
 
         if (!queryResult.success) {
-          setSearchError(queryResult.error.issues[0]?.message ?? "Search query is required");
-          setSearching(false);
-          setSearchingMore(false);
+          if (requestId === searchRequestIdRef.current) {
+            setSearchError(queryResult.error.issues[0]?.message ?? "Search query is required");
+            setSearching(false);
+            setSearchingMore(false);
+          }
           return;
         }
 
@@ -272,29 +282,50 @@ export function Collection() {
           throw new Error("Failed to search Discogs");
         }
 
-        setSearchItems((prev) => (append ? [...prev, ...data.items] : data.items));
-        setSearchPage(data.page);
-        setSearchPages(data.pages);
+        if (requestId === searchRequestIdRef.current) {
+          setSearchItems((prev) => (append ? [...prev, ...data.items] : data.items));
+          setSearchPage(data.page);
+          setSearchPages(data.pages);
+        }
       } catch (err) {
         const error: unknown = err;
-        setSearchError(error instanceof Error ? error.message : String(error));
+        if (requestId === searchRequestIdRef.current) {
+          setSearchError(error instanceof Error ? error.message : String(error));
+        }
       } finally {
-        setSearching(false);
-        setSearchingMore(false);
+        if (requestId === searchRequestIdRef.current) {
+          setSearching(false);
+          setSearchingMore(false);
+        }
       }
     },
     [fetchSearch]
   );
 
+  const clearGlobalSearch = useCallback(
+    (nextSortBy: SortField, nextSortDir: "asc" | "desc") => {
+      setQuery("");
+      setSubmittedSearchQuery("");
+      setSearchItems([]);
+      setSearchPage(1);
+      setSearchPages(1);
+      setSearchError(null);
+      setHasSearched(false);
+      syncSearchParams("search", "", nextSortBy, nextSortDir);
+    },
+    [syncSearchParams]
+  );
+
   const submitSearch = useCallback(
     (overrides?: { sortBy?: SortField; sortDir?: "asc" | "desc" }) => {
-      const trimmedQuery = query.trim();
-      if (activeFilter === "search" && !trimmedQuery) {
-        return;
-      }
-
       const nextSortBy = overrides?.sortBy ?? sortBy;
       const nextSortDir = overrides?.sortDir ?? sortDir;
+      const trimmedQuery = query.trim();
+
+      if (activeFilter === "search" && !trimmedQuery) {
+        clearGlobalSearch(nextSortBy, nextSortDir);
+        return;
+      }
 
       if (activeFilter === "collection") {
         setSubmittedCollectionQuery(trimmedQuery);
@@ -306,7 +337,7 @@ export function Collection() {
         syncSearchParams("search", trimmedQuery, nextSortBy, nextSortDir);
       }
     },
-    [activeFilter, query, sortBy, sortDir, syncSearchParams]
+    [activeFilter, clearGlobalSearch, query, sortBy, sortDir, syncSearchParams]
   );
 
   useEffect(() => {
@@ -317,14 +348,19 @@ export function Collection() {
     lastParamsKeyRef.current = paramsKey;
 
     const paramFilter = searchParams.get("filter");
+    const pathnameFilter = location.pathname === "/search" ? "search" : null;
     const nextFilter: "collection" | "search" =
-      paramFilter === "search" ? "search" : "collection";
+      paramFilter === "search" || pathnameFilter === "search" ? "search" : "collection";
     const nextQuery = searchParams.get("query") ?? "";
     const paramSortBy = searchParams.get("sortBy");
     const nextSortBy = SORT_FIELDS.includes(paramSortBy as SortField)
       ? (paramSortBy as SortField)
       : DEFAULT_SORT_BY;
     const nextSortDir = searchParams.get("sortDir") === "asc" ? "asc" : DEFAULT_SORT_DIR;
+
+    if (!paramFilter && pathnameFilter === "search") {
+      syncSearchParams("search", nextQuery, nextSortBy, nextSortDir);
+    }
 
     if (nextFilter !== activeFilter) {
       setActiveFilter(nextFilter);
@@ -372,7 +408,7 @@ export function Collection() {
         setSearchError(null);
       }
     }
-  }, [activeFilter, hasSearched, query, searchError, searchItems.length, searchPage, searchPages, searchParams, sortBy, sortDir, submittedCollectionQuery, submittedSearchQuery]);
+  }, [activeFilter, hasSearched, location.pathname, query, searchError, searchItems.length, searchPage, searchPages, searchParams, sortBy, sortDir, submittedCollectionQuery, submittedSearchQuery, syncSearchParams]);
 
   useEffect(() => {
     if (!authStatus?.discogsConnected || activeFilter !== "collection") {
@@ -732,7 +768,7 @@ export function Collection() {
                 <Icon name="search_off" className="text-4xl text-text-muted mb-2" />
                 <p className="text-sm text-slate-500">No results found. Try another search.</p>
                 <button
-                  onClick={() => setQuery("")}
+                  onClick={() => clearGlobalSearch(sortBy, sortDir)}
                   className="mt-4 text-sm font-semibold text-primary hover:underline focus-ring"
                 >
                   Clear search

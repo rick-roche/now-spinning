@@ -995,6 +995,126 @@ describe("Collection Page", () => {
     expect(screen.getByPlaceholderText("Search Discogs...")).toHaveValue("Beatles");
   });
 
+  it("restores collection mode and sort from URL params", async () => {
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "Abbey Road",
+                artist: "The Beatles",
+                year: 1969,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsCollectionResponse),
+        })
+      );
+
+    render(
+      <MemoryRouter
+        initialEntries={["/collection?filter=collection&query=Beatles&sortBy=artist&sortDir=asc"]}
+      >
+        <Collection />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Abbey Road")).toBeInTheDocument();
+    });
+
+    expect(screen.getByPlaceholderText("Search collection...")).toHaveValue("Beatles");
+    expect(screen.getByRole("button", { name: "Artist" })).toHaveClass("bg-primary");
+    expect(screen.getByLabelText("Sort descending")).toBeInTheDocument();
+  });
+
+  it("clears global search when submitted empty", async () => {
+    fetchMock
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 0,
+            items: [],
+          } as DiscogsCollectionResponse),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => ({
+            query: "Pink Floyd",
+            page: 1,
+            pages: 1,
+            perPage: 20,
+            totalItems: 1,
+            items: [
+              {
+                instanceId: "inst-1",
+                releaseId: "rel-1",
+                title: "The Wall",
+                artist: "Pink Floyd",
+                year: 1979,
+                thumbUrl: null,
+                formats: [],
+              },
+            ],
+          } as DiscogsSearchResponse),
+        })
+      );
+
+    render(
+      <BrowserRouter>
+        <Collection />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Global Search" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Global Search" }));
+
+    const input = screen.getByPlaceholderText("Search Discogs...");
+    fireEvent.change(input, { target: { value: "Pink Floyd" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(screen.getByText("The Wall")).toBeInTheDocument();
+    });
+
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(screen.getByText("Search the Discogs database for a release.")).toBeInTheDocument();
+    });
+  });
+
   it("shows empty state in global search when no results found", async () => {
     fetchMock
       .mockImplementationOnce(() =>

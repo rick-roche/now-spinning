@@ -23,7 +23,12 @@ function ScrollToTopOnNavigate({ targetRef }: { targetRef: RefObject<HTMLElement
       return;
     }
 
-    requestAnimationFrame(() => {
+    const schedule =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (callback: () => void) => callback();
+
+    schedule(() => {
       node.scrollTop = 0;
       if (typeof node.scrollTo === "function") {
         node.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -33,7 +38,7 @@ function ScrollToTopOnNavigate({ targetRef }: { targetRef: RefObject<HTMLElement
         document.body.scrollTop = 0;
       }
     });
-  }, [location.key, targetRef]);
+  }, [location.key, location.pathname, targetRef]);
 
   return null;
 }
