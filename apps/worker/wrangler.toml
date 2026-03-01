@@ -7,7 +7,7 @@ kv_namespaces = [
 ]
 
 [placement]
-mode = "smart"
+# mode = "smart"
 region = "azure:northeurope"
 
 [vars]
