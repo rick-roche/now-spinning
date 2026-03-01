@@ -53,33 +53,43 @@ export function Collection() {
   const [sortBy, setSortBy] = useState<SortField>("dateAdded");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const collectionRequestConfig = useCallback(
+    (vars: { page: number; query: string; sortBy: SortField; sortDir: "asc" | "desc" }) => {
+      const params = new URLSearchParams({
+        page: String(vars.page),
+        sortBy: vars.sortBy,
+        sortDir: vars.sortDir,
+      });
+
+      if (vars.query) {
+        params.set("query", vars.query);
+      }
+
+      return {
+        url: `/api/discogs/collection?${params.toString()}`,
+        method: "GET",
+      };
+    },
+    []
+  );
+
   const { mutate: fetchCollection } = useApiMutation<
     DiscogsCollectionResponse,
     { page: number; query: string; sortBy: SortField; sortDir: "asc" | "desc" }
-  >((vars) => {
-    const params = new URLSearchParams({
-      page: String(vars.page),
-      sortBy: vars.sortBy,
-      sortDir: vars.sortDir,
-    });
+  >(collectionRequestConfig);
 
-    if (vars.query) {
-      params.set("query", vars.query);
-    }
-
-    return {
-      url: `/api/discogs/collection?${params.toString()}`,
+  const searchRequestConfig = useCallback(
+    (vars: { page: number; query: string }) => ({
+      url: `/api/discogs/search?query=${encodeURIComponent(vars.query)}&page=${vars.page}`,
       method: "GET",
-    };
-  });
+    }),
+    []
+  );
 
   const { mutate: fetchSearch } = useApiMutation<
     DiscogsSearchResponse,
     { page: number; query: string }
-  >((vars) => ({
-    url: `/api/discogs/search?query=${encodeURIComponent(vars.query)}&page=${vars.page}`,
-    method: "GET",
-  }));
+  >(searchRequestConfig);
 
   const loadCollection = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++collectionRequestIdRef.current;
@@ -134,9 +144,7 @@ export function Collection() {
         setLoadingMore(false);
       }
     }
-  }, [debouncedCollectionQuery, sortBy, sortDir]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // Note: fetchCollection (mutate function) is stable and doesn't need to be in deps
+  }, [debouncedCollectionQuery, sortBy, sortDir, fetchCollection]);
 
 
   useEffect(() => {
@@ -244,10 +252,8 @@ export function Collection() {
         setSearchingMore(false);
       }
     },
-    [query]
+    [query, fetchSearch]
   );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // Note: fetchSearch (mutate function) is stable and doesn't need to be in deps
 
   const switchToSearch = () => {
     setActiveFilter("search");

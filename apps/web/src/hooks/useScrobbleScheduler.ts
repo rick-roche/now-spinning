@@ -16,7 +16,13 @@ export function useScrobbleScheduler(
 ) {
   const timerRef = useRef<number | null>(null);
   const scrobbledTracksRef = useRef<Set<string>>(new Set());
+  const elapsedMsRef = useRef(elapsedMs);
   const trackIdentifier = sessionId ? `${sessionId}:${trackIndex}` : null;
+
+  // Keep elapsedMs ref up to date
+  useEffect(() => {
+    elapsedMsRef.current = elapsedMs;
+  }, [elapsedMs]);
 
   useEffect(() => {
     // Clear any existing timer
@@ -45,9 +51,9 @@ export function useScrobbleScheduler(
         return;
       }
 
-      if (elapsedMs >= thresholdMs) {
+      if (elapsedMsRef.current >= thresholdMs) {
         scrobbledTracksRef.current.add(trackIdentifier);
-        void onScrobble(elapsedMs, thresholdPercent);
+        void onScrobble(elapsedMsRef.current, thresholdPercent);
         window.clearInterval(intervalHandle);
       }
     }, 100);
@@ -59,7 +65,7 @@ export function useScrobbleScheduler(
         window.clearInterval(intervalHandle);
       }
     };
-  }, [trackIdentifier, isRunning, durationMs, elapsedMs, onScrobble, sessionId]);
+  }, [trackIdentifier, isRunning, durationMs, onScrobble, sessionId]);
 
   const markAsScrobbled = (sessionId: string, trackIndex: number) => {
     scrobbledTracksRef.current.add(`${sessionId}:${trackIndex}`);

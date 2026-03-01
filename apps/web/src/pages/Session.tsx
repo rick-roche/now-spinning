@@ -86,16 +86,22 @@ export function SessionPage() {
   );
 
   const sessionActions = useSessionActions(session, setSession);
+  const pauseRef = useRef(sessionActions.pause);
+
+  // Keep pause ref up to date
+  useEffect(() => {
+    pauseRef.current = sessionActions.pause;
+  }, [sessionActions.pause]);
 
   // Auto-pause on unmount if session is still running
   useEffect(() => {
     return () => {
       const currentSession = sessionRef.current;
       if (currentSession && currentSession.state === "running") {
-        void sessionActions.pause();
+        void pauseRef.current();
       }
     };
-  }, [sessionActions]);
+  }, []);
 
   const { mutate: scrobbleCurrent } = useApiMutation<
     SessionCurrentResponse,
@@ -207,7 +213,6 @@ export function SessionPage() {
 
   const handleSkipBack = () => {
     // Skip back not implemented yet - would require API endpoint
-    console.log("Skip back not yet implemented");
   };
 
   const progressPct = durationMs
