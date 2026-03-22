@@ -56,7 +56,7 @@ export function SessionComplete({ session, onDismiss }: SessionCompleteProps) {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-accent-dark/50">
-                      <Icon name="album" className="text-6xl text-text-muted" />
+                      <Icon name="album" className="text-6xl text-text-muted" aria-hidden="true" />
                     </div>
                   )}
                 </div>
@@ -127,7 +127,7 @@ export function SessionComplete({ session, onDismiss }: SessionCompleteProps) {
 
                 return (
                   <div
-                    key={track.position}
+                    key={track.index}
                     className={`flex items-center gap-4 p-3 rounded-lg ${
                       isScrobbled
                         ? "border border-primary/20 bg-primary/5"
@@ -154,9 +154,17 @@ export function SessionComplete({ session, onDismiss }: SessionCompleteProps) {
                         </span>
                       ) : null}
                       {isScrobbled ? (
-                        <Icon name="check_circle" className="text-primary text-lg" />
+                        <Icon
+                          name="check_circle"
+                          className="text-primary text-lg"
+                          aria-label="Scrobbled track"
+                        />
                       ) : isSkipped ? (
-                        <Icon name="skip_next" className="text-sm opacity-40" />
+                        <Icon
+                          name="skip_next"
+                          className="text-sm opacity-40"
+                          aria-label="Skipped track"
+                        />
                       ) : (
                         <span className="w-[18px]" />
                       )}

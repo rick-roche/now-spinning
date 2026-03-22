@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiFetch } from "../lib/api";
+import { getScrobbleDelay } from "../lib/settings";
 import type { Session, SessionSyncResponse } from "@repo/shared";
 
 function isSessionSyncResponse(value: unknown): value is SessionSyncResponse {
@@ -53,6 +54,8 @@ export function useVisibilityResume(
     try {
       const response = await apiFetch(`/api/session/${id}/sync`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thresholdPercent: getScrobbleDelay() }),
       });
 
       if (!response.ok) {

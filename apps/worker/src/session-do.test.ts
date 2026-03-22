@@ -108,6 +108,7 @@ describe("SessionAlarmDO", () => {
           sessionId: session.id,
           userId: session.userId,
           lastfmSessionKey: "test-lastfm-key",
+          thresholdPercent: 50,
         })
       );
 
@@ -115,6 +116,7 @@ describe("SessionAlarmDO", () => {
       expect(storageMock.put).toHaveBeenCalledWith("sessionId", session.id);
       expect(storageMock.put).toHaveBeenCalledWith("userId", session.userId);
       expect(storageMock.put).toHaveBeenCalledWith("lastfmSessionKey", "test-lastfm-key");
+      expect(storageMock.put).toHaveBeenCalledWith("thresholdPercent", 50);
       expect(storageMock.setAlarm).toHaveBeenCalledTimes(1);
     });
 
@@ -125,6 +127,7 @@ describe("SessionAlarmDO", () => {
           sessionId: "nonexistent",
           userId: "user",
           lastfmSessionKey: "key",
+          thresholdPercent: 50,
         })
       );
 
@@ -143,6 +146,29 @@ describe("SessionAlarmDO", () => {
   describe("fetch - resume command", () => {
     it("should reschedule alarm for current track", async () => {
       const session = createTestSession();
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      storageMock.store.set("sessionId", session.id);
+
+      const response = await durable.fetch(
+        makeRequest("resume", {
+          command: "resume",
+          resumedAt: Date.now(),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(storageMock.setAlarm).toHaveBeenCalledTimes(1);
+    });
+
+    it("should schedule alarm for track with unknown duration using 30s fallback", async () => {
+      const release = createTestRelease();
+      release.tracks[0] = { ...release.tracks[0]!, durationSec: 0 };
+      const session = createSession({
+        sessionId: "no-duration-session",
+        userId: "test-user-id",
+        release,
+        startedAt: Date.now(),
+      });
       kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
       storageMock.store.set("sessionId", session.id);
 
@@ -193,6 +219,7 @@ describe("SessionAlarmDO", () => {
       storageMock.store.set("sessionId", "test-session");
       storageMock.store.set("userId", "test-user");
       storageMock.store.set("lastfmSessionKey", "test-key");
+      storageMock.store.set("thresholdPercent", 50);
 
       const response = await durable.fetch(makeRequest("end", { command: "end" }));
 
@@ -201,6 +228,7 @@ describe("SessionAlarmDO", () => {
       expect(storageMock.delete).toHaveBeenCalledWith("sessionId");
       expect(storageMock.delete).toHaveBeenCalledWith("userId");
       expect(storageMock.delete).toHaveBeenCalledWith("lastfmSessionKey");
+      expect(storageMock.delete).toHaveBeenCalledWith("thresholdPercent");
     });
   });
 
@@ -329,6 +357,74 @@ describe("SessionAlarmDO", () => {
       expect(updated.currentIndex).toBe(1);
       expect(updated.tracks[1]!.status).toBe("pending");
       expect(storageMock.setAlarm).toHaveBeenCalledTimes(1);
+    });
+
+    it("should schedule alarm using 30s fallback for tracks with unknown duration", async () => {
+      const now = Date.now();
+      const release = createTestRelease();
+      release.tracks[0] = { ...release.tracks[0]!, durationSec: 0 };
+
+      const session = createSession({
+        sessionId: "unknown-duration-session",
+        userId: "test-user-id",
+        release,
+        startedAt: now,
+      });
+      session.tracks[0] = { ...session.tracks[0]!, startedAt: now };
+
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      kvMock.store.set(`session:current:${session.userId}`, session.id);
+      storageMock.store.set("sessionId", session.id);
+      storageMock.store.set("lastfmSessionKey", "key");
+
+      await durable.alarm();
+
+      expect(storageMock.setAlarm).toHaveBeenCalledTimes(1);
+      expect(kvMock.store.get(`session:${session.id}`)).toBeDefined();
+      const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
+      expect(updated.tracks[0]!.status).toBe("pending");
+    });
+
+    it("should scrobble track with unknown duration after 30s elapsed", async () => {
+      const now = Date.now();
+      const release = createTestRelease();
+      release.tracks[0] = { ...release.tracks[0]!, durationSec: 0 };
+
+      const session = createSession({
+        sessionId: "unknown-duration-elapsed-session",
+        userId: "test-user-id",
+        release,
+        startedAt: now - 60_000,
+      });
+      session.tracks[0] = { ...session.tracks[0]!, startedAt: now - 60_000 };
+
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      kvMock.store.set(`session:current:${session.userId}`, session.id);
+      storageMock.store.set("sessionId", session.id);
+      storageMock.store.set("lastfmSessionKey", "key");
+
+      await durable.alarm();
+
+      const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
+      expect(updated.tracks[0]!.status).toBe("scrobbled");
+      expect(updated.currentIndex).toBe(1);
+    });
+
+    it("should use stored thresholdPercent when scheduling and checking eligibility", async () => {
+      const now = Date.now();
+      const session = createTestSession({ startedAt: now - 200_000 } as Partial<Session>);
+      session.tracks[0] = { ...session.tracks[0]!, startedAt: now - 200_000 };
+
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      kvMock.store.set(`session:current:${session.userId}`, session.id);
+      storageMock.store.set("sessionId", session.id);
+      storageMock.store.set("lastfmSessionKey", "test-lastfm-key");
+      storageMock.store.set("thresholdPercent", 75);
+
+      await durable.alarm();
+
+      const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
+      expect(updated.tracks[0]!.status).toBe("scrobbled");
     });
   });
 });

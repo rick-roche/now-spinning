@@ -12,6 +12,7 @@ interface StartCommand {
   sessionId: string;
   userId: string;
   lastfmSessionKey: string;
+  thresholdPercent: number;
 }
 
 interface PauseCommand {
@@ -34,7 +35,8 @@ interface EndCommand {
 
 type DOCommand = StartCommand | PauseCommand | ResumeCommand | NextCommand | EndCommand;
 
-const SCROBBLE_THRESHOLD_PERCENT = 50;
+const DEFAULT_THRESHOLD_PERCENT = 50;
+const MINIMUM_SCROBBLE_MS = 30_000; // 30 seconds fallback for unknown durations
 
 export class SessionAlarmDO implements DurableObject {
   private ctx: DurableObjectState;
@@ -93,22 +95,19 @@ export class SessionAlarmDO implements DurableObject {
       return;
     }
 
-    // Guard: verify the track has actually played long enough to scrobble.
-    // A stale alarm (e.g. from before a manual "next"/side-flip) may fire
-    // against a track that just started — reschedule instead of scrobbling.
+    const thresholdPercent = (await this.ctx.storage.get<number>("thresholdPercent")) ?? DEFAULT_THRESHOLD_PERCENT;
     const now = Date.now();
     const startedAt = currentTrack.startedAt ?? now;
     const durationMs = releaseTrack.durationSec ? releaseTrack.durationSec * 1000 : null;
 
-    if (durationMs) {
-      const thresholdMs = (durationMs * SCROBBLE_THRESHOLD_PERCENT) / 100;
-      const elapsed = now - startedAt;
+    const thresholdMs = durationMs
+      ? (durationMs * thresholdPercent) / 100
+      : MINIMUM_SCROBBLE_MS;
+    const elapsed = now - startedAt;
 
-      if (elapsed < thresholdMs) {
-        // Stale alarm — track hasn't played long enough. Reschedule.
-        await this.scheduleAlarmForCurrentTrack(session, now);
-        return;
-      }
+    if (elapsed < thresholdMs) {
+      await this.scheduleAlarmForCurrentTrack(session, now);
+      return;
     }
 
     const scrobbleResult = await scrobbleTrack(
@@ -147,6 +146,7 @@ export class SessionAlarmDO implements DurableObject {
     await this.ctx.storage.put("sessionId", cmd.sessionId);
     await this.ctx.storage.put("userId", cmd.userId);
     await this.ctx.storage.put("lastfmSessionKey", cmd.lastfmSessionKey);
+    await this.ctx.storage.put("thresholdPercent", cmd.thresholdPercent ?? DEFAULT_THRESHOLD_PERCENT);
 
     const session = await loadSession(this.env.NOW_SPINNING_KV, cmd.sessionId);
     if (!session) {
@@ -199,6 +199,7 @@ export class SessionAlarmDO implements DurableObject {
     await this.ctx.storage.delete("sessionId");
     await this.ctx.storage.delete("userId");
     await this.ctx.storage.delete("lastfmSessionKey");
+    await this.ctx.storage.delete("thresholdPercent");
     return new Response("OK");
   }
 
@@ -220,12 +221,12 @@ export class SessionAlarmDO implements DurableObject {
       return;
     }
 
+    const thresholdPercent = (await this.ctx.storage.get<number>("thresholdPercent")) ?? DEFAULT_THRESHOLD_PERCENT;
     const durationMs = releaseTrack.durationSec ? releaseTrack.durationSec * 1000 : null;
-    if (!durationMs) {
-      return;
-    }
+    const thresholdMs = durationMs
+      ? (durationMs * thresholdPercent) / 100
+      : MINIMUM_SCROBBLE_MS;
 
-    const thresholdMs = (durationMs * SCROBBLE_THRESHOLD_PERCENT) / 100;
     const startedAt = currentTrack.startedAt ?? referenceTime;
     const elapsed = referenceTime - startedAt;
     const remainingMs = Math.max(thresholdMs - elapsed, 1000);

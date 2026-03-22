@@ -129,7 +129,7 @@ router.post(
       );
     }
 
-    const { releaseId } = bodyResult.data;
+    const { releaseId, thresholdPercent } = bodyResult.data;
 
     if (!/^[0-9]+$/.test(releaseId)) {
       return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
@@ -162,6 +162,7 @@ router.post(
       sessionId: session.id,
       userId,
       lastfmSessionKey: tokens.lastfm!.accessToken,
+      thresholdPercent,
     });
 
     const response: SessionStartResponse = { session };
@@ -516,7 +517,17 @@ router.post(
 
     const tokens = await loadStoredTokens(kv, userId);
     const now = Date.now();
-    const thresholdPercent = 50;
+
+    let thresholdPercent = 50;
+    try {
+      const body: unknown = await c.req.json();
+      const bodyResult = SessionScrobbleCurrentRequestSchema.safeParse(body);
+      if (bodyResult.success && typeof bodyResult.data.thresholdPercent === "number") {
+        thresholdPercent = bodyResult.data.thresholdPercent;
+      }
+    } catch {
+      // No JSON body — use default thresholdPercent
+    }
 
     const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent);
 
