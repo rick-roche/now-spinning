@@ -247,4 +247,22 @@ describe("normalizeDiscogsRelease", () => {
     expect(normalized.tracks[0]?.side).toBeNull();
     expect(normalized.tracks[1]?.side).toBeNull();
   });
+
+  it("strips Discogs disambiguation suffix from release and track artists", () => {
+    const normalized = normalizeDiscogsRelease({
+      id: 14,
+      title: "Disambiguated Release",
+      artists: [{ name: "John Smith (2)" }],
+      tracklist: [
+        { position: "A1", title: "Track One" },
+        { position: "A2", title: "Collab", artists: [{ name: "Jane Doe (3)" }] },
+        { position: "B1", title: "Solo", artists: [{ name: "Plain Artist" }] },
+      ],
+    });
+
+    expect(normalized.artist).toBe("John Smith");
+    expect(normalized.tracks[0]?.artist).toBe("John Smith");
+    expect(normalized.tracks[1]?.artist).toBe("Jane Doe");
+    expect(normalized.tracks[2]?.artist).toBe("Plain Artist");
+  });
 });

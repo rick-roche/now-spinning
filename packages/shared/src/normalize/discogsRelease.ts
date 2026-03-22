@@ -1,4 +1,5 @@
 import type { NormalizedRelease, NormalizedTrack } from "../domain/release.js";
+import { stripDiscogsDisambiguation } from "./artistName.js";
 
 export interface DiscogsReleaseApiResponse {
   id?: number;
@@ -70,7 +71,7 @@ function resolveCoverUrl(images?: Array<{ uri?: string; type?: string }>): strin
 }
 
 export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): NormalizedRelease {
-  const releaseArtist = data.artists?.[0]?.name ?? "Unknown Artist";
+  const releaseArtist = stripDiscogsDisambiguation(data.artists?.[0]?.name ?? "Unknown Artist");
   const tracks = (data.tracklist ?? [])
     .filter((track) => track.type_ !== "heading")
     .map((track, index) => {
@@ -78,7 +79,7 @@ export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): Normal
       return {
         position,
         title: track.title ?? "Untitled",
-        artist: track.artists?.[0]?.name ?? releaseArtist,
+        artist: stripDiscogsDisambiguation(track.artists?.[0]?.name ?? releaseArtist),
         durationSec: parseDiscogsDuration(track.duration),
         side: deriveSide(position),
         index,
