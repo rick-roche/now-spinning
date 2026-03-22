@@ -7,6 +7,7 @@ import {
   TEST_RELEASE_ID,
   createTestUserTokens,
   createKVMock,
+  createDurableObjectNamespaceMock,
   kvUserTokensKey,
   getTestSessionCookie,
   type TestErrorResponse,
@@ -14,8 +15,10 @@ import {
 
 describe("Session Routes", () => {
   function createTestApp(kvMock: ReturnType<typeof createKVMock>) {
+    const doMock = createDurableObjectNamespaceMock();
     const mockEnv: CloudflareBinding = {
       NOW_SPINNING_KV: kvMock as unknown as KVNamespace,
+      SESSION_DO: doMock as unknown as DurableObjectNamespace,
       DEV_MODE: "true",
       DISCOGS_CONSUMER_KEY: "test-key",
       DISCOGS_CONSUMER_SECRET: "test-secret",
@@ -324,6 +327,49 @@ describe("Session Routes", () => {
       expect(response.status).toBe(400);
       const body = (await response.json()) as TestErrorResponse;
       expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+  });
+
+  describe("POST /session/:id/sync", () => {
+    it("should reject if Last.fm is not connected", async () => {
+      const kvMock = createKVMock();
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/${TEST_SESSION_ID}/sync`, {
+          method: "POST",
+          headers: {
+            cookie: `${name}=${value}`,
+          },
+        })
+      );
+
+      expect(response.status).toBe(401);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("LASTFM_NOT_CONNECTED");
+    });
+
+    it("should return 404 if session does not exist", async () => {
+      const kvMock = createKVMock();
+      const tokens = createTestUserTokens();
+      kvMock.store.set(kvUserTokensKey(TEST_SESSION_ID), JSON.stringify(tokens));
+
+      const app = createTestApp(kvMock);
+      const { name, value } = getTestSessionCookie();
+
+      const response = await app.request(
+        new Request(`http://localhost:8787/session/nonexistent-id/sync`, {
+          method: "POST",
+          headers: {
+            cookie: `${name}=${value}`,
+          },
+        })
+      );
+
+      expect(response.status).toBe(404);
+      const body = (await response.json()) as TestErrorResponse;
+      expect(body.error.code).toBe("SESSION_NOT_FOUND");
     });
   });
 });

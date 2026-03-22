@@ -6,6 +6,7 @@ import { ReleaseSkeleton } from "../components/ReleaseSkeleton";
 import { useApiMutation } from "../hooks/useApiMutation";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { formatDurationSec } from "../lib/format";
+import { getScrobbleDelay } from "../lib/settings";
 import type { DiscogsReleaseResponse, NormalizedRelease, SessionStartResponse } from "@repo/shared";
 import { DiscogsReleaseIdSchema } from "@repo/shared";
 
@@ -31,7 +32,7 @@ export function Release() {
     loading: starting,
     error: startError,
     reset: resetStartError,
-  } = useApiMutation<SessionStartResponse, { releaseId: string }>(
+  } = useApiMutation<SessionStartResponse, { releaseId: string; thresholdPercent: number }>(
     (vars) => ({
       url: "/api/session/start",
       method: "POST",
@@ -70,7 +71,7 @@ export function Release() {
   const handleStartSession = async () => {
     if (!release) return;
     resetStartError();
-    await startSession({ releaseId: release.id });
+    await startSession({ releaseId: release.id, thresholdPercent: getScrobbleDelay() });
   };
 
   const errorMessage = error ?? startError;

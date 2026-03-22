@@ -6,6 +6,7 @@ import { SessionProgress } from "../components/SessionProgress";
 import { SessionTrackInfo } from "../components/SessionTrackInfo";
 import { SideCompletionModal } from "../components/SideCompletionModal";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { SessionComplete } from "../components/SessionComplete";
 import { SessionSkeleton } from "../components/SessionSkeleton";
 import { getNotifyOnSideCompletion } from "../lib/settings";
 import { useApiMutation } from "../hooks/useApiMutation";
@@ -14,6 +15,7 @@ import { useSessionTimer } from "../hooks/useSessionTimer";
 import { useAutoAdvance } from "../hooks/useAutoAdvance";
 import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
+import { useVisibilityResume } from "../hooks/useVisibilityResume";
 import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -58,7 +60,7 @@ export function SessionPage() {
       return;
     }
 
-    const newSession = currentResponse.session?.state === "ended" ? null : currentResponse.session;
+    const newSession = currentResponse.session ?? null;
     setSession(newSession);
   }, [currentResponse]);
 
@@ -91,22 +93,6 @@ export function SessionPage() {
   );
 
   const sessionActions = useSessionActions(session, setSession);
-  const pauseRef = useRef(sessionActions.pause);
-
-  // Keep pause ref up to date
-  useEffect(() => {
-    pauseRef.current = sessionActions.pause;
-  }, [sessionActions.pause]);
-
-  // Auto-pause on unmount if session is still running
-  useEffect(() => {
-    return () => {
-      const currentSession = sessionRef.current;
-      if (currentSession && currentSession.state === "running") {
-        void pauseRef.current();
-      }
-    };
-  }, []);
 
   const { mutate: scrobbleCurrent } = useApiMutation<
     SessionActionResponse,
@@ -139,7 +125,7 @@ export function SessionPage() {
     [scrobbleCurrent]
   );
 
-  useScrobbleScheduler(
+  const { markAsScrobbled } = useScrobbleScheduler(
     session?.id ?? null,
     session?.currentIndex ?? 0,
     isRunning,
@@ -147,6 +133,22 @@ export function SessionPage() {
     elapsedMs,
     handleScrobbleCurrent
   );
+
+  const handleVisibilitySync = useCallback(
+    (syncedSession: Session, _scrobbledCount: number) => {
+      for (const track of syncedSession.tracks) {
+        if (track.status === "scrobbled") {
+          markAsScrobbled(syncedSession.id, track.index);
+        }
+      }
+      setSession(syncedSession);
+    },
+    [markAsScrobbled]
+  );
+
+  useVisibilityResume(session?.id ?? null, isRunning, {
+    onSync: handleVisibilitySync,
+  });
 
   const getSideFromTrack = useCallback((track: Session["release"]["tracks"][number] | undefined) => {
     if (!track) return null;
@@ -259,6 +261,15 @@ export function SessionPage() {
           </Link>
         </div>
       </div>
+    );
+  }
+
+  if (session.state === "ended") {
+    return (
+      <SessionComplete
+        session={session}
+        onDismiss={() => setSession(null)}
+      />
     );
   }
 

@@ -11,6 +11,7 @@ import { z } from "zod";
  */
 export const SessionStartRequestSchema = z.object({
   releaseId: z.string().trim().min(1, "Release ID is required"),
+  thresholdPercent: z.number().min(0).max(100).optional().default(50),
 });
 
 /**

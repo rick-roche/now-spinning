@@ -52,15 +52,14 @@ export function useSessionActions(
               : track
           );
           
-          // If already at last track, backend will end the session
           if (nextIndex === session.currentIndex) {
-            return null;
+            return { ...session, state: "ended" as const, tracks: updatedTracks };
           }
           
           return { ...session, currentIndex: nextIndex, tracks: updatedTracks };
         }
         if (action === "end") {
-          return null;
+          return { ...session, state: "ended" as const };
         }
         return session;
       })();
@@ -81,11 +80,7 @@ export function useSessionActions(
         return;
       }
 
-      if (raw.session?.state === "ended") {
-        onSessionUpdate(null);
-      } else {
-        onSessionUpdate(raw.session);
-      }
+      onSessionUpdate(raw.session);
     },
     [mutate, onSessionUpdate, session, sessionId]
   );
