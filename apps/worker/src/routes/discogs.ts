@@ -9,6 +9,7 @@ import {
   createAPIError,
   ErrorCode,
   DiscogsCollectionQuerySchema,
+  stripDiscogsDisambiguation,
 } from "@repo/shared";
 import type {
   DiscogsCollectionResponse,
@@ -158,7 +159,7 @@ function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsColl
     return null;
   }
 
-  const artist = basic.artists?.[0]?.name ?? "Unknown Artist";
+  const artist = stripDiscogsDisambiguation(basic.artists?.[0]?.name ?? "Unknown Artist");
   const year = Number.isFinite(basic.year) ? (basic.year as number) : null;
   const formatStrings = (basic.formats ?? [])
     .map((format) => {
@@ -187,12 +188,12 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
 
   const rawTitle = result.title?.trim() || "Untitled";
   let title = rawTitle;
-  let artist = result.artist?.trim() || "Unknown Artist";
+  let artist = stripDiscogsDisambiguation(result.artist?.trim() || "Unknown Artist");
 
   if (!result.artist && rawTitle.includes(" - ")) {
     const [maybeArtist, ...rest] = rawTitle.split(" - ");
     if (rest.length > 0 && maybeArtist !== undefined) {
-      artist = maybeArtist.trim() || artist;
+      artist = stripDiscogsDisambiguation(maybeArtist.trim() || artist);
       title = rest.join(" - ").trim() || title;
     }
   }
