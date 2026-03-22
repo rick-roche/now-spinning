@@ -10,5 +10,5 @@
  * untouched.
  */
 export function stripDiscogsDisambiguation(name: string): string {
-  return name.replace(/\s+\(\d+\)$/, "");
+  return name.replace(/ \((?:[2-9]\d*|\d{2,})\)$/, "").trim();
 }

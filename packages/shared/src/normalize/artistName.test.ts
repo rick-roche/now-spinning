@@ -25,15 +25,13 @@ describe("stripDiscogsDisambiguation", () => {
     expect(stripDiscogsDisambiguation("Artist (2) Feat. Other")).toBe("Artist (2) Feat. Other");
   });
 
-  it("handles multiple spaces before the suffix", () => {
+  it("trims extra whitespace when stripping suffix", () => {
     expect(stripDiscogsDisambiguation("Artist  (2)")).toBe("Artist");
   });
 
   it("does not strip (0) or (1) which Discogs never uses", () => {
-    // Discogs never uses (0) or (1), but our regex would still match them.
-    // This documents current behavior — these values don't appear in practice.
-    expect(stripDiscogsDisambiguation("Artist (0)")).toBe("Artist");
-    expect(stripDiscogsDisambiguation("Artist (1)")).toBe("Artist");
+    expect(stripDiscogsDisambiguation("Artist (0)")).toBe("Artist (0)");
+    expect(stripDiscogsDisambiguation("Artist (1)")).toBe("Artist (1)");
   });
 
   it("handles empty string", () => {
