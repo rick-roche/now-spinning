@@ -623,7 +623,7 @@ router.get("/release/:id", async (c: HonoContext) => {
   const kv = c.env.NOW_SPINNING_KV;
   const releaseId = c.req.param("id");
 
-  if (!/^[0-9]+$/.test(releaseId)) {
+  if (!releaseId || !/^[0-9]+$/.test(releaseId)) {
     return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
   }
 
