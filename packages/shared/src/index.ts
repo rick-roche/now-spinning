@@ -57,6 +57,7 @@ export type {
 
 export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";
 export { normalizeDiscogsRelease, parseDiscogsDuration } from "./normalize/discogsRelease.js";
+export { stripDiscogsDisambiguation } from "./normalize/artistName.js";
 
 // Validation schemas
 export {
