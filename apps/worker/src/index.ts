@@ -6,6 +6,8 @@ import { discogsRoutes } from "./routes/discogs.js";
 import { sessionRoutes } from "./routes/session.js";
 import type { CloudflareBinding } from "./types.js";
 
+export { SessionAlarmDO } from "./session-do.js";
+
 const app = new Hono<{ Bindings: CloudflareBinding }>();
 
 // CORS middleware with allowlist from environment

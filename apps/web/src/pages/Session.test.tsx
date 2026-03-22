@@ -540,4 +540,183 @@ describe("SessionPage", () => {
     expect(screen.getByLabelText(/Pause|Play/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "End Session" })).toBeInTheDocument();
   });
+
+  describe("session completion view", () => {
+    const endedSession: Session = {
+      ...mockSession,
+      state: "ended",
+      currentIndex: 1,
+      tracks: [
+        {
+          index: 0,
+          status: "scrobbled",
+          startedAt: Date.now() - 300000,
+          scrobbledAt: Date.now() - 60000,
+        },
+        {
+          index: 1,
+          status: "scrobbled",
+          startedAt: Date.now() - 60000,
+          scrobbledAt: Date.now() - 1000,
+        },
+      ],
+    };
+
+    it("displays session complete view when session state is ended", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Session Complete")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("heading", { name: "Test Album" })).toBeInTheDocument();
+      expect(screen.getAllByText("Test Artist").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("shows scrobbled track count", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Scrobbled")).toBeInTheDocument();
+      });
+
+      const scrobbledLabel = screen.getByText("Scrobbled");
+      const scrobbledCard = scrobbledLabel.closest("div");
+      expect(scrobbledCard).toHaveTextContent("2");
+    });
+
+    it("shows total track count", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Tracks")).toBeInTheDocument();
+      });
+    });
+
+    it("shows tracklist with track titles", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Tracklist")).toBeInTheDocument();
+        expect(screen.getByText("First Track")).toBeInTheDocument();
+        expect(screen.getByText("Second Track")).toBeInTheDocument();
+      });
+    });
+
+    it("shows Browse Collection link", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Browse Collection")).toBeInTheDocument();
+      });
+    });
+
+    it("dismiss button returns to no-session state", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Session Complete")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("Dismiss"));
+
+      await waitFor(() => {
+        expect(screen.getByText("No active session")).toBeInTheDocument();
+      });
+    });
+
+    it("does not show playback controls when session is ended", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: endedSession } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Session Complete")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Now Playing")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Pause")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Next track")).not.toBeInTheDocument();
+    });
+
+    it("shows skipped tracks with skipped count", async () => {
+      const sessionWithSkip: Session = {
+        ...endedSession,
+        tracks: [
+          {
+            index: 0,
+            status: "scrobbled",
+            startedAt: Date.now() - 300000,
+            scrobbledAt: Date.now() - 60000,
+          },
+          {
+            index: 1,
+            status: "skipped",
+            startedAt: null,
+            scrobbledAt: null,
+          },
+        ],
+      };
+
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: sessionWithSkip } satisfies SessionCurrentResponse),
+        })
+      );
+
+      renderSessionPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("1 skipped")).toBeInTheDocument();
+      });
+    });
+  });
 });

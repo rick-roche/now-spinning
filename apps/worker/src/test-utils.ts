@@ -101,3 +101,15 @@ export interface TestListResponse {
   items: Array<Record<string, unknown>>;
   [key: string]: unknown;
 }
+
+export function createDurableObjectNamespaceMock() {
+  const mockStub = {
+    fetch: vi.fn(async () => new Response("OK")),
+  };
+
+  return {
+    idFromName: vi.fn(() => ({ toString: () => "mock-do-id" })),
+    get: vi.fn(() => mockStub),
+    stub: mockStub,
+  };
+}

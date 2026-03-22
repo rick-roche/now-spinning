@@ -20,6 +20,8 @@ export {
   isEligibleToScrobble,
   getScrobbleThresholdMs,
 } from "./session/eligibility.js";
+export { syncSession } from "./session/sync.js";
+export type { SyncScrobbleAction, SyncSessionResult } from "./session/sync.js";
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
@@ -50,6 +52,7 @@ export type {
   SessionCurrentResponse,
   SessionStartRequest,
   SessionStartResponse,
+  SessionSyncResponse,
 } from "./contracts/session.js";
 
 export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";

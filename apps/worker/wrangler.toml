@@ -6,6 +6,14 @@ kv_namespaces = [
   { binding = "NOW_SPINNING_KV", id = "DEV_KV" }
 ]
 
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionAlarmDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionAlarmDO"]
+
 [placement]
 # mode = "smart"
 region = "azure:northeurope"
@@ -21,6 +29,10 @@ name = "now-spinning-api"
 kv_namespaces = [
   { binding = "NOW_SPINNING_KV", id = "1d0f824e743e4228a407d19deb6f416c", preview_id = "618e3ab2ce1a427ca28f566697420755" }
 ]
+
+[[env.production.durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionAlarmDO"
 
 [env.production.vars]
 PUBLIC_APP_ORIGIN = "https://now-spinning.rickroche.com"

@@ -17,7 +17,6 @@ export function useSessionTimer(
   const storageKeyRef = useRef<string | null>(null);
   const lastTrackKeyRef = useRef<string | null>(null);
 
-  // Update clock every second when running
   useEffect(() => {
     if (!isRunning) return;
     const interval = window.setInterval(() => {
@@ -25,6 +24,18 @@ export function useSessionTimer(
     }, 1000);
     return () => window.clearInterval(interval);
   }, [isRunning]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        setNowMs(Date.now());
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   // Handle track changes and timer persistence
   useEffect(() => {

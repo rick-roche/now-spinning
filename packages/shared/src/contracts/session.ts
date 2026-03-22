@@ -19,3 +19,8 @@ export interface SessionActionResponse {
 export interface SessionCurrentResponse {
   session: Session | null;
 }
+
+export interface SessionSyncResponse {
+  session: Session;
+  scrobbledCount: number;
+}

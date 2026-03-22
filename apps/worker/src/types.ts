@@ -6,6 +6,9 @@ export interface CloudflareBinding {
   // KV Namespace
   NOW_SPINNING_KV: KVNamespace;
 
+  // Durable Objects
+  SESSION_DO: DurableObjectNamespace;
+
   // Environment variables (from wrangler.toml [vars])
   PUBLIC_APP_ORIGIN: string;
   LASTFM_CALLBACK_URL: string;

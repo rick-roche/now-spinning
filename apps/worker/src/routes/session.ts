@@ -1,7 +1,3 @@
-/**
- * Session endpoints (M3 MVP).
- */
-
 import { Hono } from "hono";
 import type { Context } from "hono";
 import {
@@ -14,19 +10,26 @@ import {
   normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
+  syncSession,
   SessionStartRequestSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
   type DiscogsReleaseApiResponse,
   type NormalizedRelease,
-  type Session,
   type SessionActionResponse,
   type SessionCurrentResponse,
   type SessionStartResponse,
+  type SessionSyncResponse,
 } from "@repo/shared";
 import { getCookie } from "hono/cookie";
-import { fetchLastFm } from "../lastfm.js";
 import { getOrCreateSessionId, loadStoredTokens, setSessionCookie, requireLastFm } from "../middleware/auth.js";
+import {
+  loadCurrentSession,
+  loadSession,
+  scrobbleTrack,
+  sendNowPlaying,
+  storeSession,
+} from "../session-helpers.js";
 import type { CloudflareBinding } from "../types.js";
 import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials } from "../utils/discogs.js";
 import { formatZodErrors } from "../utils/validation.js";
@@ -35,33 +38,25 @@ type HonoContext = Context<{ Bindings: CloudflareBinding }>;
 
 const router = new Hono<{ Bindings: CloudflareBinding }>();
 
-function sessionKey(sessionId: string): string {
-  return `session:${sessionId}`;
+function getSessionDOStub(env: CloudflareBinding, sessionId: string): DurableObjectStub {
+  const id = env.SESSION_DO.idFromName(sessionId);
+  return env.SESSION_DO.get(id);
 }
 
-function currentSessionKey(userId: string): string {
-  return `session:current:${userId}`;
-}
-
-async function storeSession(kv: KVNamespace, session: Session): Promise<void> {
-  await kv.put(sessionKey(session.id), JSON.stringify(session));
-  await kv.put(currentSessionKey(session.userId), session.id);
-}
-
-async function loadSession(kv: KVNamespace, sessionId: string): Promise<Session | null> {
-  return (await kv.get<Session>(sessionKey(sessionId), "json")) ?? null;
-}
-
-async function loadCurrentSession(
-  kv: KVNamespace,
-  userId: string
-): Promise<Session | null> {
-  const currentId = await kv.get<string>(currentSessionKey(userId));
-  if (!currentId) {
-    return null;
+async function notifyDO(
+  stub: DurableObjectStub,
+  command: string,
+  body: Record<string, unknown> = {}
+): Promise<void> {
+  try {
+    await stub.fetch(`https://internal/${command}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command, ...body }),
+    });
+  } catch (err) {
+    console.error(`[notifyDO] Failed to send ${command}:`, err);
   }
-
-  return loadSession(kv, currentId);
 }
 
 async function fetchDiscogsRelease(
@@ -106,107 +101,6 @@ async function fetchDiscogsRelease(
     ok: true,
     release: normalizeDiscogsRelease(raw as DiscogsReleaseApiResponse),
   };
-}
-
-function buildLastFmParams(values: Record<string, string | number | null | undefined>):
-  Record<string, string> {
-  const params: Record<string, string> = {};
-  Object.entries(values).forEach(([key, value]) => {
-    if (value === undefined || value === null) {
-      return;
-    }
-    params[key] = String(value);
-  });
-  return params;
-}
-
-async function sendNowPlaying(
-  env: CloudflareBinding,
-  sessionKeyValue: string,
-  release: NormalizedRelease,
-  trackIndex: number
-): Promise<{ ok: boolean; message?: string }> {
-  if (trackIndex < 0 || trackIndex >= release.tracks.length) {
-    return { ok: false, message: "Track index out of bounds" };
-  }
-  
-  const track = release.tracks[trackIndex];
-  if (!track) {
-    return { ok: false, message: "Track not found" };
-  }
-
-  const isDevMode = env.DEV_MODE === "true";
-  
-  if (isDevMode) {
-    console.log("[DEV MODE] Would send Now Playing:", {
-      artist: track.artist,
-      track: track.title,
-      album: release.title,
-      duration: track.durationSec,
-    });
-    return { ok: true };
-  }
-
-  const result = await fetchLastFm("track.updateNowPlaying", {
-    ...buildLastFmParams({
-      sk: sessionKeyValue,
-      artist: track.artist,
-      track: track.title,
-      album: release.title,
-      duration: track.durationSec,
-    }),
-  }, env);
-
-  if (!result.ok) {
-    console.error("[sendNowPlaying] Last.fm API error:", result.message);
-  }
-  return result;
-}
-
-async function scrobbleTrack(
-  env: CloudflareBinding,
-  sessionKeyValue: string,
-  release: NormalizedRelease,
-  trackIndex: number,
-  timestampSec: number
-): Promise<{ ok: boolean; message?: string }> {
-  if (trackIndex < 0 || trackIndex >= release.tracks.length) {
-    return { ok: false, message: "Track index out of bounds" };
-  }
-  
-  const track = release.tracks[trackIndex];
-  if (!track) {
-    return { ok: false, message: "Track not found" };
-  }
-
-  const isDevMode = env.DEV_MODE === "true";
-  
-  if (isDevMode) {
-    console.log("[DEV MODE] Would scrobble:", {
-      artist: track.artist,
-      track: track.title,
-      album: release.title,
-      timestamp: new Date(timestampSec * 1000).toISOString(),
-      duration: track.durationSec,
-    });
-    return { ok: true };
-  }
-
-  const result = await fetchLastFm("track.scrobble", {
-    ...buildLastFmParams({
-      sk: sessionKeyValue,
-      artist: track.artist,
-      track: track.title,
-      album: release.title,
-      timestamp: timestampSec,
-      duration: track.durationSec,
-    }),
-  }, env);
-
-  if (!result.ok) {
-    console.error("[scrobbleTrack] Last.fm API error:", result.message);
-  }
-  return result;
 }
 
 router.post(
@@ -263,6 +157,13 @@ router.post(
       console.error("[POST /start] Failed to send now playing:", npResult.message);
     }
 
+    const doStub = getSessionDOStub(c.env, session.id);
+    await notifyDO(doStub, "start", {
+      sessionId: session.id,
+      userId,
+      lastfmSessionKey: tokens.lastfm!.accessToken,
+    });
+
     const response: SessionStartResponse = { session };
     return c.json(response);
   }
@@ -295,6 +196,9 @@ router.post(
     const updated = pauseSession(session);
     await storeSession(kv, updated);
 
+    const doStub = getSessionDOStub(c.env, sessionId);
+    await notifyDO(doStub, "pause");
+
     const response: SessionActionResponse = { session: updated };
     return c.json(response);
   }
@@ -325,10 +229,10 @@ router.post(
     }
 
     const tokens = await loadStoredTokens(kv, userId);
-    const updated = resumeSession(session, Date.now());
+    const now = Date.now();
+    const updated = resumeSession(session, now);
     await storeSession(kv, updated);
 
-    // Send Now Playing notification when resuming playback
     if (updated.state !== "ended") {
       const npResult = await sendNowPlaying(
         c.env,
@@ -339,6 +243,9 @@ router.post(
       if (!npResult.ok) {
         console.error("[POST /:id/resume] Failed to send now playing:", npResult.message);
       }
+
+      const doStub = getSessionDOStub(c.env, sessionId);
+      await notifyDO(doStub, "resume", { resumedAt: now });
     }
 
     const response: SessionActionResponse = { session: updated };
@@ -521,6 +428,9 @@ router.post(
       }
     }
 
+    const doStub = getSessionDOStub(c.env, sessionId);
+    await notifyDO(doStub, "next", { advancedAt: now });
+
     const response: SessionActionResponse = { session: updated };
     return c.json(response);
   }
@@ -560,7 +470,9 @@ router.post(
     const updated = endSession(session);
     await storeSession(kv, updated);
 
-    // Only scrobble if session wasn't already ended and track wasn't already scrobbled
+    const doStub = getSessionDOStub(c.env, sessionId);
+    await notifyDO(doStub, "end");
+
     if (session.state !== "ended" && !wasAlreadyScrobbled) {
       const scrobbleResult = await scrobbleTrack(
         c.env,
@@ -575,6 +487,70 @@ router.post(
     }
 
     const response: SessionActionResponse = { session: updated };
+    return c.json(response);
+  }
+);
+
+router.post(
+  "/:id/sync",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const kv = c.env.NOW_SPINNING_KV;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+
+    const params = c.req.param();
+    const paramResult = SessionParamSchema.safeParse(params);
+    if (!paramResult.success) {
+      return c.json(
+        createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)),
+        400
+      );
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const session = await loadSession(kv, sessionId);
+    if (!session || session.userId !== userId) {
+      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+    }
+
+    const tokens = await loadStoredTokens(kv, userId);
+    const now = Date.now();
+    const thresholdPercent = 50;
+
+    const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent);
+
+    for (const action of scrobbleActions) {
+      const scrobbleResult = await scrobbleTrack(
+        c.env,
+        tokens.lastfm!.accessToken,
+        synced.release,
+        action.trackIndex,
+        Math.floor(action.startedAt / 1000)
+      );
+      if (!scrobbleResult.ok) {
+        console.error(`[POST /:id/sync] Failed to scrobble track ${action.trackIndex}:`, scrobbleResult.message);
+      }
+    }
+
+    if (synced.state === "running" && scrobbleActions.length > 0) {
+      const npResult = await sendNowPlaying(
+        c.env,
+        tokens.lastfm!.accessToken,
+        synced.release,
+        synced.currentIndex
+      );
+      if (!npResult.ok) {
+        console.error("[POST /:id/sync] Failed to send now playing:", npResult.message);
+      }
+    }
+
+    await storeSession(kv, synced);
+
+    const response: SessionSyncResponse = {
+      session: synced,
+      scrobbledCount: scrobbleActions.length,
+    };
     return c.json(response);
   }
 );
