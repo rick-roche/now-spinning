@@ -28,6 +28,7 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,

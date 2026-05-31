@@ -25,13 +25,13 @@ Deployed version running at [https://now-spinning.rickroche.com](https://now-spi
 
 ## Prerequisites
 
-- **Node.js** 20.11 or later ([nvm](https://github.com/nvm-sh/nvm) recommended)
-- **pnpm** 9.15.0 or later
+- **Node.js** 22.13 or later ([nvm](https://github.com/nvm-sh/nvm) recommended)
+- **pnpm** 11.1.2 or later
 
 Install pnpm globally if needed:
 
 ```bash
-npm install -g pnpm@9.15.0
+npm install -g pnpm@11.1.2
 ```
 
 ---

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SessionStartRequestSchema,
+  SessionSyncRequestSchema,
   SessionIdSchema,
   SessionParamSchema,
 } from "./session.schema.js";
@@ -40,6 +41,70 @@ describe("SessionStartRequestSchema", () => {
   it("rejects non-string releaseId", () => {
     const result = SessionStartRequestSchema.safeParse({ releaseId: 123 });
     expect(result.success).toBe(false);
+  });
+
+  it("defaults thresholdPercent to 50", () => {
+    const result = SessionStartRequestSchema.safeParse({ releaseId: "123" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.thresholdPercent).toBe(50);
+    }
+  });
+
+  it("accepts explicit thresholdPercent", () => {
+    const result = SessionStartRequestSchema.safeParse({ releaseId: "123", thresholdPercent: 80 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.thresholdPercent).toBe(80);
+    }
+  });
+
+  it("defaults notifyOnSideCompletion to true", () => {
+    const result = SessionStartRequestSchema.safeParse({ releaseId: "123" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notifyOnSideCompletion).toBe(true);
+    }
+  });
+
+  it("accepts explicit notifyOnSideCompletion false", () => {
+    const result = SessionStartRequestSchema.safeParse({ releaseId: "123", notifyOnSideCompletion: false });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notifyOnSideCompletion).toBe(false);
+    }
+  });
+});
+
+describe("SessionSyncRequestSchema", () => {
+  it("accepts empty object and applies defaults", () => {
+    const result = SessionSyncRequestSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.thresholdPercent).toBe(50);
+      expect(result.data.notifyOnSideCompletion).toBe(true);
+    }
+  });
+
+  it("accepts explicit thresholdPercent", () => {
+    const result = SessionSyncRequestSchema.safeParse({ thresholdPercent: 75 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.thresholdPercent).toBe(75);
+    }
+  });
+
+  it("accepts explicit notifyOnSideCompletion false", () => {
+    const result = SessionSyncRequestSchema.safeParse({ notifyOnSideCompletion: false });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notifyOnSideCompletion).toBe(false);
+    }
+  });
+
+  it("rejects thresholdPercent out of range", () => {
+    expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: -1 }).success).toBe(false);
+    expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: 101 }).success).toBe(false);
   });
 });
 

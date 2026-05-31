@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useApiMutation } from "./useApiMutation";
-import type { Session, SessionActionResponse, SessionTrackStatus } from "@repo/shared";
+import type { Session, SessionActionResponse } from "@repo/shared";
 
 function isSessionActionResponse(value: unknown): value is SessionActionResponse {
   if (!value || typeof value !== "object") return false;
@@ -48,7 +48,7 @@ export function useSessionActions(
           // Mark current track as scrobbled (matching backend behavior)
           const updatedTracks = session.tracks.map((track, index) =>
             index === session.currentIndex
-              ? { ...track, status: "scrobbled" as SessionTrackStatus, scrobbledAt: Date.now() }
+              ? { ...track, status: "scrobbled" as const, scrobbledAt: Date.now() }
               : track
           );
           

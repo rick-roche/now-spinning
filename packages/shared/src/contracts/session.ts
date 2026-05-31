@@ -6,6 +6,8 @@ import type { Session } from "../domain/session.js";
 
 export interface SessionStartRequest {
   releaseId: string;
+  thresholdPercent?: number;
+  notifyOnSideCompletion?: boolean;
 }
 
 export interface SessionStartResponse {

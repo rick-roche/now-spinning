@@ -75,7 +75,7 @@ export default tseslint.config(
 
   // Session page has intentional use of setState in effect for API sync
   {
-    files: ["apps/web/src/pages/Session.tsx"],
+    files: ["apps/web/src/pages/Session.tsx", "apps/web/src/pages/Collection.tsx"],
     rules: {
       "react-hooks/set-state-in-effect": "off",
     },

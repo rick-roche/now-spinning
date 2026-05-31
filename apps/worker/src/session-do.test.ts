@@ -117,6 +117,7 @@ describe("SessionAlarmDO", () => {
       expect(storageMock.put).toHaveBeenCalledWith("userId", session.userId);
       expect(storageMock.put).toHaveBeenCalledWith("lastfmSessionKey", "test-lastfm-key");
       expect(storageMock.put).toHaveBeenCalledWith("thresholdPercent", 50);
+      expect(storageMock.put).toHaveBeenCalledWith("notifyOnSideCompletion", true);
       expect(storageMock.setAlarm).toHaveBeenCalledTimes(1);
     });
 
@@ -229,6 +230,7 @@ describe("SessionAlarmDO", () => {
       expect(storageMock.delete).toHaveBeenCalledWith("userId");
       expect(storageMock.delete).toHaveBeenCalledWith("lastfmSessionKey");
       expect(storageMock.delete).toHaveBeenCalledWith("thresholdPercent");
+      expect(storageMock.delete).toHaveBeenCalledWith("notifyOnSideCompletion");
     });
   });
 
@@ -425,6 +427,101 @@ describe("SessionAlarmDO", () => {
 
       const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
       expect(updated.tracks[0]!.status).toBe("scrobbled");
+    });
+
+    it("anchors next track startedAt to projected track end, not scrobble threshold time", async () => {
+      // Bug A regression: if startedAt is set to 'now' (the 50% mark), tracks scrobble
+      // at 2x speed because each successive track starts at the previous track's midpoint.
+      // The fix uses startedAt + durationMs so tracks progress at real-time speed.
+      const trackStartedAt = 1_000_000; // epoch ms
+      const durationMs = 180_000; // 3 minutes
+      const expectedNextStartedAt = trackStartedAt + durationMs; // = 1_180_000
+
+      const session = createTestSession();
+      session.tracks[0] = { ...session.tracks[0]!, startedAt: trackStartedAt };
+      // Set the release track duration explicitly
+      const release = createTestRelease();
+      release.tracks[0] = { ...release.tracks[0]!, durationSec: 180 };
+      const sessionWithRelease: Session = { ...session, release };
+
+      kvMock.store.set(`session:${sessionWithRelease.id}`, JSON.stringify(sessionWithRelease));
+      kvMock.store.set(`session:current:${sessionWithRelease.userId}`, sessionWithRelease.id);
+      storageMock.store.set("sessionId", sessionWithRelease.id);
+      storageMock.store.set("lastfmSessionKey", "key");
+      storageMock.store.set("thresholdPercent", 50);
+
+      // Trigger alarm by using a session whose track[0] started far enough in the past
+      // (trackStartedAt = 1_000_000ms epoch — far in the past relative to Date.now())
+      const farPastSession: Session = {
+        ...sessionWithRelease,
+        tracks: sessionWithRelease.tracks.map((t, i) =>
+          i === 0 ? { ...t, startedAt: trackStartedAt } : t
+        ),
+      };
+      kvMock.store.set(`session:${farPastSession.id}`, JSON.stringify(farPastSession));
+
+      await durable.alarm();
+
+      const afterAlarm = JSON.parse(kvMock.store.get(`session:${farPastSession.id}`)!) as Session;
+      expect(afterAlarm.tracks[0]!.status).toBe("scrobbled");
+      // scrobbledAt should be wall-clock now (not the future trackEndTime)
+      expect(afterAlarm.tracks[0]!.scrobbledAt).toBeLessThanOrEqual(Date.now());
+      expect(afterAlarm.tracks[0]!.scrobbledAt).toBeGreaterThan(trackStartedAt);
+      // Next track should start at the projected end of track 0
+      expect(afterAlarm.tracks[1]!.startedAt).toBe(expectedNextStartedAt);
+    });
+
+    it("pauses session at side boundary when notifyOnSideCompletion is true", async () => {
+      // Bug B regression: without side-boundary detection the DO advances through
+      // Side A→B while the phone is locked, skipping the flip-record pause entirely.
+      const now = Date.now();
+      // Put current track on A2 (last of Side A) with enough elapsed time to scrobble
+      const session = createTestSession();
+      session.currentIndex = 1;
+      session.tracks[0] = { ...session.tracks[0]!, status: "scrobbled", scrobbledAt: now - 300_000 };
+      session.tracks[1] = { ...session.tracks[1]!, startedAt: now - 200_000 };
+      // tracks[2] is B1 (Side B) — should NOT be advanced to
+
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      kvMock.store.set(`session:current:${session.userId}`, session.id);
+      storageMock.store.set("sessionId", session.id);
+      storageMock.store.set("lastfmSessionKey", "key");
+      storageMock.store.set("thresholdPercent", 50);
+      storageMock.store.set("notifyOnSideCompletion", true);
+
+      await durable.alarm();
+
+      const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
+      // A2 should be scrobbled
+      expect(updated.tracks[1]!.status).toBe("scrobbled");
+      // Session should be paused, not advanced to B1
+      expect(updated.state).toBe("paused");
+      expect(updated.currentIndex).toBe(1); // stays on A2
+      expect(updated.tracks[2]!.status).toBe("pending"); // B1 untouched
+      // No alarm should be scheduled — user needs to flip and resume
+      expect(storageMock.setAlarm).not.toHaveBeenCalled();
+    });
+
+    it("advances through side boundary when notifyOnSideCompletion is false", async () => {
+      const now = Date.now();
+      const session = createTestSession();
+      session.currentIndex = 1;
+      session.tracks[0] = { ...session.tracks[0]!, status: "scrobbled", scrobbledAt: now - 300_000 };
+      session.tracks[1] = { ...session.tracks[1]!, startedAt: now - 200_000 };
+
+      kvMock.store.set(`session:${session.id}`, JSON.stringify(session));
+      kvMock.store.set(`session:current:${session.userId}`, session.id);
+      storageMock.store.set("sessionId", session.id);
+      storageMock.store.set("lastfmSessionKey", "key");
+      storageMock.store.set("thresholdPercent", 50);
+      storageMock.store.set("notifyOnSideCompletion", false);
+
+      await durable.alarm();
+
+      const updated = JSON.parse(kvMock.store.get(`session:${session.id}`)!) as Session;
+      expect(updated.state).toBe("running");
+      expect(updated.currentIndex).toBe(2); // advanced to B1
+      expect(storageMock.setAlarm).toHaveBeenCalled();
     });
   });
 });

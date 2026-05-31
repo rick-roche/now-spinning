@@ -282,3 +282,52 @@ describe("syncSession", () => {
     expect(result.session.currentIndex).toBe(0);
   });
 });
+
+describe("syncSession — pauseAtSideChange", () => {
+  it("pauses at side boundary instead of advancing when pauseAtSideChange is true", () => {
+    const session = makeSession({ startedAt: 1000 });
+    // Track 0 (A1, 180s): eligible after 91_000ms. Track 1 (A2) same side — not a boundary.
+    // syncAt covers both A tracks but not B
+    const syncAt = 1000 + 400_000; // covers A1 + A2 but stops before B1 boundary if needed
+
+    // With pauseAtSideChange = true: advances through A1→A2 (same side), then scrobbles A2,
+    // detects A2→B1 boundary and pauses.
+    const result = syncSession(session, syncAt, 50, true);
+
+    expect(result.scrobbleActions).toHaveLength(2); // A1 and A2 scrobbled
+    expect(result.session.state).toBe("paused");
+    expect(result.session.currentIndex).toBe(1); // stayed on A2 (last of Side A)
+    expect(result.session.tracks[1]?.status).toBe("scrobbled");
+    expect(result.session.tracks[2]?.status).toBe("pending"); // B1 not touched
+  });
+
+  it("without pauseAtSideChange advances through side boundary normally", () => {
+    const session = makeSession({ startedAt: 1000 });
+    const syncAt = 1000 + 600_000;
+
+    const result = syncSession(session, syncAt, 50, false);
+
+    expect(result.scrobbleActions).toHaveLength(3);
+    expect(result.session.state).toBe("ended");
+  });
+
+  it("does not pause if current and next track are on the same side", () => {
+    const session = makeSession({ startedAt: 1000 });
+    // Only advance through A1 (side A → A2 still side A — no boundary)
+    const syncAt = 1000 + 200_000; // covers A1, partially into A2
+
+    const result = syncSession(session, syncAt, 50, true);
+
+    expect(result.session.state).toBe("running");
+    expect(result.session.currentIndex).toBe(1); // advanced to A2
+    expect(result.scrobbleActions).toHaveLength(1); // only A1
+  });
+
+  it("pauseAtSideChange has no effect when session is paused", () => {
+    const session = pauseSession(makeSession());
+    const result = syncSession(session, 500_000, 50, true);
+
+    expect(result.scrobbleActions).toHaveLength(0);
+    expect(result.session.state).toBe("paused");
+  });
+});

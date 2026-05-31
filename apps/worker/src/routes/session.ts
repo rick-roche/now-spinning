@@ -14,7 +14,7 @@ import {
   SessionStartRequestSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
-  type DiscogsReleaseApiResponse,
+  SessionSyncRequestSchema,
   type NormalizedRelease,
   type SessionActionResponse,
   type SessionCurrentResponse,
@@ -99,7 +99,7 @@ async function fetchDiscogsRelease(
 
   return {
     ok: true,
-    release: normalizeDiscogsRelease(raw as DiscogsReleaseApiResponse),
+    release: normalizeDiscogsRelease(raw),
   };
 }
 
@@ -129,7 +129,7 @@ router.post(
       );
     }
 
-    const { releaseId, thresholdPercent } = bodyResult.data;
+    const { releaseId, thresholdPercent, notifyOnSideCompletion } = bodyResult.data;
 
     if (!/^[0-9]+$/.test(releaseId)) {
       return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
@@ -163,6 +163,7 @@ router.post(
       userId,
       lastfmSessionKey: tokens.lastfm!.accessToken,
       thresholdPercent,
+      notifyOnSideCompletion,
     });
 
     const response: SessionStartResponse = { session };
@@ -519,17 +520,19 @@ router.post(
     const now = Date.now();
 
     let thresholdPercent = 50;
+    let notifyOnSideCompletion = true;
     try {
       const body: unknown = await c.req.json();
-      const bodyResult = SessionScrobbleCurrentRequestSchema.safeParse(body);
-      if (bodyResult.success && typeof bodyResult.data.thresholdPercent === "number") {
+      const bodyResult = SessionSyncRequestSchema.safeParse(body);
+      if (bodyResult.success) {
         thresholdPercent = bodyResult.data.thresholdPercent;
+        notifyOnSideCompletion = bodyResult.data.notifyOnSideCompletion;
       }
     } catch {
-      // No JSON body — use default thresholdPercent
+      // No JSON body — use defaults
     }
 
-    const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent);
+    const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent, notifyOnSideCompletion);
 
     for (const action of scrobbleActions) {
       const scrobbleResult = await scrobbleTrack(
