@@ -10,7 +10,7 @@ export interface DiscogsReleaseApiResponse {
   tracklist?: DiscogsTrack[];
 }
 
-export interface DiscogsTrack {
+interface DiscogsTrack {
   position?: string;
   title?: string;
   duration?: string;

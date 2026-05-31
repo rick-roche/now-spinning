@@ -488,6 +488,7 @@ describe("Collection Page", () => {
     class MockIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = "0px";
+      readonly scrollMargin = "0px";
       readonly thresholds = [0];
       disconnect = vi.fn();
       observe = vi.fn();
