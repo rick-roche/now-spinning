@@ -22,6 +22,7 @@ export {
 } from "./session/eligibility.js";
 export { syncSession } from "./session/sync.js";
 export type { SyncScrobbleAction, SyncSessionResult } from "./session/sync.js";
+export { getSideFromTrack } from "./session/utils.js";
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
@@ -83,7 +84,9 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,
+  type SessionSyncRequest,
 } from "./validation/index.js";

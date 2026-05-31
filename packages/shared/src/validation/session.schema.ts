@@ -12,7 +12,19 @@ import { z } from "zod";
 export const SessionStartRequestSchema = z.object({
   releaseId: z.string().trim().min(1, "Release ID is required"),
   thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  notifyOnSideCompletion: z.boolean().optional().default(true),
 });
+
+/**
+ * Session sync request body.
+ * Sent by the client when resuming from background to catch up on missed scrobbles.
+ */
+export const SessionSyncRequestSchema = z.object({
+  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  notifyOnSideCompletion: z.boolean().optional().default(true),
+});
+
+export type SessionSyncRequest = z.infer<typeof SessionSyncRequestSchema>;
 
 /**
  * Session ID validation.

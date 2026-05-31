@@ -1,4 +1,4 @@
-import { advanceSession, type Session } from "@repo/shared";
+import { advanceSession, pauseSession, getSideFromTrack, type Session } from "@repo/shared";
 import {
   loadSession,
   scrobbleTrack,
@@ -13,6 +13,7 @@ interface StartCommand {
   userId: string;
   lastfmSessionKey: string;
   thresholdPercent: number;
+  notifyOnSideCompletion?: boolean;
 }
 
 interface PauseCommand {
@@ -122,7 +123,32 @@ export class SessionAlarmDO implements DurableObject {
       console.error(`[SessionAlarmDO] Failed to scrobble track ${currentIndex}:`, scrobbleResult.message);
     }
 
-    const advanced = advanceSession(session, now);
+    // Use the projected track end time so the next track's startedAt is anchored
+    // to when the current track actually finished, not the scrobble threshold point.
+    // Without this, each track starts at the 50%-mark of the previous one, causing
+    // tracks to scrobble at ~2× speed.
+    const trackEndTime = durationMs !== null ? startedAt + durationMs : now;
+
+    // Check if the next track is on a different record side. If the user has
+    // enabled side-completion notifications, pause instead of auto-advancing so
+    // they can flip the record.
+    const notifyOnSideCompletion = (await this.ctx.storage.get<boolean>("notifyOnSideCompletion")) ?? true;
+    const nextReleaseTrack = session.release.tracks[currentIndex + 1];
+    const currentSide = getSideFromTrack(releaseTrack);
+    const nextSide = getSideFromTrack(nextReleaseTrack ?? null);
+
+    if (notifyOnSideCompletion && currentSide !== null && nextSide !== null && currentSide !== nextSide) {
+      // Pause at side boundary — mark current track scrobbled but do not advance.
+      // The client will detect the paused state on next foreground sync and show
+      // the "flip the record" modal.
+      const updatedTracks = [...session.tracks];
+      updatedTracks[currentIndex] = { ...currentTrack, status: "scrobbled", scrobbledAt: now };
+      const pausedSession = pauseSession({ ...session, tracks: updatedTracks });
+      await storeSession(this.env.NOW_SPINNING_KV, pausedSession);
+      return;
+    }
+
+    const advanced = advanceSession(session, trackEndTime);
     await storeSession(this.env.NOW_SPINNING_KV, advanced);
 
     if (advanced.state === "ended") {
@@ -147,6 +173,7 @@ export class SessionAlarmDO implements DurableObject {
     await this.ctx.storage.put("userId", cmd.userId);
     await this.ctx.storage.put("lastfmSessionKey", cmd.lastfmSessionKey);
     await this.ctx.storage.put("thresholdPercent", cmd.thresholdPercent ?? DEFAULT_THRESHOLD_PERCENT);
+    await this.ctx.storage.put("notifyOnSideCompletion", cmd.notifyOnSideCompletion ?? true);
 
     const session = await loadSession(this.env.NOW_SPINNING_KV, cmd.sessionId);
     if (!session) {
@@ -200,6 +227,7 @@ export class SessionAlarmDO implements DurableObject {
     await this.ctx.storage.delete("userId");
     await this.ctx.storage.delete("lastfmSessionKey");
     await this.ctx.storage.delete("thresholdPercent");
+    await this.ctx.storage.delete("notifyOnSideCompletion");
     return new Response("OK");
   }
 

@@ -16,6 +16,7 @@ import { useAutoAdvance } from "../hooks/useAutoAdvance";
 import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
 import { useVisibilityResume } from "../hooks/useVisibilityResume";
+import { getSideFromTrack } from "@repo/shared";
 import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -142,6 +143,29 @@ export function SessionPage() {
         }
       }
       setSession(syncedSession);
+
+      // If the server paused the session at a side boundary (because the DO
+      // fired while the phone was locked), detect that and show the flip modal.
+      if (syncedSession.state === "paused" && getNotifyOnSideCompletion()) {
+        const currentIdx = syncedSession.currentIndex;
+        const currentTrackState = syncedSession.tracks[currentIdx];
+        const currentReleaseTrack = syncedSession.release.tracks[currentIdx];
+        const nextReleaseTrack = syncedSession.release.tracks[currentIdx + 1];
+
+        if (currentReleaseTrack && nextReleaseTrack && currentTrackState?.status === "scrobbled") {
+          const currentSide = getSideFromTrack(currentReleaseTrack);
+          const nextSide = getSideFromTrack(nextReleaseTrack);
+          if (currentSide && nextSide && currentSide !== nextSide) {
+            setSideCompletionInfo({
+              currentSide,
+              nextSide,
+              currentTitle: currentReleaseTrack.title || "Unknown",
+              nextTitle: nextReleaseTrack.title || "Unknown",
+            });
+            setShowSideCompletionModal(true);
+          }
+        }
+      }
     },
     [markAsScrobbled]
   );
@@ -149,13 +173,6 @@ export function SessionPage() {
   useVisibilityResume(session?.id ?? null, isRunning, {
     onSync: handleVisibilitySync,
   });
-
-  const getSideFromTrack = useCallback((track: Session["release"]["tracks"][number] | undefined) => {
-    if (!track) return null;
-    if (track.side) return track.side;
-    const match = track.position?.trim().match(/^[A-Za-z]/);
-    return match ? match[0].toUpperCase() : null;
-  }, []);
 
   const getSideCompletionInfo = useCallback(() => {
     if (!session) return null;
@@ -173,7 +190,7 @@ export function SessionPage() {
       currentTitle: current.title || "Unknown",
       nextTitle: next.title || "Unknown",
     };
-  }, [getSideFromTrack, session]);
+  }, [session]);
 
   const handleNext = useCallback(async () => {
     const info = getSideCompletionInfo();

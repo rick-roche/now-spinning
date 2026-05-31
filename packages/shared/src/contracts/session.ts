@@ -6,6 +6,7 @@ import type { Session } from "../domain/session.js";
 
 export interface SessionStartRequest {
   releaseId: string;
+  notifyOnSideCompletion?: boolean;
 }
 
 export interface SessionStartResponse {
