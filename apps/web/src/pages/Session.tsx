@@ -146,7 +146,10 @@ export function SessionPage() {
 
       // If the server paused the session at a side boundary (because the DO
       // fired while the phone was locked), detect that and show the flip modal.
-      if (syncedSession.state === "paused" && getNotifyOnSideCompletion()) {
+      // Don't gate this on the local preference: the server already decided to
+      // pause (based on the preference stored at session-start), so the user
+      // needs the modal to resume regardless of their current local setting.
+      if (syncedSession.state === "paused") {
         const currentIdx = syncedSession.currentIndex;
         const currentTrackState = syncedSession.tracks[currentIdx];
         const currentReleaseTrack = syncedSession.release.tracks[currentIdx];
