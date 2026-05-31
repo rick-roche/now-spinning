@@ -99,7 +99,7 @@ async function fetchDiscogsRelease(
 
   return {
     ok: true,
-    release: normalizeDiscogsRelease(raw),
+    release: normalizeDiscogsRelease(raw as Parameters<typeof normalizeDiscogsRelease>[0]),
   };
 }
 

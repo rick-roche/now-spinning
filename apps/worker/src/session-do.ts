@@ -127,6 +127,8 @@ export class SessionAlarmDO implements DurableObject {
     // to when the current track actually finished, not the scrobble threshold point.
     // Without this, each track starts at the 50%-mark of the previous one, causing
     // tracks to scrobble at ~2× speed.
+    // Note: scrobbledAt stays as 'now' (the actual scrobble wall-clock time), but
+    // the *next* track's startedAt is set to trackEndTime via advanceSession.
     const trackEndTime = durationMs !== null ? startedAt + durationMs : now;
 
     // Check if the next track is on a different record side. If the user has
@@ -148,24 +150,34 @@ export class SessionAlarmDO implements DurableObject {
       return;
     }
 
+    // Set scrobbledAt to now (actual wall-clock scrobble time) while anchoring
+    // the next track's startedAt to trackEndTime (projected track end).
+    // advanceSession uses its advancedAt argument for both, so we call it with
+    // trackEndTime and then patch scrobbledAt back to now.
     const advanced = advanceSession(session, trackEndTime);
-    await storeSession(this.env.NOW_SPINNING_KV, advanced);
+    const patchedTracks = [...advanced.tracks];
+    const scrobbledTrack = patchedTracks[currentIndex];
+    if (scrobbledTrack && scrobbledTrack.status === "scrobbled") {
+      patchedTracks[currentIndex] = { ...scrobbledTrack, scrobbledAt: now };
+    }
+    const advancedPatched = { ...advanced, tracks: patchedTracks };
+    await storeSession(this.env.NOW_SPINNING_KV, advancedPatched);
 
-    if (advanced.state === "ended") {
+    if (advancedPatched.state === "ended") {
       return;
     }
 
     const npResult = await sendNowPlaying(
       this.env,
       lastfmSessionKey,
-      advanced.release,
-      advanced.currentIndex
+      advancedPatched.release,
+      advancedPatched.currentIndex
     );
     if (!npResult.ok) {
-      console.error(`[SessionAlarmDO] Failed to send now playing for track ${advanced.currentIndex}:`, npResult.message);
+      console.error(`[SessionAlarmDO] Failed to send now playing for track ${advancedPatched.currentIndex}:`, npResult.message);
     }
 
-    await this.scheduleNextAlarm(advanced);
+    await this.scheduleNextAlarm(advancedPatched);
   }
 
   private async handleStart(cmd: StartCommand): Promise<Response> {

@@ -464,6 +464,9 @@ describe("SessionAlarmDO", () => {
 
       const afterAlarm = JSON.parse(kvMock.store.get(`session:${farPastSession.id}`)!) as Session;
       expect(afterAlarm.tracks[0]!.status).toBe("scrobbled");
+      // scrobbledAt should be wall-clock now (not the future trackEndTime)
+      expect(afterAlarm.tracks[0]!.scrobbledAt).toBeLessThanOrEqual(Date.now());
+      expect(afterAlarm.tracks[0]!.scrobbledAt).toBeGreaterThan(trackStartedAt);
       // Next track should start at the projected end of track 0
       expect(afterAlarm.tracks[1]!.startedAt).toBe(expectedNextStartedAt);
     });
