@@ -88,5 +88,4 @@ export {
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,
-  type SessionSyncRequest,
 } from "./validation/index.js";

@@ -32,5 +32,4 @@ export {
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,
-  type SessionSyncRequest,
 } from "./session.schema.js";

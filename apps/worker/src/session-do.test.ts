@@ -449,12 +449,9 @@ describe("SessionAlarmDO", () => {
       storageMock.store.set("sessionId", sessionWithRelease.id);
       storageMock.store.set("lastfmSessionKey", "key");
       storageMock.store.set("thresholdPercent", 50);
-      // Simulate alarm firing at scrobble threshold (50% of 180s = 90s past start)
-      // i.e. "now" = trackStartedAt + 90_000, but we verify next track starts at full end
-
-      const updated = JSON.parse(kvMock.store.get(`session:${sessionWithRelease.id}`)!) as Session;
 
       // Trigger alarm by using a session whose track[0] started far enough in the past
+      // (trackStartedAt = 1_000_000ms epoch — far in the past relative to Date.now())
       const farPastSession: Session = {
         ...sessionWithRelease,
         tracks: sessionWithRelease.tracks.map((t, i) =>

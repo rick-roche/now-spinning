@@ -24,8 +24,6 @@ export const SessionSyncRequestSchema = z.object({
   notifyOnSideCompletion: z.boolean().optional().default(true),
 });
 
-export type SessionSyncRequest = z.infer<typeof SessionSyncRequestSchema>;
-
 /**
  * Session ID validation.
  * Session IDs are UUIDs generated server-side.
