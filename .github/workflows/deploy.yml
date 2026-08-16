@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event.workflow_run.conclusion == 'success'
+    # if: github.event.workflow_run.conclusion == 'success'
+    if: github.head_ref == 'feat/migate-to-coolify'
 
     concurrency:
       group: coolify-production
