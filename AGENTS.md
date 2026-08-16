@@ -8,18 +8,18 @@ Use it as the first read, then load only the docs needed for the current task.
 
 Now Spinning is a mobile-first app that lets users pick a Discogs release, start a listening session, and scrobble vinyl tracks to Last.fm.
 
-- Frontend: Cloudflare Pages SPA (`apps/web`)
-- Backend: Cloudflare Worker API (`apps/worker`)
+- Frontend: React/Vite SPA (`apps/web`)
+- Backend: Hono Node.js API (`apps/server`)
 - Shared logic/contracts: TypeScript package (`packages/shared`)
 
 ## 2) Non-Negotiable Rules
 
 1. No secrets in client code
-- Discogs/Last.fm secrets and token exchange happen in Worker only.
+- Discogs/Last.fm secrets and token exchange happen in the server only.
 - SPA must never receive service secrets.
 
 2. Server-side token storage
-- Store external tokens/session keys server-side (KV in MVP, D1 optional later).
+- Store external tokens/session keys server-side in SQLite.
 - Bind tokens to an internal `user_id` via HttpOnly cookie.
 
 3. Shared pure logic and tests
@@ -51,13 +51,13 @@ Guidance for future refinement:
 
 Current scoped files:
 - `apps/web/AGENTS.md`
-- `apps/worker/AGENTS.md`
+- `apps/server/AGENTS.md`
 - `packages/shared/AGENTS.md`
 
 ## 4) Repo Boundaries
 
 - `apps/web`: UI routes, components, client state, API client calls
-- `apps/worker`: auth/OAuth, route validation, token/session storage, third-party API calls
+- `apps/server`: auth/OAuth, route validation, token/session storage, third-party API calls, scheduler
 - `packages/shared`: contracts, domain types, normalization, session/scrobble engine
 
 Boundary constraints:
@@ -67,13 +67,13 @@ Boundary constraints:
 
 ## 5) Agent Role Map
 
-### API/Worker Agent
-Owns Worker routing/middleware, OAuth flows, token/session storage, Discogs/Last.fm integration, and stable error responses.
+### API/Server Agent
+Owns server routing/middleware, OAuth flows, token/session storage, Discogs/Last.fm integration, scheduling, and stable error responses.
 
 Primary paths:
-- `apps/worker/src/routes`
-- `apps/worker/src/middleware`
-- `apps/worker/src/utils`
+- `apps/server/src/routes`
+- `apps/server/src/middleware`
+- `apps/server/src/utils`
 
 ### Data/Normalization Agent
 Owns Discogs-to-internal normalization and track ordering heuristics.

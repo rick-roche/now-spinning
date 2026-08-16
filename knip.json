@@ -4,16 +4,11 @@
     ".": {
       "entry": []
     },
-    "apps/web": {
-      "entry": ["functions/**/*.ts"]
-    },
-    "apps/worker": {
-      "entry": ["wrangler.toml"]
-    },
+    "apps/web": { "entry": [] },
+    "apps/server": { "entry": [] },
     "packages/shared": {
       "entry": []
     }
   },
-  "ignoreDependencies": ["wrangler"],
   "ignoreBinaries": ["playwright"]
 }

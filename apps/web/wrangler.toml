@@ -1,5 +1,0 @@
-name = "now-spinning"
-compatibility_date = "2026-02-01"
-
-[vars]
-API_BASE_URL = "https://now-spinning-api.rickroche.workers.dev"

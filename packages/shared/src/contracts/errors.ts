@@ -35,6 +35,8 @@ export interface APIError {
   };
 }
 
+declare const crypto: { randomUUID(): string };
+
 /**
  * Create a standardized API error response with generated request ID.
  */

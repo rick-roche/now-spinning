@@ -81,8 +81,7 @@ export function useApiMutation<TData = unknown, TVariables = void>(
 
             let errorMessage = `Request failed with status ${response.status}`;
             try {
-              const errorData: { error?: { message?: string } } =
-                await response.json();
+              const errorData = (await response.json()) as unknown as { error?: { message?: string } };
               errorMessage = errorData.error?.message ?? errorMessage;
             } catch {
               // Ignore JSON parse error

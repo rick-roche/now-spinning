@@ -7,10 +7,11 @@ dist/
 build/
 .output/
 
-# Cloudflare
-.wrangler/
-.dev.vars
-wrangler.toml.backup
+# Local application data
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # Testing
 coverage/
@@ -48,6 +49,5 @@ yarn-error.log*
 *.tmp
 .cache/
 
-.dev.vars
 stitch-designs/
 tmp/

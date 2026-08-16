@@ -9,7 +9,7 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 * **Mobile-first, one-handed UX**: fast selection + “Now Playing” in seconds.
 * **Accurate scrobbling**: track sequence and timing, with a sensible approach to durations and user adjustments.
 * **Secure by default**: no tokens in the client; minimal data stored; easy to revoke.
-* **Low/zero cost hosting**: Cloudflare Pages + Workers (and KV/D1 only if needed).
+* **Low-cost hosting**: Docker on Hetzner managed by Coolify, with SQLite persistence.
 * **Discogs integration**:
 
   * Browse **my collection** (and filter/search within it)
@@ -103,12 +103,11 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 ---
 
-## 6) Architecture (Cloudflare Pages + Workers)
+## 6) Architecture (Docker / Coolify)
 
 ### High-level approach
 
-* **Pages** serves the React SPA (static).
-* **Worker** acts as the secure backend for:
+* **Node/Hono** serves the React SPA and acts as the secure backend for:
 
   * OAuth/token exchange & storage
   * Discogs API proxy calls (collection, release, search)
@@ -121,12 +120,11 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 * Avoids shipping Discogs/Last.fm secrets to the client.
 * Lets you enforce rate limiting and input validation centrally.
 
-### Suggested Cloudflare components
+### Runtime components
 
-* **Workers**: API + OAuth handling
-* **KV** (MVP): store encrypted tokens & short-lived session state
-* **D1** (v1): store sessions/history more robustly (optional)
-* **Queues** (optional): for resilient scrobble submission retries (can be deferred)
+* **Hono on Node.js 22**: API, OAuth handling, static SPA serving, and scheduler
+* **SQLite**: tokens, OAuth state, sessions, schedules, and Discogs cache entries
+* **Docker/Coolify**: one production replica with `/data` mounted persistently
 
 ---
 
@@ -162,7 +160,7 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 * No selling/sharing.
 * Keep history minimal (opt-in).
-* Provide “Delete my data” which clears KV/D1 entries.
+* Provide “Delete my data” which clears SQLite entries.
 
 ---
 
