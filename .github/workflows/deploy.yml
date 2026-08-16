@@ -4,7 +4,10 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main, feat/migate-to-coolify]
+    branches: [main]
+  pull_request:
+    branches:
+      - main
 
 jobs:
   deploy:
