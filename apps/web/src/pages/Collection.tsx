@@ -436,7 +436,7 @@ export function Collection() {
     setSearchPages(1);
     setSearchError(null);
     setHasSearched(false);
-    syncSearchParams("collection", "", sortBy, sortDir);
+    syncSearchParams("collection", query, sortBy, sortDir);
   };
 
   const switchToSearch = () => {
@@ -448,7 +448,7 @@ export function Collection() {
     setSearchPages(1);
     setSearchError(null);
     setHasSearched(false);
-    syncSearchParams("search", "", sortBy, sortDir);
+    syncSearchParams("search", query, sortBy, sortDir);
   };
 
   const canLoadMoreCollection = page < pages;
