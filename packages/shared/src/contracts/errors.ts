@@ -1,5 +1,5 @@
 /**
- * Centralized error codes used across Worker routes.
+ * Centralized error codes used across server routes.
  */
 export const ErrorCode = {
   AUTH_DENIED: "AUTH_DENIED",
@@ -20,7 +20,7 @@ export const ErrorCode = {
 
 /**
  * Standard API error response shape.
- * Returned by Worker endpoints for all errors.
+ * Returned by server endpoints for all errors.
  */
 export interface APIError {
   error: {

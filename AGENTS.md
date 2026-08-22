@@ -61,8 +61,8 @@ Current scoped files:
 - `packages/shared`: contracts, domain types, normalization, session/scrobble engine
 
 Boundary constraints:
-- Web must not import Worker-only code.
-- Worker must not import Web code.
+- Web must not import server-only code.
+- Server must not import Web code.
 - Cross-app contracts belong in `packages/shared`.
 
 ## 5) Agent Role Map
@@ -141,16 +141,18 @@ A task is done when all are true:
 
 ## 9) Error And Security Conventions
 
-Worker error response shape:
+Server API error response shape:
 
 ```json
 { "error": { "code": "string", "message": "string", "requestId": "optional" } }
 ```
 
 Required practices:
-- Validate inputs at Worker route edges.
+- Validate inputs at server route edges.
 - Map internal failures to stable, user-readable error codes/messages.
 - Keep OAuth/token operations server-side only.
+
+Production deployment is a single Coolify Application built from the root Dockerfile. It runs one Node/Hono process with SQLite mounted at `/data`; do not scale replicas horizontally while the in-process scheduler and SQLite storage are in use.
 
 ## 10) Canonical Commands
 

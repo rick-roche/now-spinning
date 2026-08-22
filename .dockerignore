@@ -5,6 +5,14 @@ dist
 coverage
 **/coverage
 .git
+.github
 .env
+.env.*
 data
 *.sqlite
+**/*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite-wal
+.DS_Store

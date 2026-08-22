@@ -51,3 +51,4 @@ yarn-error.log*
 
 stitch-designs/
 tmp/
+.wip/

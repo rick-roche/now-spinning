@@ -29,4 +29,27 @@ describe("SQLiteStorage", () => {
     expect(storage.getCache("key")).toBeNull();
     storage.close();
   });
+
+  it("allows only one live scheduler lease owner", () => {
+    const storage = createStorage();
+    expect(storage.acquireSchedulerLease("first", 1_000, 100)).toBe(true);
+    expect(storage.acquireSchedulerLease("second", 1_050, 100)).toBe(false);
+    expect(storage.ownsSchedulerLease("first", 1_050)).toBe(true);
+    expect(storage.acquireSchedulerLease("second", 1_101, 100)).toBe(true);
+    expect(storage.ownsSchedulerLease("first", 1_101)).toBe(false);
+    expect(storage.ownsSchedulerLease("second", 1_101)).toBe(true);
+    storage.close();
+  });
+
+  it("renews and releases only the current scheduler lease", () => {
+    const storage = createStorage();
+    expect(storage.acquireSchedulerLease("owner", 1_000, 100)).toBe(true);
+    expect(storage.renewSchedulerLease("owner", 1_050, 100)).toBe(true);
+    expect(storage.ownsSchedulerLease("owner", 1_149)).toBe(true);
+    storage.releaseSchedulerLease("other");
+    expect(storage.ownsSchedulerLease("owner", 1_149)).toBe(true);
+    storage.releaseSchedulerLease("owner");
+    expect(storage.ownsSchedulerLease("owner", 1_149)).toBe(false);
+    storage.close();
+  });
 });

@@ -1,5 +1,5 @@
 /**
- * Worker auth middleware and session management.
+ * Server auth middleware and session management.
  * Handles extracting/validating user sessions from cookies.
  */
 

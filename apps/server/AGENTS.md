@@ -41,8 +41,10 @@ If instructions conflict, follow: user request > this file > root `AGENTS.md`.
 - Add lightweight route/middleware tests for request validation and response contracts.
 - Add/update integration helper tests when signing/auth/session behavior changes.
 
-## Done Criteria (Worker-Specific)
+## Done Criteria (Server-Specific)
 
 - Route inputs validated and malformed input handled safely.
 - No secret leakage in logs/responses.
 - Error contract remains stable for UI consumers.
+- Server shutdown releases the scheduler lease and closes SQLite cleanly.
+- Scheduler changes preserve single-owner behavior across container replacements.

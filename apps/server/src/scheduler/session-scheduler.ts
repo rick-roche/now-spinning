@@ -1,4 +1,5 @@
 import { advanceSession, getScrobbleThresholdMs, getSideFromTrack, pauseSession, type Session } from "@repo/shared";
+import { randomUUID } from "node:crypto";
 import { scrobbleTrack, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
 import type { SQLiteStorage } from "../storage/storage.js";
@@ -6,13 +7,21 @@ import type { SQLiteStorage } from "../storage/storage.js";
 type Timer = ReturnType<typeof setTimeout>;
 
 export class SessionScheduler {
+  private static readonly leaseDurationMs = 60_000;
+  private static readonly leaseRenewalMs = 15_000;
   private readonly timers = new Map<string, Timer>();
   private readonly locks = new Map<string, Promise<void>>();
+  private readonly ownerId = randomUUID();
+  private leaseTimer: Timer | undefined;
+  private ownsLease = false;
   private stopped = false;
 
   constructor(private readonly storage: SQLiteStorage, private readonly env: AppEnvironment) {}
 
   start(): Promise<void> {
+    this.ownsLease = this.storage.acquireSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs);
+    if (!this.ownsLease) return Promise.resolve();
+    this.leaseTimer = setInterval(() => this.renewLease(), SessionScheduler.leaseRenewalMs);
     for (const schedule of this.storage.loadSchedules()) {
       const session = this.storage.loadSession(schedule.sessionId);
       if (!session || session.state !== "running" || schedule.dueAt === null) {
@@ -27,9 +36,13 @@ export class SessionScheduler {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    if (this.leaseTimer) clearInterval(this.leaseTimer);
+    this.leaseTimer = undefined;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     await Promise.all(this.locks.values());
+    if (this.ownsLease) this.storage.releaseSchedulerLease(this.ownerId);
+    this.ownsLease = false;
   }
 
   async startSession(session: Session, thresholdPercent: number, notifyOnSideCompletion: boolean): Promise<void> {
@@ -57,8 +70,17 @@ export class SessionScheduler {
 
   private clear(sessionId: string): void { const timer = this.timers.get(sessionId); if (timer) clearTimeout(timer); this.timers.delete(sessionId); }
 
+  private renewLease(): void {
+    if (this.stopped || !this.ownsLease) return;
+    if (!this.storage.renewSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs)) {
+      this.ownsLease = false;
+      for (const timer of this.timers.values()) clearTimeout(timer);
+      this.timers.clear();
+    }
+  }
+
   private arm(sessionId: string, dueAt: number): void {
-    if (this.stopped) return;
+    if (this.stopped || !this.ownsLease) return;
     this.clear(sessionId);
     const timer = setTimeout(() => void this.process(sessionId, dueAt), Math.max(1, dueAt - Date.now()));
     this.timers.set(sessionId, timer);
@@ -80,7 +102,7 @@ export class SessionScheduler {
 
   private async process(sessionId: string, expectedDueAt: number): Promise<void> {
     await this.withLock(sessionId, async () => {
-      if (this.stopped) return;
+      if (this.stopped || !this.ownsLease || !this.storage.ownsSchedulerLease(this.ownerId)) return;
       const schedule = this.storage.loadSchedule(sessionId);
       if (!schedule || schedule.dueAt !== expectedDueAt) return;
       const session = this.storage.loadSession(sessionId);

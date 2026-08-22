@@ -1,8 +1,11 @@
 services:
   app:
+    # Local/provider-portable tooling. Coolify production uses an Application
+    # built directly from the root Dockerfile, not this Compose file.
     build: .
     restart: unless-stopped
     environment:
+      NODE_ENV: production
       PORT: 3000
       DATABASE_PATH: /data/now-spinning.sqlite
       PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}

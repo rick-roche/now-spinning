@@ -14,10 +14,44 @@ export interface ScheduleRecord {
   updatedAt: number;
 }
 
+const SCHEDULER_LEASE_NAME = "session-scheduler";
+
 export class SQLiteStorage {
   constructor(private readonly db: SqliteDatabase) {}
 
   close(): void { this.db.close(); }
+
+  acquireSchedulerLease(ownerId: string, now = Date.now(), durationMs = 60_000): boolean {
+    const result = this.db.prepare(`
+      INSERT INTO scheduler_leases(name, owner_id, lease_until, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        owner_id = excluded.owner_id,
+        lease_until = excluded.lease_until,
+        updated_at = excluded.updated_at
+      WHERE scheduler_leases.lease_until <= ? OR scheduler_leases.owner_id = ?
+    `).run(SCHEDULER_LEASE_NAME, ownerId, now + durationMs, now, now, ownerId);
+    return result.changes === 1;
+  }
+
+  renewSchedulerLease(ownerId: string, now = Date.now(), durationMs = 60_000): boolean {
+    const result = this.db.prepare(`
+      UPDATE scheduler_leases
+      SET lease_until = ?, updated_at = ?
+      WHERE name = ? AND owner_id = ? AND lease_until > ?
+    `).run(now + durationMs, now, SCHEDULER_LEASE_NAME, ownerId, now);
+    return result.changes === 1;
+  }
+
+  ownsSchedulerLease(ownerId: string, now = Date.now()): boolean {
+    const row = this.db.prepare("SELECT 1 FROM scheduler_leases WHERE name = ? AND owner_id = ? AND lease_until > ?")
+      .get(SCHEDULER_LEASE_NAME, ownerId, now);
+    return row !== undefined;
+  }
+
+  releaseSchedulerLease(ownerId: string): void {
+    this.db.prepare("DELETE FROM scheduler_leases WHERE name = ? AND owner_id = ?").run(SCHEDULER_LEASE_NAME, ownerId);
+  }
 
   loadTokens(userId: string): StoredTokens {
     const row = this.db.prepare("SELECT json FROM tokens WHERE user_id = ?").get(userId) as { json: string } | undefined;

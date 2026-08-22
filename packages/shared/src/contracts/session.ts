@@ -1,5 +1,5 @@
 /**
- * Session contracts - shared between Worker and SPA.
+ * Session contracts shared between the server and SPA.
  */
 
 import type { Session } from "../domain/session.js";

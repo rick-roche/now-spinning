@@ -79,7 +79,13 @@ For a local production-like container, configure `.env` and run:
 docker compose -f compose.yaml -f compose.local.yaml up --build
 ```
 
-The app is available at http://localhost:3000 and stores SQLite data in the named `now-spinning-data` volume. Coolify should use `compose.yaml` without the local port override, expose internal port `3000`, mount `/data`, and run exactly one replica.
+The app is available at http://localhost:3000 and stores SQLite data in the named `now-spinning-data` volume. Compose is local/provider-portable tooling only. Production is a Coolify **Application** built from the repository root `/Dockerfile`, exposing port `3000`, mounting `/data`, and running exactly one replica.
+
+### Coolify deployment
+
+Coolify connects to this repository through its GitHub App and builds the root Dockerfile directly. Production deploys are triggered by the successful `CI` workflow through the authenticated Coolify webhook; disable Coolify automatic main-branch deploys to avoid duplicate builds. Pull Request previews are enabled for trusted contributors only and use isolated storage rather than the production `/data` volume.
+
+See [docs/deployment.md](docs/deployment.md) for the exact production, preview, DNS, environment, persistence, and rollback configuration.
 
 ---
 
@@ -89,7 +95,7 @@ All commands run from the **workspace root**:
 
 | Command            | Description                              |
 | ------------------ | ---------------------------------------- |
-| `pnpm dev`         | Start SPA + Worker in dev mode           |
+| `pnpm dev`         | Start SPA + Node server in dev mode      |
 | `pnpm build`       | Build all workspaces for production      |
 | `pnpm test`        | Run all tests (Vitest)                   |
 | `pnpm test:e2e`    | Run Playwright smoke tests (web)         |
@@ -143,9 +149,9 @@ now-spinning/
 
 ### Security principles
 
-- **No secrets in client:** All OAuth and API keys live in the Worker
+- **No secrets in client:** All OAuth and API keys live in the Node server
 - **Server-side tokens:** External service tokens stored in SQLite, keyed by session cookie
-- **HttpOnly cookies:** Session binding between client and Worker
+- **HttpOnly cookies:** Session binding between client and Node server
 
 See [SPEC.md](SPEC.md) for detailed architecture and security model.
 

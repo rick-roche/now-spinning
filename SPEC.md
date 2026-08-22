@@ -134,13 +134,13 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 * Prevent token theft from the client
 * Prevent replay/CSRF on auth callbacks
-* Limit abuse of your Worker endpoints
+ * Limit abuse of your server endpoints
 * Avoid storing more personal data than necessary
 
 ### Key decisions
 
 * Use **server-side OAuth**: client never sees Discogs/Last.fm secrets.
-* Store tokens encrypted at rest (Worker-side), keyed by a **user session id**.
+ * Store tokens encrypted at rest on the server, keyed by a **user session id**.
 * Use **HTTP-only secure cookies** for session binding.
 * Validate all inputs; strict allowlist of upstream endpoints.
 * Add basic **rate limiting** per session/user agent.
@@ -174,7 +174,7 @@ Use Discogs for:
 * Release lookup (tracklist, artists, title, year, images)
 * Search (release results)
 
-Worker should:
+The server should:
 
 * Normalize Discogs data to a stable internal shape.
 * Handle pagination and caching (short TTL is fine).
@@ -187,7 +187,7 @@ Use Last.fm for:
 * “Now Playing” updates (when a session starts or track changes)
 * Scrobble submission (when track qualifies / user triggers)
 
-Worker should:
+The server should:
 
 * Centralize signing and request formatting.
 * Implement retry logic for transient failures.
@@ -300,7 +300,7 @@ Compute `scrobble_id = hash(user_id, release_id, track_title, artist, startedAt_
 
 ---
 
-## 11) Worker API (proposed)
+## 11) Server API
 
 Base: `/api`
 
@@ -352,16 +352,16 @@ You have two viable options:
 
 ### Option A (simplest): Client-driven ticks
 
-* The client keeps the timer and calls Worker on key transitions:
+* The client keeps the timer and calls the server on key transitions:
 
   * start, pause, resume, next
-* Worker validates state, submits now playing/scrobbles on transitions.
+* The server validates state, submits now playing/scrobbles on transitions.
 * Pros: simplest infra; no background scheduling.
 * Cons: if user closes the tab mid-track, auto-scrobble may not happen until reopen.
 
-### Option B (more “correct”): Worker-driven scheduling
+### Option B (more “correct”): Server-driven scheduling
 
-* Worker stores schedule and uses a queue/alarm-like mechanism to submit scrobbles.
+* The Node server stores schedules in SQLite and uses its scheduler to submit scrobbles.
 * Pros: more reliable even if client goes away.
 * Cons: more moving parts.
 
@@ -385,7 +385,7 @@ You have two viable options:
 
 ## 14) Performance
 
-* Cache Discogs release details in Worker (short TTL) to reduce repeated calls.
+* Cache Discogs release details in SQLite (short TTL) to reduce repeated calls.
 * Minimize payload sizes (only what UI needs).
 * Use pagination + infinite scroll for collection.
 * Prefer cover thumbnails.
@@ -447,8 +447,8 @@ MVP is done when:
 
 ### M0: Skeleton
 
-* Pages app scaffold (Vite + React + Radix Themes)
-* Worker scaffold with `/api/health`
+* Vite + React + Radix Themes SPA
+* Node/Hono server with `/api/health`
 * Shared types package or folder
 
 ### M1: Auth
@@ -495,13 +495,13 @@ This repo uses agents to accelerate development while keeping quality high. Agen
 ## Project principles
 
 * Preserve security boundaries: **no secrets in client**
-* Keep Worker endpoints minimal and validated
+* Keep server endpoints minimal and validated
 * Prefer pure functions for complex logic (easy to test)
 * Don’t introduce new dependencies unless justified
 
 ## Work breakdown for agents
 
-* **Agent: API/Worker**
+* **Agent: API/Server**
 
   * OAuth flows, token storage, upstream proxying, validation, rate limiting
 * **Agent: Data/Normalization**

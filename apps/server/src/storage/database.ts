@@ -40,6 +40,12 @@ export function openDatabase(path: string): SqliteDatabase {
       due_at INTEGER,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS scheduler_leases (
+      name TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      lease_until INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS cache_entries (
       key TEXT PRIMARY KEY,
       json TEXT NOT NULL,
