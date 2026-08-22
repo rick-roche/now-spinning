@@ -4,6 +4,7 @@ import { Home } from "../pages/Home";
 import { Settings } from "../pages/Settings";
 import { Collection } from "../pages/Collection";
 import { Release } from "../pages/Release";
+import { Master } from "../pages/Master";
 import { SessionPage } from "../pages/Session";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { BottomNav } from "../components/BottomNav";
@@ -66,6 +67,7 @@ export function App() {
               <Route path="/collection" element={<ErrorBoundary><Collection /></ErrorBoundary>} />
               <Route path="/search" element={<ErrorBoundary><Collection /></ErrorBoundary>} />
               <Route path="/release/:id" element={<ErrorBoundary><Release /></ErrorBoundary>} />
+              <Route path="/master/:id" element={<ErrorBoundary><Master /></ErrorBoundary>} />
               <Route path="/session" element={<ErrorBoundary><SessionPage /></ErrorBoundary>} />
               <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             </Routes>
@@ -76,4 +78,3 @@ export function App() {
     </ErrorBoundary>
   );
 }
-

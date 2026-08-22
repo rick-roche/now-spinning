@@ -820,6 +820,18 @@ describe("Collection Page", () => {
     expect(screen.getByText("Search the Discogs database for a release.")).toBeInTheDocument();
   });
 
+  it("keeps the collection search draft when switching to global search", async () => {
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => ({ lastfmConnected: false, discogsConnected: true } as AuthStatusResponse) }))
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => ({ page: 1, pages: 1, perPage: 20, totalItems: 0, items: [] } as DiscogsCollectionResponse) }));
+
+    render(<BrowserRouter><Collection /></BrowserRouter>);
+    await waitFor(() => expect(screen.getByPlaceholderText("Search collection...")).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText("Search collection..."), { target: { value: "Kind of Blue" } });
+    fireEvent.click(screen.getByRole("button", { name: "Global Search" }));
+    expect(screen.getByPlaceholderText("Search Discogs...")).toHaveValue("Kind of Blue");
+  });
+
   it("searches Discogs when Enter is pressed in global search mode", async () => {
     fetchMock
       .mockImplementationOnce(() =>

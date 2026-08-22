@@ -27,12 +27,12 @@ router.get("/start", async (c: HonoContext) => {
   const sessionId = getOrCreateSessionId(c);
   setSessionCookie(c, sessionId);
 
-  const apiKey = c.env.LASTFM_API_KEY;
+  const apiKey = c.env.lastfmApiKey;
   if (!apiKey) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm API key not configured"), 500);
   }
 
-  const callbackUrl = c.env.LASTFM_CALLBACK_URL;
+  const callbackUrl = c.env.lastfmCallbackUrl;
   if (!callbackUrl) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm callback URL not configured"), 500);
   }
@@ -54,8 +54,7 @@ router.get("/callback", async (c: HonoContext) => {
   const token = c.req.query("token");
 
   if (!token) {
-    const error = c.req.query("error") || "User denied Last.fm authorization";
-    return c.json(createAPIError(ErrorCode.AUTH_DENIED, error), 403);
+    return c.json(createAPIError(ErrorCode.AUTH_DENIED, "Last.fm authorization was denied"), 403);
   }
 
   // Verify CSRF state token
@@ -79,7 +78,7 @@ router.get("/callback", async (c: HonoContext) => {
   );
 
   if (!sessionResponse.ok) {
-    return c.json(createAPIError(ErrorCode.LASTFM_ERROR, sessionResponse.message), 502);
+    return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Last.fm session lookup failed"), 502);
   }
 
   const sessionKey = sessionResponse.data.session?.key;
@@ -91,7 +90,7 @@ router.get("/callback", async (c: HonoContext) => {
   tokens.lastfm = { service: "lastfm", accessToken: sessionKey, storedAt: Date.now() };
   await storeTokens(storage, sessionId, tokens);
 
-  const appOrigin = c.env.PUBLIC_APP_ORIGIN;
+  const appOrigin = c.env.publicAppOrigin;
   const redirectUrl = new URL("/settings?auth=lastfm", appOrigin).toString();
   return c.redirect(redirectUrl);
 });

@@ -2,8 +2,9 @@ import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
 import { Icon } from "./Icon";
 
 interface SideCompletionModalProps {
-  currentSide: string;
-  nextSide: string;
+  boundary: "flip" | "change-disc";
+  currentUnit: string;
+  nextUnit: string;
   currentTrackTitle: string;
   nextTrackTitle: string;
   onContinue: () => Promise<void>;
@@ -13,8 +14,9 @@ interface SideCompletionModalProps {
 
 export function SideCompletionModal(props: SideCompletionModalProps) {
   const {
-    currentSide,
-    nextSide,
+    boundary,
+    currentUnit,
+    nextUnit,
     currentTrackTitle,
     nextTrackTitle,
     isOpen,
@@ -28,11 +30,13 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
         <Dialog.Title>
           <Flex gap="2" align="center">
             <Icon name="album" />
-            Time to flip the record
+            {boundary === "flip" ? "Time to flip" : "Time to change disc"}
           </Flex>
         </Dialog.Title>
         <Dialog.Description>
-          You just finished side {currentSide}. Flip to side {nextSide} to keep listening.
+          {boundary === "flip"
+            ? `You just finished side ${currentUnit}. Flip to side ${nextUnit} to keep listening.`
+            : `You just finished disc ${currentUnit}. Change to disc ${nextUnit} to keep listening.`}
         </Dialog.Description>
 
         <Text as="p" size="2" color="gray" mt="3" mb="5">
@@ -46,7 +50,7 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
             Keep paused
           </Button>
           <Button onClick={() => void onContinue()}>
-            Continue to side {nextSide}
+            Continue to {boundary === "flip" ? `side ${nextUnit}` : `disc ${nextUnit}`}
           </Button>
         </Flex>
       </Dialog.Content>

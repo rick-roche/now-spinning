@@ -1,7 +1,9 @@
 /**
  * Normalized release model (from Discogs data).
- * Represents a vinyl release with consistent structure.
+ * Represents a physical release with consistent structure.
  */
+export type PhysicalMediaType = "vinyl" | "cassette" | "cd" | "unknown";
+
 export interface NormalizedRelease {
   /** Discogs release ID */
   id: string;
@@ -13,6 +15,12 @@ export interface NormalizedRelease {
   year: number | null;
   /** Cover image URL (null if unavailable) */
   coverUrl: string | null;
+  /** Physical medium derived from Discogs format metadata. */
+  mediaType?: PhysicalMediaType;
+  /** Discogs format labels shown to the listener. */
+  formats?: string[];
+  /** Parent Discogs master release, when this is a concrete release. */
+  masterId?: string | null;
   /** Ordered list of tracks */
   tracks: NormalizedTrack[];
 }
@@ -32,6 +40,8 @@ export interface NormalizedTrack {
   durationSec: number | null;
   /** Side identifier derived from position (null if not applicable) */
   side: "A" | "B" | "C" | "D" | null;
+  /** Disc number derived from a multi-disc position (null if not applicable). */
+  discNumber?: number | null;
   /** 0-based index for stable internal ordering */
   index: number;
 }

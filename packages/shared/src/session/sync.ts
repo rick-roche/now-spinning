@@ -8,7 +8,7 @@
 
 import type { Session, SessionTrackState } from "../domain/session.js";
 import { isEligibleToScrobble } from "./eligibility.js";
-import { getSideFromTrack } from "./utils.js";
+import { getPhysicalMediaBoundary } from "./utils.js";
 
 export interface SyncScrobbleAction {
   trackIndex: number;
@@ -87,13 +87,11 @@ export function syncSession(
       break;
     }
 
-    // Pause at a side boundary instead of advancing through it.
+    // Pause at a physical-media boundary instead of advancing through it.
     if (pauseAtSideChange) {
       const currentReleaseTrack = currentSession.release.tracks[currentIndex];
       const nextReleaseTrack = currentSession.release.tracks[nextIndex];
-      const currentSide = getSideFromTrack(currentReleaseTrack);
-      const nextSide = getSideFromTrack(nextReleaseTrack);
-      if (currentSide !== null && nextSide !== null && currentSide !== nextSide) {
+      if (getPhysicalMediaBoundary(currentSession.release, currentReleaseTrack, nextReleaseTrack)) {
         currentSession = {
           ...currentSession,
           tracks: updatedTracks,

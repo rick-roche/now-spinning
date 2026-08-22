@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDiscogsRelease, parseDiscogsDuration } from "./discogsRelease.js";
+import {
+  mergeMissingTrackDurations,
+  normalizeDiscogsRelease,
+  parseDiscogsDuration,
+} from "./discogsRelease.js";
 
 describe("parseDiscogsDuration", () => {
   it("parses mm:ss and hh:mm:ss values", () => {
@@ -264,5 +268,49 @@ describe("normalizeDiscogsRelease", () => {
     expect(normalized.tracks[0]?.artist).toBe("John Smith");
     expect(normalized.tracks[1]?.artist).toBe("Jane Doe");
     expect(normalized.tracks[2]?.artist).toBe("Plain Artist");
+  });
+
+  it("derives physical medium, formats, master ID, and CD disc numbers", () => {
+    const normalized = normalizeDiscogsRelease({
+      id: 15,
+      master_id: 9,
+      formats: [{ name: "CD", descriptions: ["Album", "2xCD"] }],
+      tracklist: [
+        { position: "1-1", title: "Disc one" },
+        { position: "2-1", title: "Disc two" },
+      ],
+    });
+
+    expect(normalized).toMatchObject({
+      mediaType: "cd",
+      formats: ["CD Album 2xCD"],
+      masterId: "9",
+    });
+    expect(normalized.tracks.map((track) => track.discNumber)).toEqual([1, 2]);
+  });
+
+  it("fills only missing track durations from matching master tracks", () => {
+    const release = normalizeDiscogsRelease({
+      id: 16,
+      tracklist: [
+        { position: "A1", title: "Existing", duration: "2:00" },
+        { position: "A2", title: "Missing" },
+        { position: "A3", title: "Unmatched" },
+      ],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 17,
+      tracklist: [
+        { position: "A1", title: "Existing", duration: "3:00" },
+        { position: "A2", title: "Missing", duration: "4:00" },
+        { position: "B3", title: "Different", duration: "5:00" },
+      ],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks.map((track) => track.durationSec)).toEqual([
+      120,
+      240,
+      null,
+    ]);
   });
 });

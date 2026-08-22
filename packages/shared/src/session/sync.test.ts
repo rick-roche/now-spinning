@@ -10,6 +10,7 @@ const release: NormalizedRelease = {
   artist: "Test Artist",
   year: 2024,
   coverUrl: null,
+  mediaType: "vinyl",
   tracks: [
     {
       index: 0,

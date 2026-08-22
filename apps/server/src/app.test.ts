@@ -21,10 +21,6 @@ function environment(): AppEnvironment {
     staticRoot: "/nonexistent",
     NOW_SPINNING_STORAGE: {} as AppEnvironment["NOW_SPINNING_STORAGE"],
     scheduler: {} as AppEnvironment["scheduler"],
-    PUBLIC_APP_ORIGIN: "http://localhost:5173",
-    LASTFM_CALLBACK_URL: "http://localhost:3000/api/auth/lastfm/callback",
-    DISCOGS_CALLBACK_URL: "http://localhost:3000/api/auth/discogs/callback",
-    DEV_MODE: "true",
   };
 }
 
@@ -33,6 +29,7 @@ describe("application", () => {
     const response = await createApp(environment()).request("http://localhost/api/missing");
     expect(response.status).toBe(404);
     expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND", message: "Not found" } });
   });
 
   it("treats /api and malformed paths as safe API/404 responses", async () => {

@@ -1,4 +1,4 @@
-import { advanceSession, getScrobbleThresholdMs, getSideFromTrack, pauseSession, type Session } from "@repo/shared";
+import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, pauseSession, type Session } from "@repo/shared";
 import { randomUUID } from "node:crypto";
 import { scrobbleTrack, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
@@ -160,7 +160,7 @@ export class SessionScheduler {
       if (!result.ok) console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message);
       const trackEnd = durationMs === null ? now : startedAt + durationMs;
       const nextTrack = session.release.tracks[session.currentIndex + 1];
-      if (schedule.notifyOnSideCompletion && nextTrack && getSideFromTrack(track) !== null && getSideFromTrack(nextTrack) !== null && getSideFromTrack(track) !== getSideFromTrack(nextTrack)) {
+      if (schedule.notifyOnSideCompletion && nextTrack && getPhysicalMediaBoundary(session.release, track, nextTrack)) {
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: now };
         const paused = pauseSession({ ...session, tracks });

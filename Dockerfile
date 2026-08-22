@@ -16,6 +16,7 @@ ENV NODE_ENV=production PORT=3000 DATABASE_PATH=/data/now-spinning.sqlite
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /prod/node_modules ./node_modules
 COPY --from=build /app/apps/web/dist ./apps/web/dist
+
 RUN mkdir -p /data && chown -R node:node /app /data
 USER node
 EXPOSE 3000

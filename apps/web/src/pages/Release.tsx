@@ -147,6 +147,9 @@ export function Release() {
           <p className="text-base opacity-60 mt-1 font-medium">
             {release.artist}{release.year ? ` · ${release.year}` : ""}
           </p>
+          {release.formats && release.formats.length > 0 && (
+            <p className="text-xs text-primary mt-2">{release.formats.join(" · ")}</p>
+          )}
         </div>
 
         {/* Start Session Button */}

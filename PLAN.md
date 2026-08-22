@@ -1,6 +1,6 @@
 # Now Spinning — Implementation Plan
 
-**Current milestone:** M4 (Quality & Polish)  
+**Current milestone:** M5 (Coolify deployment hardening)
 **Status:** In progress  
 **Last updated:** 2026-02-21
 
@@ -12,7 +12,22 @@
 - **AGENTS:** [AGENTS.md](AGENTS.md) — Agent workflow and responsibilities
 - **README:** [README.md](README.md) — Setup and local dev instructions
 
+## M5: Coolify deployment hardening
+
+The current runtime is Node/Hono with SQLite. Production is a single Coolify Application built from the root Dockerfile, with `/data` mounted persistently and one replica. GitHub Actions runs the quality gate and triggers production only after successful CI. Pull Request previews are managed by Coolify's GitHub App integration and must not execute untrusted public PRs.
+
+- [x] Root multi-stage Node 22 Dockerfile
+- [x] Single-origin SPA/API container on port 3000
+- [x] Unauthenticated `/api/health` endpoint and graceful shutdown
+- [x] Production-only `/data/now-spinning.sqlite` persistence contract
+- [x] Docker build validation in CI
+- [x] Successful-main-only Coolify webhook deployment
+- [x] SQLite scheduler lease for deployment overlap protection
+- [x] Coolify production, preview, DNS, and secret documentation
+
 ---
+
+The M0-M4 entries below are historical implementation notes from the former Cloudflare design. Current deployment and runtime decisions are documented in the M5 section above.
 
 ## M0: Skeleton — Monorepo Foundation
 
@@ -22,7 +37,7 @@
 - **Router:** Hono (modern, type-safe, popular for Workers)
 - **Linting:** ESLint 9 with flat config (added during M0 instead of deferring)
 - **CI:** GitHub Actions (typecheck + test + lint + knip)
-- **Node version:** 20.11+ LTS
+- **Node version:** 22.13+ LTS
 - **Radix Themes:** Default theme (customize in M1+)
 
 ### Implementation steps
@@ -266,7 +281,7 @@
   - User-configurable % of track
   - Default threshold aligned with eligibility rules
 - [x] 3. Notify on side completion
-  - Pause on side changes and prompt to continue
+  - Pause for vinyl/cassette side changes and multi-disc CD changes, then prompt to continue
 - [ ] 4. Offline queue & retry
   - Store pending actions in localStorage
   - Retry on reconnect and app load
@@ -290,3 +305,7 @@
 - Network errors show user-friendly banners with retry
 - Tests cover offline/retry flows
 - All validation passes (typecheck, lint, test, knip)
+
+---
+
+- **2026-08-22:** Added physical-media release selection. Master releases resolve through medium then concrete pressing selection; master timings fill only missing concrete-track durations.

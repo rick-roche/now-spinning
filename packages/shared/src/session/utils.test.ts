@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getSideFromTrack } from "./utils.js";
-import type { NormalizedTrack } from "../domain/release.js";
+import { getPhysicalMediaBoundary, getSideFromTrack } from "./utils.js";
+import type { NormalizedRelease, NormalizedTrack } from "../domain/release.js";
 
 function track(overrides: Partial<NormalizedTrack>): NormalizedTrack {
   return {
@@ -44,5 +44,33 @@ describe("getSideFromTrack", () => {
 
   it("trims whitespace from position before matching", () => {
     expect(getSideFromTrack(track({ side: null, position: "  B2" }))).toBe("B");
+  });
+});
+
+describe("getPhysicalMediaBoundary", () => {
+  function release(mediaType: NormalizedRelease["mediaType"]): Pick<NormalizedRelease, "mediaType"> {
+    return { mediaType };
+  }
+
+  it("requires a flip between vinyl or cassette sides", () => {
+    expect(getPhysicalMediaBoundary(release("vinyl"), track({ side: "A" }), track({ side: "B" }))).toBe("flip");
+    expect(getPhysicalMediaBoundary(release("cassette"), track({ side: "A" }), track({ side: "B" }))).toBe("flip");
+  });
+
+  it("requires a disc change only between CD disc numbers", () => {
+    expect(
+      getPhysicalMediaBoundary(
+        release("cd"),
+        track({ position: "1-8", discNumber: 1 }),
+        track({ position: "2-1", discNumber: 2 })
+      )
+    ).toBe("change-disc");
+    expect(
+      getPhysicalMediaBoundary(release("cd"), track({ discNumber: 1 }), track({ discNumber: 1 }))
+    ).toBeNull();
+  });
+
+  it("does not infer a physical action for unknown media", () => {
+    expect(getPhysicalMediaBoundary(release("unknown"), track({ side: "A" }), track({ side: "B" }))).toBeNull();
   });
 });

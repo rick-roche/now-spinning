@@ -13,7 +13,7 @@ Connect your [last.fm](https://www.last.fm/) and [Discogs](https://www.discogs.c
 - Pick a record from your [Discogs](https://www.discogs.com/) collection
 - Tap **Start Scrobbling**, and let the app scrobble each track as you listen.
 
-Deployed version running at [https://now-spinning.apps.rickroche.com](https://now-spinning.apps.rickroche.com/).
+Deployed version running at [https://now-spinning.rickroche.com](https://now-spinning.rickroche.com/).
 
 ## Documentation
 

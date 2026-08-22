@@ -429,7 +429,6 @@ export function Collection() {
 
   const switchToCollection = () => {
     setActiveFilter("collection");
-    setQuery("");
     setSubmittedCollectionQuery("");
     setSubmittedSearchQuery("");
     setSearchItems([]);
@@ -442,7 +441,6 @@ export function Collection() {
 
   const switchToSearch = () => {
     setActiveFilter("search");
-    setQuery("");
     setSubmittedCollectionQuery("");
     setSubmittedSearchQuery("");
     setSearchItems([]);
@@ -647,6 +645,7 @@ export function Collection() {
                     </div>
                     <h3 className="font-bold text-sm truncate">{item.title}</h3>
                     <p className="text-text-muted text-xs truncate">{item.artist}</p>
+                    {item.formats.length > 0 && <p className="text-primary/70 text-[10px] truncate">{item.formats.join(" · ")}</p>}
                   </div>
                 ))}
               </div>
@@ -717,7 +716,7 @@ export function Collection() {
                       key={item.instanceId}
                       className="group relative cursor-pointer"
                       onClick={() => {
-                        void navigate(`/release/${item.releaseId}`);
+                        void navigate(item.isMaster ? `/master/${item.releaseId}` : `/release/${item.releaseId}`);
                       }}
                     >
                       <div className="aspect-square w-full rounded-lg overflow-hidden vinyl-shadow bg-surface-dark mb-3 relative">
@@ -742,6 +741,9 @@ export function Collection() {
                       <p className="text-text-muted text-xs truncate">
                         {item.artist}
                         {item.year ? ` · ${item.year}` : ""}
+                      </p>
+                      <p className="text-primary/70 text-[10px] truncate">
+                        {item.isMaster ? "Master release" : item.formats.join(" · ")}
                       </p>
                     </div>
                   ))}

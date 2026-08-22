@@ -13,8 +13,8 @@ export const DISCOGS_USER_AGENT = "NowSpinning/0.0.1 +now-spinning.dev";
 export function getDiscogsAppCredentials(
   c: HonoContext
 ): { consumerKey: string; consumerSecret: string } | null {
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
+  const consumerKey = c.env.discogsConsumerKey;
+  const consumerSecret = c.env.discogsConsumerSecret;
   if (!consumerKey || !consumerSecret) {
     return null;
   }

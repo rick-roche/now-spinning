@@ -37,7 +37,7 @@ export function createApp(environment: AppEnvironment): Hono<{ Bindings: AppEnvi
   app.onError((error, c) => {
     if (error instanceof StorageCryptoError) return c.json(createAPIError(ErrorCode.TOKEN_STORAGE_UNAVAILABLE, "Token storage is unavailable"), 503);
     console.error("Unhandled application error:", error);
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Internal server error"), 500);
+    return c.json(createAPIError(ErrorCode.INTERNAL_SERVER_ERROR, "Internal server error"), 500);
   });
   app.use("*", cors({
     origin: (origin) => {
@@ -52,7 +52,7 @@ export function createApp(environment: AppEnvironment): Hono<{ Bindings: AppEnvi
   app.route("/api/discogs", discogsRoutes);
   app.route("/api/session", sessionRoutes);
   app.get("*", async (c) => {
-    if (isApiPath(c.req.path) || c.req.method !== "GET") return c.json({ error: { code: "NOT_FOUND", message: "Not found" } }, 404);
+    if (isApiPath(c.req.path) || c.req.method !== "GET") return c.json(createAPIError(ErrorCode.NOT_FOUND, "Not found"), 404);
     let requestedPath: string;
     try {
       requestedPath = decodeURIComponent(c.req.path).replace(/^\/+/, "");
@@ -78,6 +78,6 @@ export function createApp(environment: AppEnvironment): Hono<{ Bindings: AppEnvi
       return c.text("Not found", 404);
     }
   });
-  app.notFound((c) => isApiPath(c.req.path) ? c.json({ error: { code: "NOT_FOUND", message: "Not found" } }, 404) : c.text("Not found", 404));
+  app.notFound((c) => isApiPath(c.req.path) ? c.json(createAPIError(ErrorCode.NOT_FOUND, "Not found"), 404) : c.text("Not found", 404));
   return app;
 }

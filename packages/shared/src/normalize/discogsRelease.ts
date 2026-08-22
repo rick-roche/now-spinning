@@ -1,4 +1,4 @@
-import type { NormalizedRelease, NormalizedTrack } from "../domain/release.js";
+import type { NormalizedRelease, NormalizedTrack, PhysicalMediaType } from "../domain/release.js";
 import { stripDiscogsDisambiguation } from "./artistName.js";
 
 export interface DiscogsReleaseApiResponse {
@@ -7,7 +7,26 @@ export interface DiscogsReleaseApiResponse {
   year?: number;
   artists?: Array<{ name?: string }>;
   images?: Array<{ uri?: string; type?: string }>;
+  formats?: Array<{ name?: string; descriptions?: string[] }>;
+  master_id?: number;
   tracklist?: DiscogsTrack[];
+}
+
+export function formatDiscogsFormats(
+  formats?: Array<{ name?: string; descriptions?: string[] }>
+): string[] {
+  return (formats ?? []).flatMap((format) => {
+    const value = [format.name, ...(format.descriptions ?? [])].filter(Boolean).join(" ").trim();
+    return value ? [value] : [];
+  });
+}
+
+export function derivePhysicalMediaType(formats: string[]): PhysicalMediaType {
+  const values = formats.join(" ").toLowerCase();
+  if (/(vinyl|\blp\b|\bep\b|\b7\"|\b10\"|\b12\")/.test(values)) return "vinyl";
+  if (/(cassette|\btape\b)/.test(values)) return "cassette";
+  if (/(\bcd\b|compact disc)/.test(values)) return "cd";
+  return "unknown";
 }
 
 interface DiscogsTrack {
@@ -61,6 +80,11 @@ function deriveSide(position?: string | null): NormalizedTrack["side"] {
   return match[0] as NormalizedTrack["side"];
 }
 
+function deriveDiscNumber(position: string): number | null {
+  const match = position.match(/^(\d+)\s*[-.]\s*\d+/);
+  return match?.[1] ? Number.parseInt(match[1], 10) : null;
+}
+
 function resolveCoverUrl(images?: Array<{ uri?: string; type?: string }>): string | null {
   if (!images || images.length === 0) {
     return null;
@@ -72,6 +96,7 @@ function resolveCoverUrl(images?: Array<{ uri?: string; type?: string }>): strin
 
 export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): NormalizedRelease {
   const releaseArtist = stripDiscogsDisambiguation(data.artists?.[0]?.name ?? "Unknown Artist");
+  const formats = formatDiscogsFormats(data.formats);
   const tracks = (data.tracklist ?? [])
     .filter((track) => track.type_ !== "heading")
     .map((track, index) => {
@@ -82,6 +107,7 @@ export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): Normal
         artist: stripDiscogsDisambiguation(track.artists?.[0]?.name ?? releaseArtist),
         durationSec: parseDiscogsDuration(track.duration),
         side: deriveSide(position),
+        discNumber: deriveDiscNumber(position),
         index,
       };
     });
@@ -92,6 +118,36 @@ export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): Normal
     artist: releaseArtist,
     year: Number.isFinite(data.year) ? (data.year as number) : null,
     coverUrl: resolveCoverUrl(data.images),
+    mediaType: derivePhysicalMediaType(formats),
+    formats,
+    masterId: data.master_id ? String(data.master_id) : null,
     tracks,
   };
+}
+
+/**
+ * Fills only missing concrete-release durations from its master. Exact track
+ * positions win; a same-index, same-title match is a conservative fallback.
+ */
+export function mergeMissingTrackDurations(
+  release: NormalizedRelease,
+  master: Pick<NormalizedRelease, "tracks">
+): NormalizedRelease {
+  const tracks = release.tracks.map((track) => {
+    if (track.durationSec !== null) return track;
+
+    const exactPosition = master.tracks.find(
+      (masterTrack) => masterTrack.position === track.position && masterTrack.durationSec !== null
+    );
+    const sameIndex = master.tracks[track.index];
+    const fallback =
+      sameIndex?.title.trim().toLowerCase() === track.title.trim().toLowerCase() &&
+      sameIndex.durationSec !== null
+        ? sameIndex
+        : undefined;
+    const source = exactPosition ?? fallback;
+    return source ? { ...track, durationSec: source.durationSec } : track;
+  });
+
+  return { ...release, tracks };
 }

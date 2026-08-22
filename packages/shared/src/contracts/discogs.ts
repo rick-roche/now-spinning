@@ -32,6 +32,21 @@ export interface DiscogsSearchItem {
   year: number | null;
   thumbUrl: string | null;
   formats: string[];
+  /** True when the result is a Discogs master release, not a playable pressing. */
+  isMaster?: boolean;
+}
+
+export interface DiscogsMasterVersion {
+  releaseId: string;
+  title: string;
+  year: number | null;
+  thumbUrl: string | null;
+  formats: string[];
+}
+
+export interface DiscogsMasterVersionsResponse {
+  masterId: string;
+  versions: DiscogsMasterVersion[];
 }
 
 export interface DiscogsSearchResponse {
