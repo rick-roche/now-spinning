@@ -1,5 +1,6 @@
 import type { Session, StoredToken } from "@repo/shared";
 import type { SqliteDatabase } from "./database.js";
+import { decryptJson, encryptJson, StorageCryptoError } from "./crypto.js";
 
 export interface StoredTokens {
   lastfm: StoredToken | null;
@@ -17,7 +18,7 @@ export interface ScheduleRecord {
 const SCHEDULER_LEASE_NAME = "session-scheduler";
 
 export class SQLiteStorage {
-  constructor(private readonly db: SqliteDatabase) {}
+  constructor(private readonly db: SqliteDatabase, private readonly encryptionKey: Buffer) {}
 
   close(): void { this.db.close(); }
 
@@ -56,22 +57,22 @@ export class SQLiteStorage {
   loadTokens(userId: string): StoredTokens {
     const row = this.db.prepare("SELECT json FROM tokens WHERE user_id = ?").get(userId) as { json: string } | undefined;
     if (!row) return { lastfm: null, discogs: null };
-    try {
-      return JSON.parse(row.json) as StoredTokens;
-    } catch {
-      return { lastfm: null, discogs: null };
-    }
+    if (row.json.startsWith("v1:")) return decryptJson<StoredTokens>(row.json, this.encryptionKey, `tokens:${userId}`);
+    let tokens: StoredTokens;
+    try { tokens = JSON.parse(row.json) as StoredTokens; } catch { throw new StorageCryptoError("Stored token data is invalid"); }
+    this.storeTokens(userId, tokens);
+    return tokens;
   }
 
   storeTokens(userId: string, tokens: StoredTokens): void {
     this.db.prepare("INSERT INTO tokens(user_id,json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at")
-      .run(userId, JSON.stringify(tokens), Date.now());
+      .run(userId, encryptJson(tokens, this.encryptionKey, `tokens:${userId}`), Date.now());
   }
 
   storeOAuthState(service: string, state: string, metadata: Record<string, string>, ttlSeconds = 600): void {
     this.cleanupOAuthStates();
     this.db.prepare("INSERT OR REPLACE INTO oauth_states(service,state,metadata_json,expires_at) VALUES(?,?,?,?)")
-      .run(service, state, JSON.stringify(metadata), Date.now() + ttlSeconds * 1000);
+      .run(service, state, encryptJson(metadata, this.encryptionKey, `oauth:${service}:${state}`), Date.now() + ttlSeconds * 1000);
   }
 
   consumeOAuthState(service: string, state: string): Record<string, string> | null {
@@ -80,6 +81,7 @@ export class SQLiteStorage {
         .get(service, state) as { metadata_json: string; expires_at: number } | undefined;
       this.db.prepare("DELETE FROM oauth_states WHERE service = ? AND state = ?").run(service, state);
       if (!row || row.expires_at <= Date.now()) return null;
+      if (row.metadata_json.startsWith("v1:")) return decryptJson<Record<string, string>>(row.metadata_json, this.encryptionKey, `oauth:${service}:${state}`);
       return JSON.parse(row.metadata_json) as Record<string, string>;
     });
     return transaction();
@@ -101,7 +103,8 @@ export class SQLiteStorage {
 
   loadSession(sessionId: string): Session | null {
     const row = this.db.prepare("SELECT session_json FROM sessions WHERE id = ?").get(sessionId) as { session_json: string } | undefined;
-    return row ? JSON.parse(row.session_json) as Session : null;
+    if (!row) return null;
+    try { return JSON.parse(row.session_json) as Session; } catch { return null; }
   }
 
   loadCurrentSession(userId: string): Session | null {
@@ -131,7 +134,10 @@ export class SQLiteStorage {
     const row = this.db.prepare("SELECT json, expires_at FROM cache_entries WHERE key = ?").get(key) as { json: string; expires_at: number } | undefined;
     if (!row) return null;
     if (row.expires_at <= Date.now()) { this.db.prepare("DELETE FROM cache_entries WHERE key = ?").run(key); return null; }
-    return JSON.parse(row.json) as T;
+    try { return JSON.parse(row.json) as T; } catch {
+      this.db.prepare("DELETE FROM cache_entries WHERE key = ?").run(key);
+      return null;
+    }
   }
 
   setCache(key: string, value: unknown, ttlSeconds: number): void {

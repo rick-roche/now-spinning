@@ -12,6 +12,7 @@ function environment(): AppEnvironment {
   return {
     port: 3000,
     databasePath: "/tmp/test.sqlite",
+    tokenEncryptionKey: Buffer.alloc(32, 7),
     publicAppOrigin: "http://localhost:5173",
     lastfmCallbackUrl: "http://localhost:3000/api/auth/lastfm/callback",
     discogsCallbackUrl: "http://localhost:3000/api/auth/discogs/callback",

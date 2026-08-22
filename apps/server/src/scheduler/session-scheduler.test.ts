@@ -27,7 +27,7 @@ describe("SessionScheduler", () => {
   it("starts background work only for the scheduler holding the SQLite lease", async () => {
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
-    const storage = new SQLiteStorage(openDatabase(path));
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
     const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 120_000 });
     storage.saveSession(session);
     storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
@@ -54,7 +54,7 @@ describe("SessionScheduler", () => {
     vi.setSystemTime(0);
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
-    const storage = new SQLiteStorage(openDatabase(path));
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
     const session = createSession({ sessionId: "session-retry", userId: "user-retry", release, startedAt: -120_000 });
     storage.saveSession(session);
     storage.storeTokens("user-retry", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
@@ -73,7 +73,7 @@ describe("SessionScheduler", () => {
   it("preserves paused schedules across restart", async () => {
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
-    const storage = new SQLiteStorage(openDatabase(path));
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
     const running = createSession({ sessionId: "session-paused", userId: "user-paused", release, startedAt: Date.now() - 120_000 });
     const paused = pauseSession(running);
     storage.saveSession(paused);

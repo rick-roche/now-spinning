@@ -140,7 +140,8 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 ### Key decisions
 
 * Use **server-side OAuth**: client never sees Discogs/Last.fm secrets.
- * Store tokens encrypted at rest on the server, keyed by a **user session id**.
+* Store tokens encrypted at rest on the server with AES-256-GCM, keyed by a **user session id**.
+* Keep the base64-encoded 32-byte encryption key only in server environment secrets; losing it makes persisted OAuth tokens unrecoverable.
 * Use **HTTP-only secure cookies** for session binding.
 * Validate all inputs; strict allowlist of upstream endpoints.
 * Add basic **rate limiting** per session/user agent.

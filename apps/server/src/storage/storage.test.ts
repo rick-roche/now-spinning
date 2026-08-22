@@ -2,14 +2,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { unlinkSync } from "node:fs";
 import { openDatabase } from "./database.js";
 import { SQLiteStorage } from "./storage.js";
+import { StorageCryptoError } from "./crypto.js";
 
 const paths: string[] = [];
+const encryptionKey = Buffer.alloc(32, 7);
 afterEach(() => { for (const path of paths.splice(0)) { try { unlinkSync(path); } catch { /* test cleanup */ } } });
 
 function createStorage(): SQLiteStorage {
   const path = `/tmp/now-spinning-test-${crypto.randomUUID()}.sqlite`;
   paths.push(path);
-  return new SQLiteStorage(openDatabase(path));
+  return new SQLiteStorage(openDatabase(path), encryptionKey);
 }
 
 describe("SQLiteStorage", () => {
@@ -30,14 +32,38 @@ describe("SQLiteStorage", () => {
     storage.close();
   });
 
-  it("falls back safely when stored token JSON is corrupt", () => {
+  it("fails closed when stored token JSON is corrupt", () => {
     const path = `/tmp/now-spinning-test-${crypto.randomUUID()}.sqlite`;
     paths.push(path);
     const database = openDatabase(path);
-    const storage = new SQLiteStorage(database);
+    const storage = new SQLiteStorage(database, encryptionKey);
     storage.storeTokens("user", { lastfm: null, discogs: null });
     database.prepare("UPDATE tokens SET json = ? WHERE user_id = ?").run("not-json", "user");
-    expect(storage.loadTokens("user")).toEqual({ lastfm: null, discogs: null });
+    expect(() => storage.loadTokens("user")).toThrow(StorageCryptoError);
+    storage.close();
+  });
+
+  it("migrates legacy plaintext tokens to encrypted storage", () => {
+    const path = `/tmp/now-spinning-test-${crypto.randomUUID()}.sqlite`;
+    paths.push(path);
+    const database = openDatabase(path);
+    const storage = new SQLiteStorage(database, encryptionKey);
+    database.prepare("INSERT INTO tokens(user_id,json,updated_at) VALUES(?,?,?)")
+      .run("legacy", JSON.stringify({ lastfm: { service: "lastfm", accessToken: "secret", storedAt: 1 }, discogs: null }), Date.now());
+    expect(storage.loadTokens("legacy").lastfm?.accessToken).toBe("secret");
+    expect((database.prepare("SELECT json FROM tokens WHERE user_id = ?").get("legacy") as { json: string }).json).toMatch(/^v1:/);
+    storage.close();
+  });
+
+  it("evicts corrupt cache and session rows", () => {
+    const path = `/tmp/now-spinning-test-${crypto.randomUUID()}.sqlite`;
+    paths.push(path);
+    const database = openDatabase(path);
+    const storage = new SQLiteStorage(database, encryptionKey);
+    database.prepare("INSERT INTO cache_entries(key,json,expires_at) VALUES(?,?,?)").run("bad", "not-json", Date.now() + 60_000);
+    database.prepare("INSERT INTO sessions(id,user_id,session_json,updated_at) VALUES(?,?,?,?)").run("bad", "user", "not-json", Date.now());
+    expect(storage.getCache("bad")).toBeNull();
+    expect(storage.loadSession("bad")).toBeNull();
     storage.close();
   });
 

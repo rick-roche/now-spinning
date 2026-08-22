@@ -48,6 +48,14 @@ pnpm install
 
 Copy `.env.example` to `.env` and provide the provider credentials. Secrets are loaded by the Node server only.
 
+Generate the required local token-encryption key with:
+
+```bash
+openssl rand -base64 32
+```
+
+Set the result as `TOKEN_ENCRYPTION_KEY`. Keep the same key across restarts; losing it makes encrypted OAuth tokens unrecoverable.
+
 Note: These are required before OAuth flows will work.
 
 - LASTFM_API_KEY
@@ -151,6 +159,7 @@ now-spinning/
 
 - **No secrets in client:** All OAuth and API keys live in the Node server
 - **Server-side tokens:** External service tokens stored in SQLite, keyed by session cookie
+- **Encrypted tokens:** OAuth tokens and temporary OAuth state are encrypted with AES-256-GCM before SQLite persistence
 - **HttpOnly cookies:** Session binding between client and Node server
 
 See [SPEC.md](SPEC.md) for detailed architecture and security model.

@@ -23,7 +23,7 @@ describe("session routes", () => {
   it("serializes pause and resume with scheduler state", async () => {
     const path = `/tmp/now-spinning-route-${crypto.randomUUID()}.sqlite`;
     paths.push(path);
-    const storage = new SQLiteStorage(openDatabase(path));
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
     const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() });
     storage.saveSession(session);
     storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });

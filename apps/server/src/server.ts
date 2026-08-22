@@ -8,7 +8,7 @@ import type { AppEnvironment } from "./types.js";
 
 const config = loadConfig();
 const database = openDatabase(config.databasePath);
-const storage = new SQLiteStorage(database);
+const storage = new SQLiteStorage(database, config.tokenEncryptionKey);
 const environment = {
   ...config,
   NOW_SPINNING_STORAGE: storage,
