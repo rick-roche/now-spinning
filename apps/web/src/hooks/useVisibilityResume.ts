@@ -64,7 +64,7 @@ export function useVisibilityResume(
       if (!response.ok) {
         let message = `Sync failed (${response.status})`;
         try {
-          const body: { error?: { message?: string } } = await response.json();
+          const body = (await response.json()) as unknown as { error?: { message?: string } };
           message = body.error?.message ?? message;
         } catch {
           // Ignore JSON parse error

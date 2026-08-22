@@ -1,5 +1,5 @@
 /**
- * Authentication contracts - shared between Worker and SPA.
+ * Authentication contracts shared between the server and SPA.
  * Defines request/response shapes for OAuth flows and auth status.
  */
 

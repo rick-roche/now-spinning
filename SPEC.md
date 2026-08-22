@@ -9,7 +9,7 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 * **Mobile-first, one-handed UX**: fast selection + “Now Playing” in seconds.
 * **Accurate scrobbling**: track sequence and timing, with a sensible approach to durations and user adjustments.
 * **Secure by default**: no tokens in the client; minimal data stored; easy to revoke.
-* **Low/zero cost hosting**: Cloudflare Pages + Workers (and KV/D1 only if needed).
+* **Low-cost hosting**: Docker on Hetzner managed by Coolify, with SQLite persistence.
 * **Discogs integration**:
 
   * Browse **my collection** (and filter/search within it)
@@ -103,12 +103,11 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 ---
 
-## 6) Architecture (Cloudflare Pages + Workers)
+## 6) Architecture (Docker / Coolify)
 
 ### High-level approach
 
-* **Pages** serves the React SPA (static).
-* **Worker** acts as the secure backend for:
+* **Node/Hono** serves the React SPA and acts as the secure backend for:
 
   * OAuth/token exchange & storage
   * Discogs API proxy calls (collection, release, search)
@@ -121,12 +120,11 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 * Avoids shipping Discogs/Last.fm secrets to the client.
 * Lets you enforce rate limiting and input validation centrally.
 
-### Suggested Cloudflare components
+### Runtime components
 
-* **Workers**: API + OAuth handling
-* **KV** (MVP): store encrypted tokens & short-lived session state
-* **D1** (v1): store sessions/history more robustly (optional)
-* **Queues** (optional): for resilient scrobble submission retries (can be deferred)
+* **Hono on Node.js 22**: API, OAuth handling, static SPA serving, and scheduler
+* **SQLite**: tokens, OAuth state, sessions, schedules, and Discogs cache entries
+* **Docker/Coolify**: one production replica with `/data` mounted persistently
 
 ---
 
@@ -136,13 +134,14 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 * Prevent token theft from the client
 * Prevent replay/CSRF on auth callbacks
-* Limit abuse of your Worker endpoints
+ * Limit abuse of your server endpoints
 * Avoid storing more personal data than necessary
 
 ### Key decisions
 
 * Use **server-side OAuth**: client never sees Discogs/Last.fm secrets.
-* Store tokens encrypted at rest (Worker-side), keyed by a **user session id**.
+* Store tokens encrypted at rest on the server with AES-256-GCM, keyed by a **user session id**.
+* Keep the base64-encoded 32-byte encryption key only in server environment secrets; losing it makes persisted OAuth tokens unrecoverable.
 * Use **HTTP-only secure cookies** for session binding.
 * Validate all inputs; strict allowlist of upstream endpoints.
 * Add basic **rate limiting** per session/user agent.
@@ -162,7 +161,7 @@ When I listen to vinyl, my listening history on Last.fm stays incomplete. I want
 
 * No selling/sharing.
 * Keep history minimal (opt-in).
-* Provide “Delete my data” which clears KV/D1 entries.
+* Provide “Delete my data” which clears SQLite entries.
 
 ---
 
@@ -176,7 +175,7 @@ Use Discogs for:
 * Release lookup (tracklist, artists, title, year, images)
 * Search (release results)
 
-Worker should:
+The server should:
 
 * Normalize Discogs data to a stable internal shape.
 * Handle pagination and caching (short TTL is fine).
@@ -189,7 +188,7 @@ Use Last.fm for:
 * “Now Playing” updates (when a session starts or track changes)
 * Scrobble submission (when track qualifies / user triggers)
 
-Worker should:
+The server should:
 
 * Centralize signing and request formatting.
 * Implement retry logic for transient failures.
@@ -302,7 +301,7 @@ Compute `scrobble_id = hash(user_id, release_id, track_title, artist, startedAt_
 
 ---
 
-## 11) Worker API (proposed)
+## 11) Server API
 
 Base: `/api`
 
@@ -354,16 +353,16 @@ You have two viable options:
 
 ### Option A (simplest): Client-driven ticks
 
-* The client keeps the timer and calls Worker on key transitions:
+* The client keeps the timer and calls the server on key transitions:
 
   * start, pause, resume, next
-* Worker validates state, submits now playing/scrobbles on transitions.
+* The server validates state, submits now playing/scrobbles on transitions.
 * Pros: simplest infra; no background scheduling.
 * Cons: if user closes the tab mid-track, auto-scrobble may not happen until reopen.
 
-### Option B (more “correct”): Worker-driven scheduling
+### Option B (more “correct”): Server-driven scheduling
 
-* Worker stores schedule and uses a queue/alarm-like mechanism to submit scrobbles.
+* The Node server stores schedules in SQLite and uses its scheduler to submit scrobbles.
 * Pros: more reliable even if client goes away.
 * Cons: more moving parts.
 
@@ -387,7 +386,7 @@ You have two viable options:
 
 ## 14) Performance
 
-* Cache Discogs release details in Worker (short TTL) to reduce repeated calls.
+* Cache Discogs release details in SQLite (short TTL) to reduce repeated calls.
 * Minimize payload sizes (only what UI needs).
 * Use pagination + infinite scroll for collection.
 * Prefer cover thumbnails.
@@ -449,8 +448,8 @@ MVP is done when:
 
 ### M0: Skeleton
 
-* Pages app scaffold (Vite + React + Radix Themes)
-* Worker scaffold with `/api/health`
+* Vite + React + Radix Themes SPA
+* Node/Hono server with `/api/health`
 * Shared types package or folder
 
 ### M1: Auth
@@ -497,13 +496,13 @@ This repo uses agents to accelerate development while keeping quality high. Agen
 ## Project principles
 
 * Preserve security boundaries: **no secrets in client**
-* Keep Worker endpoints minimal and validated
+* Keep server endpoints minimal and validated
 * Prefer pure functions for complex logic (easy to test)
 * Don’t introduce new dependencies unless justified
 
 ## Work breakdown for agents
 
-* **Agent: API/Worker**
+* **Agent: API/Server**
 
   * OAuth flows, token storage, upstream proxying, validation, rate limiting
 * **Agent: Data/Normalization**

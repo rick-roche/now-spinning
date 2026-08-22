@@ -13,7 +13,7 @@ Connect your [last.fm](https://www.last.fm/) and [Discogs](https://www.discogs.c
 - Pick a record from your [Discogs](https://www.discogs.com/) collection
 - Tap **Start Scrobbling**, and let the app scrobble each track as you listen.
 
-Deployed version running at [https://now-spinning.rickroche.com](https://now-spinning.rickroche.com/).
+Deployed version running at [https://now-spinning.apps.rickroche.com](https://now-spinning.apps.rickroche.com/).
 
 ## Documentation
 
@@ -46,7 +46,15 @@ pnpm install
 
 ### 2. Start local development
 
-There are secrets that are needed (set with: wrangler secret put KEY --env development or in a `apps/worker/.dev.vars` file)
+Copy `.env.example` to `.env` and provide the provider credentials. Secrets are loaded by the Node server only.
+
+Generate the required local token-encryption key with:
+
+```bash
+openssl rand -base64 32
+```
+
+Set the result as `TOKEN_ENCRYPTION_KEY`. Keep the same key across restarts; losing it makes encrypted OAuth tokens unrecoverable.
 
 Note: These are required before OAuth flows will work.
 
@@ -55,21 +63,37 @@ Note: These are required before OAuth flows will work.
 - DISCOGS_CONSUMER_KEY
 - DISCOGS_CONSUMER_SECRET
 
-This runs both the SPA and Worker concurrently:
+This runs both the SPA and Node server concurrently:
 
 ```bash
 pnpm dev
 ```
 
 - **SPA:** http://localhost:5173
-- **Worker API:** http://localhost:8787
+- **Server API:** http://localhost:3000
 - **Health check:** http://localhost:5173/api/health
 
-The SPA proxies `/api/*` requests to the Worker automatically.
+The SPA proxies `/api/*` requests to the Node server automatically.
 
 ### 3. Verify it works
 
 Open http://localhost:5173 in your browser.
+
+### Docker
+
+For a local production-like container, configure `.env` and run:
+
+```bash
+docker compose -f compose.yaml -f compose.local.yaml up --build
+```
+
+The app is available at http://localhost:3000 and stores SQLite data in the named `now-spinning-data` volume. Compose is local/provider-portable tooling only. Production is a Coolify **Application** built from the repository root `/Dockerfile`, exposing port `3000`, mounting `/data`, and running exactly one replica.
+
+### Coolify deployment
+
+Coolify connects to this repository through its GitHub App and builds the root Dockerfile directly. Production deploys are triggered by the successful `CI` workflow through the authenticated Coolify webhook; disable Coolify automatic main-branch deploys to avoid duplicate builds. Pull Request previews are enabled for trusted contributors only and use isolated storage rather than the production `/data` volume.
+
+See [docs/deployment.md](docs/deployment.md) for the exact production, preview, DNS, environment, persistence, and rollback configuration.
 
 ---
 
@@ -79,7 +103,7 @@ All commands run from the **workspace root**:
 
 | Command            | Description                              |
 | ------------------ | ---------------------------------------- |
-| `pnpm dev`         | Start SPA + Worker in dev mode           |
+| `pnpm dev`         | Start SPA + Node server in dev mode      |
 | `pnpm build`       | Build all workspaces for production      |
 | `pnpm test`        | Run all tests (Vitest)                   |
 | `pnpm test:e2e`    | Run Playwright smoke tests (web)         |
@@ -101,8 +125,8 @@ pnpm -C apps/web build
 pnpm -C apps/web test:e2e
 
 # In the worker
-pnpm -C apps/worker dev
-pnpm -C apps/worker deploy
+pnpm -C apps/server dev
+pnpm -C apps/server build
 
 # In shared package
 pnpm -C packages/shared test
@@ -113,8 +137,8 @@ pnpm -C packages/shared test
 ```
 now-spinning/
 ├── apps/
-│   ├── web/           # React SPA (Cloudflare Pages)
-│   └── worker/        # API backend (Cloudflare Workers)
+│   ├── web/           # React/Vite SPA
+│   └── server/        # Hono API and scheduler on Node.js
 ├── packages/
 │   └── shared/        # Shared types + pure logic
 ├── .github/
@@ -126,16 +150,17 @@ now-spinning/
 ## Architecture
 
 - **Frontend:** React SPA with Vite, Radix Themes, React Router
-- **Backend:** Cloudflare Workers with Hono
+- **Backend:** Hono on Node.js
 - **Shared:** TypeScript types and pure logic (normalization, session engine)
-- **Storage:** Cloudflare KV (tokens + sessions)
-- **Hosting:** Cloudflare Pages (SPA) + Workers (API on `/api/*` route)
+- **Storage:** SQLite at `/data/now-spinning.sqlite`
+- **Hosting:** Docker on Coolify/Hetzner, one application replica
 
 ### Security principles
 
-- **No secrets in client:** All OAuth and API keys live in the Worker
-- **Server-side tokens:** External service tokens stored in KV, keyed by session cookie
-- **HttpOnly cookies:** Session binding between client and Worker
+- **No secrets in client:** All OAuth and API keys live in the Node server
+- **Server-side tokens:** External service tokens stored in SQLite, keyed by session cookie
+- **Encrypted tokens:** OAuth tokens and temporary OAuth state are encrypted with AES-256-GCM before SQLite persistence
+- **HttpOnly cookies:** Session binding between client and Node server
 
 See [SPEC.md](SPEC.md) for detailed architecture and security model.
 
@@ -146,4 +171,3 @@ Contributions welcome — please open issues or pull requests with a clear descr
 ## License
 
 See the [LICENSE](./LICENSE) file in the repository root.
-

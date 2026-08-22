@@ -23,7 +23,7 @@ If instructions conflict, follow: user request > this file > root `AGENTS.md`.
 - Keep session/scrobble transitions explicit and idempotent.
 
 4. Boundary discipline
-- Do not import from `apps/web` or `apps/worker`.
+- Do not import from `apps/web` or `apps/server`.
 - Shared package must remain independently testable.
 
 ## Where To Change Code

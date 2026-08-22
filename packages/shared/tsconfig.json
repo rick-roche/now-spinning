@@ -4,8 +4,7 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "outDir": "./dist",
-    "types": ["@cloudflare/workers-types"]
+    "outDir": "./dist"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

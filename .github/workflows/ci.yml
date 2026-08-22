@@ -45,20 +45,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-      - name: Run tests
-        run: pnpm test
-
       - name: Install Playwright browser
         run: pnpm -C apps/web exec playwright install --with-deps chromium
 
-      - name: Run E2E smoke tests
-        run: pnpm test:e2e
+      - name: Validate
+        run: pnpm validate
+
+      - name: Validate production Docker build
+        run: docker build -t now-spinning:test .
 
       - name: Lint code
         run: pnpm lint

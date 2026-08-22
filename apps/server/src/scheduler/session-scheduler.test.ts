@@ -1,0 +1,88 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { createSession, pauseSession, type NormalizedRelease } from "@repo/shared";
+import { openDatabase } from "../storage/database.js";
+import { SQLiteStorage } from "../storage/storage.js";
+import type { AppEnvironment } from "../types.js";
+import { SessionScheduler } from "./session-scheduler.js";
+
+const paths: string[] = [];
+afterEach(() => {
+  for (const path of paths.splice(0)) {
+    try { unlinkSync(path); } catch { /* test cleanup */ }
+  }
+});
+
+const release: NormalizedRelease = {
+  id: "release-1",
+  title: "Test Release",
+  artist: "Test Artist",
+  year: 2024,
+  coverUrl: null,
+  tracks: [{ index: 0, position: "A1", title: "First", artist: "Test Artist", durationSec: 180, side: "A" }],
+};
+
+describe("SessionScheduler", () => {
+  it("starts background work only for the scheduler holding the SQLite lease", async () => {
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 120_000 });
+    storage.saveSession(session);
+    storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
+
+    const environment = { devMode: true } as AppEnvironment;
+    const first = new SessionScheduler(storage, environment);
+    const second = new SessionScheduler(storage, environment);
+    await first.start();
+    await second.start();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    const updated = storage.loadSession(session.id);
+    expect(updated?.state).toBe("ended");
+    expect(storage.acquireSchedulerLease("third")).toBe(false);
+
+    await second.stop();
+    await first.stop();
+    storage.close();
+  });
+
+  it("retries startup ownership after an existing lease expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-retry", userId: "user-retry", release, startedAt: -120_000 });
+    storage.saveSession(session);
+    storage.storeTokens("user-retry", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: 0, updatedAt: 0 });
+    expect(storage.acquireSchedulerLease("blocker", 0, 60_000)).toBe(true);
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(storage.loadSession(session.id)?.state).toBe("ended");
+    await scheduler.stop();
+    storage.close();
+    vi.useRealTimers();
+  });
+
+  it("preserves paused schedules across restart", async () => {
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const running = createSession({ sessionId: "session-paused", userId: "user-paused", release, startedAt: Date.now() - 120_000 });
+    const paused = pauseSession(running);
+    storage.saveSession(paused);
+    storage.saveSchedule({ sessionId: paused.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    expect(storage.loadSchedule(paused.id)?.dueAt).toBeNull();
+    await scheduler.stop();
+    storage.close();
+  });
+});

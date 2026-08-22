@@ -1,5 +1,5 @@
 /**
- * Discogs collection contracts - shared between Worker and SPA.
+ * Discogs collection contracts shared between the server and SPA.
  */
 
 export type DiscogsCollectionSortField = "dateAdded" | "title" | "artist" | "year";

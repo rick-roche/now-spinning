@@ -6,13 +6,13 @@ If instructions conflict, follow: user request > this file > root `AGENTS.md`.
 
 ## Purpose
 
-`apps/web` is the Cloudflare Pages SPA (React + Vite). It owns UI, UX flows, and client-side state only.
+`apps/web` is the React + Vite SPA. It owns UI, UX flows, and client-side state only.
 
 ## Hard Rules
 
 1. No secrets in client code
 - Never place Discogs/Last.fm secrets, token exchange logic, or signing logic in web code.
-- Treat the Worker as the only trusted integration boundary for third-party APIs.
+- Treat the Node server as the only trusted integration boundary for third-party APIs.
 
 2. API usage
 - Call backend via `/api/*` using shared helpers in `apps/web/src/lib`.
@@ -24,7 +24,7 @@ If instructions conflict, follow: user request > this file > root `AGENTS.md`.
 - Keep touch targets and bottom-primary actions usable one-handed.
 
 4. Boundary discipline
-- Do not import Worker code.
+- Do not import server code.
 - Shared contracts/types come from `packages/shared`.
 
 ## Where To Change Code
@@ -32,7 +32,7 @@ If instructions conflict, follow: user request > this file > root `AGENTS.md`.
 - Pages/routes: `apps/web/src/pages`
 - Reusable UI: `apps/web/src/components`
 - API + utilities: `apps/web/src/lib`
-- Edge proxy function: `apps/web/functions/api/[[path]].ts`
+- API client: `apps/web/src/lib/api.ts`
 
 ## Testing Expectations
 

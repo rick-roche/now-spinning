@@ -1,5 +1,5 @@
 /**
- * Centralized error codes used across Worker routes.
+ * Centralized error codes used across server routes.
  */
 export const ErrorCode = {
   AUTH_DENIED: "AUTH_DENIED",
@@ -14,13 +14,14 @@ export const ErrorCode = {
   LASTFM_ERROR: "LASTFM_ERROR",
   LASTFM_NOT_CONNECTED: "LASTFM_NOT_CONNECTED",
   SESSION_NOT_FOUND: "SESSION_NOT_FOUND",
+  TOKEN_STORAGE_UNAVAILABLE: "TOKEN_STORAGE_UNAVAILABLE",
   UNAUTHORIZED: "UNAUTHORIZED",
   VALIDATION_ERROR: "VALIDATION_ERROR",
 } as const;
 
 /**
  * Standard API error response shape.
- * Returned by Worker endpoints for all errors.
+ * Returned by server endpoints for all errors.
  */
 export interface APIError {
   error: {
@@ -36,18 +37,20 @@ export interface APIError {
 }
 
 /**
- * Create a standardized API error response with generated request ID.
+ * Create a standardized API error response with an optional generated request ID.
  */
 export function createAPIError(
   code: string,
   message: string,
   details?: unknown
 ): APIError {
+  const runtimeCrypto = (globalThis as typeof globalThis & { crypto?: { randomUUID?: () => string } }).crypto;
+  const requestId = typeof runtimeCrypto?.randomUUID === "function" ? runtimeCrypto.randomUUID() : undefined;
   return {
     error: {
       code,
       message,
-      requestId: crypto.randomUUID(),
+      ...(requestId ? { requestId } : {}),
       ...(details !== undefined && { details }),
     },
   };
