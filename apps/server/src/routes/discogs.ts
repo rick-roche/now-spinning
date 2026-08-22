@@ -39,6 +39,7 @@ import { formatZodErrors } from "../utils/validation.js";
 
 type HonoContext = Context<{ Bindings: AppEnvironment }>;
 const CACHE_TTL_SECONDS = 3600;
+const MAX_MASTER_VERSION_PAGES = 10;
 const COLLECTION_SNAPSHOT_TTL_SECONDS = 43_200;
 const CACHE_VERSION = "v3";
 const COLLECTION_INDEX_PER_PAGE = 100;
@@ -657,8 +658,16 @@ router.get("/release/:id", async (c: HonoContext) => {
       if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
       return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
-    const code = releaseResponse.status === 500 ? ErrorCode.CONFIG_ERROR : ErrorCode.DISCOGS_ERROR;
-    const message = releaseResponse.status === 500 ? "Discogs credentials not configured" : "Discogs release lookup failed";
+    const code = releaseResponse.status === 500
+      ? ErrorCode.CONFIG_ERROR
+      : releaseResponse.status === 404
+        ? ErrorCode.NOT_FOUND
+        : ErrorCode.DISCOGS_ERROR;
+    const message = releaseResponse.status === 500
+      ? "Discogs credentials not configured"
+      : releaseResponse.status === 404
+        ? "Discogs release not found"
+        : "Discogs release lookup failed";
     return c.json(createAPIError(code, message), releaseResponse.status);
   }
 
@@ -684,7 +693,7 @@ router.get("/master/:id/versions", async (c: HonoContext) => {
   const upstreamVersions: NonNullable<DiscogsMasterVersionsApiResponse["versions"]> = [];
   let page = 1;
   let pages = 1;
-  while (page <= pages) {
+  while (page <= pages && page <= MAX_MASTER_VERSION_PAGES) {
     const response = await fetchDiscogsJson<DiscogsMasterVersionsApiResponse>(
       `${DISCOGS_API_BASE}/masters/${masterId}/versions?per_page=100&page=${page}`,
       authHeader
@@ -694,7 +703,10 @@ router.get("/master/:id/versions", async (c: HonoContext) => {
         if (response.retryAfter) c.header("Retry-After", response.retryAfter);
         return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
       }
-      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs master lookup failed"), 502);
+      const status = response.status === 404 ? 404 : 502;
+      const code = response.status === 404 ? ErrorCode.NOT_FOUND : ErrorCode.DISCOGS_ERROR;
+      const message = response.status === 404 ? "Discogs master release not found" : "Discogs master lookup failed";
+      return c.json(createAPIError(code, message), status);
     }
     upstreamVersions.push(...(response.data.versions ?? []));
     pages = Math.max(1, response.data.pagination?.pages ?? 1);
@@ -716,7 +728,11 @@ router.get("/master/:id/versions", async (c: HonoContext) => {
       mediaType: derivePhysicalMediaType(version.major_formats ?? formats),
     }];
   });
-  const payload: DiscogsMasterVersionsResponse = { masterId, versions };
+  const payload: DiscogsMasterVersionsResponse = {
+    masterId,
+    versions,
+    hasMore: page <= pages,
+  };
   storage.setCache(cacheKey, payload, CACHE_TTL_SECONDS);
   return c.json(payload);
 });

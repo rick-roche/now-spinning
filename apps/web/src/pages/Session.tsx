@@ -218,8 +218,8 @@ export function SessionPage() {
   );
 
   const handleSideCompletionContinue = useCallback(async () => {
-    await sessionActions.next();
-    if (!sessionActions.error) {
+    const succeeded = await sessionActions.next();
+    if (succeeded) {
       setShowSideCompletionModal(false);
       setSideCompletionInfo(null);
     }

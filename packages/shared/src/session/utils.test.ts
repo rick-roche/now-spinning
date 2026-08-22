@@ -70,7 +70,17 @@ describe("getPhysicalMediaBoundary", () => {
     ).toBeNull();
   });
 
-  it("does not infer a physical action for unknown media", () => {
-    expect(getPhysicalMediaBoundary(release("unknown"), track({ side: "A" }), track({ side: "B" }))).toBeNull();
+  it("falls back to side changes for unknown media", () => {
+    expect(getPhysicalMediaBoundary(release("unknown"), track({ side: "A" }), track({ side: "B" }))).toBe("flip");
+  });
+
+  it("falls back to disc changes for unknown media", () => {
+    expect(
+      getPhysicalMediaBoundary(
+        release("unknown"),
+        track({ position: "1-8", discNumber: 1 }),
+        track({ position: "2-1", discNumber: 2 })
+      )
+    ).toBe("change-disc");
   });
 });

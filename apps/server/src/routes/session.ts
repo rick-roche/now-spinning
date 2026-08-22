@@ -72,8 +72,16 @@ router.post(
         if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
         return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
       }
-      const code = releaseResponse.status === 500 ? ErrorCode.CONFIG_ERROR : ErrorCode.DISCOGS_ERROR;
-      const message = releaseResponse.status === 500 ? "Discogs credentials not configured" : "Discogs release lookup failed";
+      const code = releaseResponse.status === 500
+        ? ErrorCode.CONFIG_ERROR
+        : releaseResponse.status === 404
+          ? ErrorCode.NOT_FOUND
+          : ErrorCode.DISCOGS_ERROR;
+      const message = releaseResponse.status === 500
+        ? "Discogs credentials not configured"
+        : releaseResponse.status === 404
+          ? "Discogs release not found"
+          : "Discogs release lookup failed";
       return c.json(createAPIError(code, message), releaseResponse.status);
     }
     if (releaseResponse.release.tracks.length === 0) {
@@ -425,18 +433,20 @@ router.post(
       );
     }
 
-    try {
-      const body: unknown = await c.req.json();
+    const rawBody = await c.req.text();
+    if (rawBody.trim()) {
+      let body: unknown;
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+      }
       const bodyResult = SessionSyncRequestSchema.safeParse(body);
       if (!bodyResult.success) {
         return c.json(
           createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)),
           400
         );
-      }
-    } catch {
-      if (c.req.header("Content-Length") && c.req.header("Content-Length") !== "0") {
-        return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
       }
     }
 

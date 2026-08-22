@@ -52,6 +52,7 @@ export interface DiscogsMasterVersion {
 export interface DiscogsMasterVersionsResponse {
   masterId: string;
   versions: DiscogsMasterVersion[];
+  hasMore?: boolean;
 }
 
 export interface DiscogsSearchResponse {

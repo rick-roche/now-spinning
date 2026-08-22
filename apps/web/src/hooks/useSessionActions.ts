@@ -27,8 +27,8 @@ export function useSessionActions(
   );
 
   const executeAction = useCallback(
-    async (action: "pause" | "resume" | "next" | "end") => {
-      if (!sessionId || !session || actionInFlight.current) return;
+    async (action: "pause" | "resume" | "next" | "end"): Promise<boolean> => {
+      if (!sessionId || !session || actionInFlight.current) return false;
       actionInFlight.current = true;
 
       setLocalError(null);
@@ -72,12 +72,18 @@ export function useSessionActions(
 
       try {
         const raw = await mutate({ action });
-        if (!raw) { onSessionUpdate(previousSession); return; }
-        if (!isSessionActionResponse(raw)) { setLocalError("Invalid session response"); onSessionUpdate(previousSession); return; }
+        if (!raw) { onSessionUpdate(previousSession); return false; }
+        if (!isSessionActionResponse(raw)) {
+          setLocalError("Invalid session response");
+          onSessionUpdate(previousSession);
+          return false;
+        }
         onSessionUpdate(raw.session);
+        return true;
       } catch (caught) {
         onSessionUpdate(previousSession);
         setLocalError(caught instanceof Error ? caught.message : "Session action failed");
+        return false;
       } finally {
         actionInFlight.current = false;
       }

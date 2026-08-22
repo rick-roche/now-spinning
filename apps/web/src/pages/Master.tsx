@@ -32,11 +32,12 @@ export function Master() {
       <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">Master Release</p>
       <h1 className="mt-2 text-2xl font-bold">Choose a format</h1>
       <p className="mt-2 text-sm text-text-muted">Select the physical medium you are listening to, then choose its pressing.</p>
+      {data.hasMore && <p className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-text-muted" role="status">Showing the first set of pressings. Some additional Discogs versions may not be shown.</p>}
       {availableMedia.length === 0 ? (
         <div className="mt-6 rounded-xl border border-white/10 p-5 text-sm text-text-muted">No supported vinyl, CD, or cassette pressings are available for this master release.</div>
       ) : <div className="mt-6 grid grid-cols-3 gap-3">
         {availableMedia.map((media) => (
-          <button key={media} onClick={() => setSelectedMedia(media)} className={`rounded-xl border p-4 text-sm font-bold capitalize ${selectedMedia === media ? "border-primary bg-primary/10 text-primary" : "border-white/10"}`}>
+          <button key={media} type="button" aria-pressed={selectedMedia === media} onClick={() => setSelectedMedia(media)} className={`rounded-xl border p-4 text-sm font-bold capitalize focus-ring ${selectedMedia === media ? "border-primary bg-primary/10 text-primary" : "border-white/10"}`}>
             {media === "cd" ? "CD" : media}
           </button>
         ))}

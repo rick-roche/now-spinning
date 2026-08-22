@@ -2,7 +2,7 @@
 
 **Current milestone:** M5 (Coolify deployment hardening)
 **Status:** In progress  
-**Last updated:** 2026-02-21
+**Last updated:** 2026-08-22
 
 ---
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CollectionSkeleton } from "../components/CollectionSkeleton";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { Icon } from "../components/Icon";
@@ -323,7 +323,8 @@ export function Collection() {
     setPage(1);
     setPages(1);
     setError(null);
-  }, []);
+    syncSearchParams("collection", "", sortBy, sortDir);
+  }, [sortBy, sortDir, syncSearchParams]);
 
   const submitSearch = useCallback(
     (overrides?: { sortBy?: SortField; sortDir?: "asc" | "desc" }) => {
@@ -720,12 +721,10 @@ export function Collection() {
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                   {searchItems.map((item) => (
-                    <div
+                    <Link
                       key={item.instanceId}
-                      className="group relative cursor-pointer"
-                      onClick={() => {
-                        void navigate(item.isMaster ? `/master/${item.releaseId}` : `/release/${item.releaseId}`);
-                      }}
+                      to={item.isMaster ? `/master/${item.releaseId}` : `/release/${item.releaseId}`}
+                      className="group relative block cursor-pointer focus-ring"
                     >
                       <div className="aspect-square w-full rounded-lg overflow-hidden vinyl-shadow bg-surface-dark mb-3 relative">
                         {item.thumbUrl ? (
@@ -740,9 +739,9 @@ export function Collection() {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <button className="bg-primary text-white p-3 rounded-full shadow-lg">
+                          <div className="bg-primary text-white p-3 rounded-full shadow-lg">
                             <Icon name="play_arrow" />
-                          </button>
+                          </div>
                         </div>
                       </div>
                       <h3 className="font-bold text-sm truncate">{item.title}</h3>
@@ -753,7 +752,7 @@ export function Collection() {
                       <p className="text-primary/70 text-[10px] truncate">
                         {item.isMaster ? "Master release" : item.formats.join(" · ")}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
 

@@ -12,12 +12,12 @@ const CACHE_TTL_SECONDS = 3600;
 
 export type DiscogsReleaseLoadResult =
   | { ok: true; release: NormalizedRelease }
-  | { ok: false; status: 429 | 500 | 502; retryAfter?: string | null };
+  | { ok: false; status: 404 | 429 | 500 | 502; retryAfter?: string | null };
 
 async function fetchRelease(
   environment: AppEnvironment,
   path: string
-): Promise<{ ok: true; data: DiscogsReleaseApiResponse } | { ok: false; status: 429 | 500 | 502; retryAfter?: string | null }> {
+): Promise<{ ok: true; data: DiscogsReleaseApiResponse } | { ok: false; status: 404 | 429 | 500 | 502; retryAfter?: string | null }> {
   const { discogsConsumerKey, discogsConsumerSecret } = environment;
   if (!discogsConsumerKey || !discogsConsumerSecret) return { ok: false, status: 500 };
 
@@ -31,9 +31,9 @@ async function fetchRelease(
     return { ok: false, status: 502 };
   }
   if (!response.ok) {
-    return response.status === 429
-      ? { ok: false, status: 429, retryAfter: response.headers.get("Retry-After") }
-      : { ok: false, status: 502 };
+    if (response.status === 429) return { ok: false, status: 429, retryAfter: response.headers.get("Retry-After") };
+    if (response.status === 404) return { ok: false, status: 404 };
+    return { ok: false, status: 502 };
   }
 
   let data: unknown;

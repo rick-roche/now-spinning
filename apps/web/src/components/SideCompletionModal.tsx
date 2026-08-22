@@ -48,7 +48,7 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
         </Text>
 
         <Flex gap="3" justify="end" mt="6">
-          {error && <Text as="p" color="red" size="2">{error}</Text>}
+          {error && <Text as="p" role="alert" aria-live="assertive" color="red" size="2">{error}</Text>}
           <Button variant="soft" onClick={onPause} disabled={loading}>
             Keep paused
           </Button>

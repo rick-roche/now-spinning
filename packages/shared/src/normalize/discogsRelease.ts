@@ -134,17 +134,17 @@ export function mergeMissingTrackDurations(
   const tracks = release.tracks.map((track) => {
     if (track.durationSec !== null) return track;
 
-    const title = track.title.trim().toLocaleLowerCase();
-    const artist = track.artist.trim().toLocaleLowerCase();
+    const title = track.title.trim().toLowerCase();
+    const artist = track.artist.trim().toLowerCase();
     const exactPosition = master.tracks.find((masterTrack) =>
       masterTrack.position === track.position &&
-      masterTrack.title.trim().toLocaleLowerCase() === title &&
-      masterTrack.artist.trim().toLocaleLowerCase() === artist &&
+      masterTrack.title.trim().toLowerCase() === title &&
+      masterTrack.artist.trim().toLowerCase() === artist &&
       masterTrack.durationSec !== null
     );
     const sameIndex = master.tracks[track.index];
     const fallback =
-      sameIndex?.title.trim().toLocaleLowerCase() === title &&
+      sameIndex?.title.trim().toLowerCase() === title &&
       sameIndex.durationSec !== null
         ? sameIndex
         : undefined;

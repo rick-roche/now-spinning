@@ -25,12 +25,21 @@ export function getPhysicalMediaBoundary(
   if (!current || !next) return null;
 
   const mediaType: PhysicalMediaType = release.mediaType ?? derivePhysicalMediaType(release.formats);
-  // Sessions persisted before mediaType existed retain their established
-  // side-based flip behavior until they are replaced by a new snapshot.
-  if (mediaType === "unknown" && release.mediaType === undefined) {
+  // Fall back to track metadata for older or incomplete release snapshots.
+  if (mediaType === "unknown") {
     const currentSide = getSideFromTrack(current);
     const nextSide = getSideFromTrack(next);
-    return currentSide !== null && nextSide !== null && currentSide !== nextSide ? "flip" : null;
+    if (currentSide !== null && nextSide !== null && currentSide !== nextSide) return "flip";
+
+    if (
+      current.discNumber !== null &&
+      current.discNumber !== undefined &&
+      next.discNumber !== null &&
+      next.discNumber !== undefined &&
+      current.discNumber !== next.discNumber
+    ) {
+      return "change-disc";
+    }
   }
   if (mediaType === "vinyl" || mediaType === "cassette") {
     const currentSide = getSideFromTrack(current);
