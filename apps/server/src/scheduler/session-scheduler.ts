@@ -172,8 +172,6 @@ export class SessionScheduler {
         return;
       }
       if (durationMs === null || now - startedAt < durationMs) { await this.schedule(sessionId, now); return; }
-      const tokens = this.storage.loadTokens(session.userId);
-      if (!tokens.lastfm) { this.clear(sessionId); this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now }); return; }
       const trackEnd = startedAt + durationMs;
       const nextTrack = session.release.tracks[session.currentIndex + 1];
       if (schedule.notifyOnSideCompletion && nextTrack && getPhysicalMediaBoundary(session.release, track, nextTrack)) {
@@ -181,6 +179,23 @@ export class SessionScheduler {
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: current.scrobbledAt ?? now };
         const paused = pauseSession({ ...session, tracks });
         await storeSession(this.storage, paused); this.clear(sessionId); this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now }); return;
+      }
+      const tokens = this.storage.loadTokens(session.userId);
+      if (!tokens.lastfm) {
+        if (current.status !== "scrobbled") {
+          this.clear(sessionId);
+          this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now });
+          return;
+        }
+        const advancedWithoutLastFm = advanceSession(session, trackEnd);
+        await storeSession(this.storage, advancedWithoutLastFm);
+        if (advancedWithoutLastFm.state === "ended") {
+          this.clear(sessionId);
+          this.storage.deleteSchedule(sessionId);
+        } else {
+          await this.schedule(sessionId, now);
+        }
+        return;
       }
       const advanced = advanceSession(session, trackEnd);
       const tracks = [...advanced.tracks];

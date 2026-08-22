@@ -155,7 +155,7 @@ export function Release() {
             href={`https://www.discogs.com/release/${release.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-primary hover:bg-primary/10"
+            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-primary hover:bg-primary/10 focus-ring"
           >
             View on Discogs
             <Icon name="open_in_new" className="text-base" />
