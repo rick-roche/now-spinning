@@ -77,7 +77,7 @@ describe("Collection Page", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Connect Discogs")).toBeInTheDocument();
-      expect(screen.getByText(/Connect your Discogs account to access your vinyl collection/)).toBeInTheDocument();
+      expect(screen.getByText(/Connect your Discogs account to access your physical music collection/)).toBeInTheDocument();
     });
   });
 

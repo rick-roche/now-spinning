@@ -39,7 +39,7 @@ async function fetchRelease(
   let data: unknown;
   try { data = await response.json(); } catch { return { ok: false, status: 502 }; }
   if (!data || typeof data !== "object") return { ok: false, status: 502 };
-  return { ok: true, data: data as DiscogsReleaseApiResponse };
+  return { ok: true, data };
 }
 
 /** Loads one concrete release and fills its missing durations from its master. */

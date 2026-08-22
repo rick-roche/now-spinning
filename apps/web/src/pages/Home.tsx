@@ -128,7 +128,7 @@ export function Home() {
                     <h3 className="text-xl font-bold tracking-tight">Connect Discogs</h3>
                   </div>
                   <p className="text-slate-600 dark:text-primary/40 leading-relaxed text-sm">
-                    Access your vinyl collection and search the global database for accurate
+                    Access your physical music collection and search the global database for accurate
                     metadata and cover art.
                   </p>
                 </div>

@@ -25,7 +25,7 @@ export function derivePhysicalMediaType(formats: readonly string[] | string | un
   const values = (Array.isArray(formats) ? formats : [formats ?? ""]).join(" ").toLowerCase();
   if (/(\bcd\b|compact disc)/.test(values)) return "cd";
   if (/(cassette|\btape\b)/.test(values)) return "cassette";
-  if (/(vinyl|\blp\b|\b7\"|\b10\"|\b12\")/.test(values)) return "vinyl";
+  if (/(vinyl|\blp\b|\b7"|\b10"|\b12")/.test(values)) return "vinyl";
   return "unknown";
 }
 
@@ -79,7 +79,7 @@ export function deriveSide(position?: string | null): NormalizedTrack["side"] {
 }
 
 export function deriveDiscNumber(position: string): number | null {
-  const match = position.trim().match(/^(?:CD|DISC\s*)?(\d+)\s*[-.]\s*\d+/i);
+  const match = position.trim().match(/^(?:CD\s*|DISC\s*)?(\d+)\s*[-.]\s*\d+/i);
   return match?.[1] ? Number.parseInt(match[1], 10) : null;
 }
 

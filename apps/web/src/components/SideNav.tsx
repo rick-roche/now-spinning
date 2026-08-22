@@ -16,7 +16,7 @@ export function SideNav() {
           </div>
           <div>
             <p className="font-bold text-sm tracking-tight leading-tight">Now Spinning</p>
-            <p className="text-[10px] text-text-muted uppercase tracking-widest">Vinyl Scrobbler</p>
+            <p className="text-[10px] text-text-muted uppercase tracking-widest">Play. Track. Collect.</p>
           </div>
         </div>
       </div>
@@ -45,7 +45,7 @@ export function SideNav() {
       {/* Footer */}
       <div className="px-5 py-4 border-t border-border-dark">
         <p className="text-[10px] text-text-muted leading-relaxed">
-          Playing vinyl, scrobbling life.
+          Physical music. Digital memory.
         </p>
       </div>
     </aside>

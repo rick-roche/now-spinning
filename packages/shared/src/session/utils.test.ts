@@ -48,8 +48,8 @@ describe("getSideFromTrack", () => {
 });
 
 describe("getPhysicalMediaBoundary", () => {
-  function release(mediaType: NormalizedRelease["mediaType"]): Pick<NormalizedRelease, "mediaType"> {
-    return { mediaType };
+  function release(mediaType: NormalizedRelease["mediaType"]): Partial<Pick<NormalizedRelease, "mediaType" | "formats">> {
+    return mediaType === undefined ? {} : { mediaType };
   }
 
   it("requires a flip between vinyl or cassette sides", () => {

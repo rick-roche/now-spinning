@@ -18,7 +18,7 @@ export type PhysicalMediaBoundary = "flip" | "change-disc";
 
 /** Returns the physical action needed before moving to the next track. */
 export function getPhysicalMediaBoundary(
-  release: Pick<NormalizedRelease, "mediaType"> & Partial<Pick<NormalizedRelease, "formats">>,
+  release: Partial<Pick<NormalizedRelease, "mediaType" | "formats">>,
   current: NormalizedTrack | null | undefined,
   next: NormalizedTrack | null | undefined
 ): PhysicalMediaBoundary | null {

@@ -1,4 +1,4 @@
-## Now Spinning Vinyl Scrobbler
+## Now Spinning: Play. Track. Collect.
 
 ### 1) Problem statement
 

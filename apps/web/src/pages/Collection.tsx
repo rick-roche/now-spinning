@@ -323,7 +323,7 @@ export function Collection() {
     setPage(1);
     setPages(1);
     setError(null);
-  }, [sortBy, sortDir, syncSearchParams]);
+  }, []);
 
   const submitSearch = useCallback(
     (overrides?: { sortBy?: SortField; sortDir?: "asc" | "desc" }) => {
@@ -485,7 +485,7 @@ export function Collection() {
           </div>
           <h2 className="text-2xl font-bold mb-2">Connect Discogs</h2>
           <p className="text-slate-500 dark:text-primary/60 mb-6">
-            Connect your Discogs account to access your vinyl collection.
+            Connect your Discogs account to access your physical music collection.
           </p>
           <button
             onClick={() => {

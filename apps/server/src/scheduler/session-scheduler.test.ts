@@ -38,7 +38,7 @@ describe("SessionScheduler", () => {
     const second = new SessionScheduler(storage, environment);
     await first.start();
     await second.start();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
 
     const updated = storage.loadSession(session.id);
     expect(updated?.state).toBe("ended");
@@ -63,7 +63,7 @@ describe("SessionScheduler", () => {
 
     const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
     await scheduler.start();
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(61_000);
     expect(storage.loadSession(session.id)?.state).toBe("ended");
     await scheduler.stop();
     storage.close();

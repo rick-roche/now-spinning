@@ -1,3 +1,5 @@
+import type { PhysicalMediaType } from "../domain/release.js";
+
 /**
  * Discogs collection contracts shared between the server and SPA.
  */
@@ -13,7 +15,7 @@ export interface DiscogsCollectionItem {
   year: number | null;
   thumbUrl: string | null;
   formats: string[];
-  mediaType?: import("../domain/release.js").PhysicalMediaType;
+  mediaType?: PhysicalMediaType;
   dateAdded?: string | null;
 }
 
@@ -33,7 +35,7 @@ export interface DiscogsSearchItem {
   year: number | null;
   thumbUrl: string | null;
   formats: string[];
-  mediaType?: import("../domain/release.js").PhysicalMediaType;
+  mediaType?: PhysicalMediaType;
   /** True when the result is a Discogs master release, not a playable pressing. */
   isMaster?: boolean;
 }
@@ -44,7 +46,7 @@ export interface DiscogsMasterVersion {
   year: number | null;
   thumbUrl: string | null;
   formats: string[];
-  mediaType: import("../domain/release.js").PhysicalMediaType;
+  mediaType: PhysicalMediaType;
 }
 
 export interface DiscogsMasterVersionsResponse {

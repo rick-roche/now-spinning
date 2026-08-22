@@ -72,7 +72,7 @@ describe("Home Page", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Connect Discogs" })).toBeInTheDocument();
       expect(
-        screen.getByText(/Access your vinyl collection and search the global database/)
+        screen.getByText(/Access your physical music collection and search the global database/)
       ).toBeInTheDocument();
     });
   });
