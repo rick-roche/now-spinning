@@ -91,9 +91,11 @@ describe("SessionScheduler", () => {
     paths.push(path);
     const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
     const created = createSession({ sessionId: "session-no-lastfm", userId: "user-no-lastfm", release, startedAt: Date.now() - 240_000 });
+    const firstTrack = created.tracks[0];
+    if (!firstTrack) throw new Error("Expected a session track");
     const session = {
       ...created,
-      tracks: [{ ...created.tracks[0], status: "scrobbled" as const, scrobbledAt: Date.now() - 60_000 }],
+      tracks: [{ ...firstTrack, status: "scrobbled" as const, scrobbledAt: Date.now() - 60_000 }],
     };
     storage.saveSession(session);
     storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
