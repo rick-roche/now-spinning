@@ -23,12 +23,12 @@ export function Master() {
     selectedMedia ? version.mediaType === selectedMedia : false
   ) ?? [], [data, selectedMedia]);
 
-  if (!masterId) return <ErrorMessage fullPage message="Master id must be numeric." onRetry={() => void navigate("/search")} />;
+  if (!masterId) return <ErrorMessage fullPage message="Master ID must be a positive number." onRetry={() => void navigate("/search")} />;
   if (loading) return <div className="p-6 text-center" role="status">Loading pressings...</div>;
   if (error || !data) return <ErrorMessage fullPage message={error ?? "Master release not found"} onRetry={() => void refetch()} />;
 
   return (
-    <main className="mx-auto max-w-2xl p-6 pb-28">
+    <div className="mx-auto max-w-2xl p-6 pb-28">
       <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">Master Release</p>
       <h1 className="mt-2 text-2xl font-bold">Choose a format</h1>
       <p className="mt-2 text-sm text-text-muted">Select the physical medium you are listening to, then choose its pressing.</p>
@@ -45,13 +45,13 @@ export function Master() {
       {selectedMedia && <div className="mt-8 space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider">Choose a pressing</h2>
         {versions.map((version) => (
-          <button key={version.releaseId} onClick={() => void navigate(`/release/${version.releaseId}`)} className="flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left hover:border-primary">
+          <button key={version.releaseId} type="button" onClick={() => void navigate(`/release/${version.releaseId}`)} className="flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left hover:border-primary focus-ring">
             <Icon name="album" className="text-primary" />
             <span className="min-w-0 flex-1"><span className="block truncate font-bold">{version.title}</span><span className="block truncate text-xs text-text-muted">{version.formats.join(" · ")}{version.year ? ` · ${version.year}` : ""}</span></span>
             <Icon name="arrow_forward" />
           </button>
         ))}
       </div>}
-    </main>
+    </div>
   );
 }
