@@ -16,7 +16,7 @@ import { useAutoAdvance } from "../hooks/useAutoAdvance";
 import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
 import { useVisibilityResume } from "../hooks/useVisibilityResume";
-import { getPhysicalMediaBoundary } from "@repo/shared";
+import { getPhysicalMediaBoundary, getSideFromTrack } from "@repo/shared";
 import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -161,8 +161,8 @@ export function SessionPage() {
           if (boundary) {
             setSideCompletionInfo({
               boundary,
-              currentUnit: boundary === "flip" ? currentReleaseTrack.side ?? "" : String(currentReleaseTrack.discNumber),
-              nextUnit: boundary === "flip" ? nextReleaseTrack.side ?? "" : String(nextReleaseTrack.discNumber),
+              currentUnit: boundary === "flip" ? getSideFromTrack(currentReleaseTrack) ?? "" : String(currentReleaseTrack.discNumber),
+              nextUnit: boundary === "flip" ? getSideFromTrack(nextReleaseTrack) ?? "" : String(nextReleaseTrack.discNumber),
               currentTitle: currentReleaseTrack.title || "Unknown",
               nextTitle: nextReleaseTrack.title || "Unknown",
             });
@@ -189,8 +189,8 @@ export function SessionPage() {
 
     return {
       boundary,
-      currentUnit: boundary === "flip" ? current.side ?? "" : String(current.discNumber),
-      nextUnit: boundary === "flip" ? next.side ?? "" : String(next.discNumber),
+      currentUnit: boundary === "flip" ? getSideFromTrack(current) ?? "" : String(current.discNumber),
+      nextUnit: boundary === "flip" ? getSideFromTrack(next) ?? "" : String(next.discNumber),
       currentTitle: current.title || "Unknown",
       nextTitle: next.title || "Unknown",
     };
@@ -218,9 +218,11 @@ export function SessionPage() {
   );
 
   const handleSideCompletionContinue = useCallback(async () => {
-    setShowSideCompletionModal(false);
-    setSideCompletionInfo(null);
     await sessionActions.next();
+    if (!sessionActions.error) {
+      setShowSideCompletionModal(false);
+      setSideCompletionInfo(null);
+    }
   }, [sessionActions]);
 
   const handleSideCompletionPause = useCallback(() => {
@@ -430,6 +432,8 @@ export function SessionPage() {
           isOpen={showSideCompletionModal}
           onContinue={handleSideCompletionContinue}
           onPause={handleSideCompletionPause}
+          loading={sessionActions.isLoading}
+          error={sessionActions.error}
         />
       )}
     </>

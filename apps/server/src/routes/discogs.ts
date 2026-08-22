@@ -10,6 +10,7 @@ import {
   DiscogsCollectionQuerySchema,
   DiscogsReleaseParamSchema,
   DiscogsSearchQuerySchema,
+  derivePhysicalMediaType,
   stripDiscogsDisambiguation,
 } from "@repo/shared";
 import type {
@@ -81,6 +82,7 @@ interface DiscogsCollectionApiResponse {
 
 interface DiscogsCollectionRelease {
   id?: number;
+  instance_id?: number;
   date_added?: string;
   basic_information?: {
     id?: number;
@@ -115,7 +117,8 @@ interface DiscogsSearchResult {
 }
 
 interface DiscogsMasterVersionsApiResponse {
-  versions?: Array<{ id?: number; title?: string; released?: string; thumb?: string; format?: string[] }>;
+  pagination?: { page?: number; pages?: number };
+  versions?: Array<{ id?: number; title?: string; released?: string; thumb?: string; format?: string; major_formats?: string[] }>;
 }
 
 interface DiscogsCollectionSnapshot {
@@ -162,8 +165,8 @@ function createOAuthHeader(params: {
 
 function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsCollectionItem | null {
   const basic = release.basic_information ?? {};
-  const instanceId = release.id;
-  const releaseId = basic.id;
+  const instanceId = release.instance_id;
+  const releaseId = basic.id ?? release.id;
   if (!instanceId || !releaseId) {
     return null;
   }
@@ -186,6 +189,7 @@ function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsColl
     year,
     thumbUrl: basic.thumb ?? basic.cover_image ?? null,
     formats,
+    mediaType: derivePhysicalMediaType(formats),
     dateAdded: release.date_added ?? null,
   };
 }
@@ -208,13 +212,14 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
   }
 
   return {
-    instanceId: String(result.id),
+    instanceId: `${result.type === "master" ? "master" : "release"}:${result.id}`,
     releaseId: String(result.id),
     title,
     artist,
     year: Number.isFinite(result.year) ? (result.year as number) : null,
     thumbUrl: result.thumb ?? result.cover_image ?? null,
     formats: result.format ?? [],
+    mediaType: derivePhysicalMediaType(result.format),
     isMaster: result.type === "master",
   };
 }
@@ -290,7 +295,12 @@ async function fetchDiscogsJson<T>(
   const urlPath = (() => { try { return new URL(url).pathname; } catch { return url; } })();
 
   for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
-    const response = await fetch(url, { method: "GET", headers });
+    let response: Response;
+    try {
+      response = await fetch(url, { method: "GET", headers, signal: AbortSignal.timeout(15_000) });
+    } catch {
+      return { ok: false, status: 502 };
+    }
 
     console.log(
       `[Discogs] ${urlPath} → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")} auth=${authHeader ? "yes" : "no"}${attempt > 0 ? ` attempt=${attempt + 1}` : ""}`
@@ -300,8 +310,13 @@ async function fetchDiscogsJson<T>(
       if (!response.ok) {
         return { ok: false, status: response.status };
       }
-      const data = (await response.json()) as T;
-      return { ok: true, data };
+      try {
+        const data: unknown = await response.json();
+        if (!data || typeof data !== "object") return { ok: false, status: 502 };
+        return { ok: true, data: data as T };
+      } catch {
+        return { ok: false, status: 502 };
+      }
     }
 
     // 429: rate limited — retry with backoff unless we've exhausted attempts
@@ -665,27 +680,40 @@ router.get("/master/:id/versions", async (c: HonoContext) => {
   const cached = storage.getCache<DiscogsMasterVersionsResponse>(cacheKey);
   if (cached) return c.json(cached);
 
-  const response = await fetchDiscogsJson<DiscogsMasterVersionsApiResponse>(
-    `${DISCOGS_API_BASE}/masters/${masterId}/versions?per_page=100`,
-    createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret)
-  );
-  if (!response.ok) {
-    if (response.status === 429) {
-      if (response.retryAfter) c.header("Retry-After", response.retryAfter);
-      return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
+  const authHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
+  const upstreamVersions: NonNullable<DiscogsMasterVersionsApiResponse["versions"]> = [];
+  let page = 1;
+  let pages = 1;
+  while (page <= pages) {
+    const response = await fetchDiscogsJson<DiscogsMasterVersionsApiResponse>(
+      `${DISCOGS_API_BASE}/masters/${masterId}/versions?per_page=100&page=${page}`,
+      authHeader
+    );
+    if (!response.ok) {
+      if (response.status === 429) {
+        if (response.retryAfter) c.header("Retry-After", response.retryAfter);
+        return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
+      }
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs master lookup failed"), 502);
     }
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs master lookup failed"), 502);
+    upstreamVersions.push(...(response.data.versions ?? []));
+    pages = Math.max(1, response.data.pagination?.pages ?? 1);
+    page += 1;
   }
-
-  const versions: DiscogsMasterVersion[] = (response.data.versions ?? []).flatMap((version) => {
+  const seenReleaseIds = new Set<string>();
+  const versions: DiscogsMasterVersion[] = upstreamVersions.flatMap((version) => {
     if (!version.id) return [];
+    if (seenReleaseIds.has(String(version.id))) return [];
+    seenReleaseIds.add(String(version.id));
     const year = version.released ? Number.parseInt(version.released, 10) : NaN;
+    const formats = [...(version.major_formats ?? []), ...(version.format ? version.format.split(",").map((value) => value.trim()).filter(Boolean) : [])];
     return [{
       releaseId: String(version.id),
       title: version.title ?? "Untitled",
       year: Number.isFinite(year) ? year : null,
       thumbUrl: version.thumb ?? null,
-      formats: version.format ?? [],
+      formats,
+      mediaType: derivePhysicalMediaType(version.major_formats ?? formats),
     }];
   });
   const payload: DiscogsMasterVersionsResponse = { masterId, versions };

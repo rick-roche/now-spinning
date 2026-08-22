@@ -76,6 +76,9 @@ router.post(
       const message = releaseResponse.status === 500 ? "Discogs credentials not configured" : "Discogs release lookup failed";
       return c.json(createAPIError(code, message), releaseResponse.status);
     }
+    if (releaseResponse.release.tracks.length === 0) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "This release has no playable tracks"), 400);
+    }
 
     const now = Date.now();
     const session = createSession({
@@ -422,8 +425,6 @@ router.post(
       );
     }
 
-    let thresholdPercent = 50;
-    let notifyOnSideCompletion = true;
     try {
       const body: unknown = await c.req.json();
       const bodyResult = SessionSyncRequestSchema.safeParse(body);
@@ -433,8 +434,6 @@ router.post(
           400
         );
       }
-      thresholdPercent = bodyResult.data.thresholdPercent;
-      notifyOnSideCompletion = bodyResult.data.notifyOnSideCompletion;
     } catch {
       if (c.req.header("Content-Length") && c.req.header("Content-Length") !== "0") {
         return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
@@ -450,7 +449,13 @@ router.post(
 
       const tokens = await loadStoredTokens(storage, userId);
       const now = Date.now();
-      const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent, notifyOnSideCompletion);
+      const schedule = storage.loadSchedule(sessionId);
+      const { session: synced, scrobbleActions } = syncSession(
+        session,
+        now,
+        schedule?.thresholdPercent ?? 50,
+        schedule?.notifyOnSideCompletion ?? true
+      );
 
       for (const action of scrobbleActions) {
         const scrobbleResult = await scrobbleTrack(
@@ -478,6 +483,7 @@ router.post(
       }
 
       await storeSession(storage, synced);
+      if (synced.state === "running") await c.env.scheduler.resume(sessionId, now, true);
 
       const response: SessionSyncResponse = {
         session: synced,

@@ -87,7 +87,7 @@ describe("syncSession", () => {
       elapsedMs: 91_000,
       startedAt: 1000,
     });
-    expect(result.session.currentIndex).toBe(1);
+    expect(result.session.currentIndex).toBe(0);
     expect(result.session.tracks[0]?.status).toBe("scrobbled");
     expect(result.session.tracks[1]?.status).toBe("pending");
     expect(result.session.state).toBe("running");
@@ -150,7 +150,7 @@ describe("syncSession", () => {
         i === 0 ? { ...t, status: "scrobbled" as const, scrobbledAt: 50_000 } : t
       ),
     };
-    const result = syncSession(withScrobbled, 500_000, 50);
+    const result = syncSession(withScrobbled, 100_000, 50);
 
     expect(result.scrobbleActions).toHaveLength(0);
   });
@@ -174,7 +174,7 @@ describe("syncSession", () => {
     expect(result.scrobbleActions[0]?.trackIndex).toBe(0);
   });
 
-  it("unknown duration uses syncAt for next track startedAt", () => {
+  it("does not advance unknown-duration tracks during sync", () => {
     const unknownDurationRelease: NormalizedRelease = {
       ...release,
       tracks: release.tracks.map((t) => ({ ...t, durationSec: null })),
@@ -189,11 +189,9 @@ describe("syncSession", () => {
     const syncAt = 100_000;
     const result = syncSession(session, syncAt, 50);
 
-    expect(result.scrobbleActions.length).toBeGreaterThanOrEqual(1);
-    // With unknown duration, next track startedAt falls back to syncAt
-    if (result.session.tracks[1]) {
-      expect(result.session.tracks[1].startedAt).toBe(syncAt);
-    }
+    expect(result.scrobbleActions).toHaveLength(1);
+    expect(result.session.currentIndex).toBe(0);
+    expect(result.session.tracks[1]?.startedAt).toBeNull();
   });
 
   it("handles track with null startedAt (not yet started)", () => {
@@ -285,6 +283,15 @@ describe("syncSession", () => {
 });
 
 describe("syncSession — pauseAtSideChange", () => {
+  it("scrobbles at the threshold without completing the track", () => {
+    const session = makeSession({ startedAt: 1000 });
+    const result = syncSession(session, 100_000, 50, true);
+    expect(result.scrobbleActions).toHaveLength(1);
+    expect(result.session.state).toBe("running");
+    expect(result.session.currentIndex).toBe(0);
+    expect(result.session.tracks[0]?.status).toBe("scrobbled");
+  });
+
   it("pauses at side boundary instead of advancing when pauseAtSideChange is true", () => {
     const session = makeSession({ startedAt: 1000 });
     // Track 0 (A1, 180s): eligible after 91_000ms. Track 1 (A2) same side — not a boundary.

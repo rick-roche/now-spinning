@@ -253,6 +253,7 @@ export function Collection() {
         if (requestId === searchRequestIdRef.current) {
           setSearchError(null);
           setHasSearched(true);
+          if (!append) setSearchItems([]);
           if (append) {
             setSearchingMore(true);
           } else {
@@ -315,6 +316,14 @@ export function Collection() {
     },
     [syncSearchParams]
   );
+
+  const clearCollectionSearch = useCallback(() => {
+    setQuery("");
+    setSubmittedCollectionQuery("");
+    setPage(1);
+    setPages(1);
+    setError(null);
+  }, [sortBy, sortDir, syncSearchParams]);
 
   const submitSearch = useCallback(
     (overrides?: { sortBy?: SortField; sortDir?: "asc" | "desc" }) => {
@@ -436,7 +445,7 @@ export function Collection() {
     setSearchPages(1);
     setSearchError(null);
     setHasSearched(false);
-    syncSearchParams("collection", query, sortBy, sortDir);
+    syncSearchParams("collection", "", sortBy, sortDir);
   };
 
   const switchToSearch = () => {
@@ -448,7 +457,6 @@ export function Collection() {
     setSearchPages(1);
     setSearchError(null);
     setHasSearched(false);
-    syncSearchParams("search", query, sortBy, sortDir);
   };
 
   const canLoadMoreCollection = page < pages;
@@ -673,7 +681,7 @@ export function Collection() {
               <p className="text-sm text-slate-500">No matches found.</p>
               {query.trim() && (
                 <button
-                  onClick={() => setQuery("")}
+                  onClick={clearCollectionSearch}
                   className="mt-4 text-sm font-semibold text-primary hover:underline focus-ring"
                 >
                   Clear search
@@ -708,7 +716,7 @@ export function Collection() {
               </div>
             )}
 
-            {!searching && searchItems.length > 0 && (
+            {!searching && !searchError && searchItems.length > 0 && (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                   {searchItems.map((item) => (

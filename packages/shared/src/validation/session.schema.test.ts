@@ -77,34 +77,15 @@ describe("SessionStartRequestSchema", () => {
 });
 
 describe("SessionSyncRequestSchema", () => {
-  it("accepts empty object and applies defaults", () => {
+  it("accepts an empty object", () => {
     const result = SessionSyncRequestSchema.safeParse({});
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.thresholdPercent).toBe(50);
-      expect(result.data.notifyOnSideCompletion).toBe(true);
-    }
   });
 
-  it("accepts explicit thresholdPercent", () => {
-    const result = SessionSyncRequestSchema.safeParse({ thresholdPercent: 75 });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.thresholdPercent).toBe(75);
-    }
-  });
-
-  it("accepts explicit notifyOnSideCompletion false", () => {
-    const result = SessionSyncRequestSchema.safeParse({ notifyOnSideCompletion: false });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.notifyOnSideCompletion).toBe(false);
-    }
-  });
-
-  it("rejects thresholdPercent out of range", () => {
+  it("rejects client policy overrides", () => {
+    expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: 75 }).success).toBe(false);
+    expect(SessionSyncRequestSchema.safeParse({ notifyOnSideCompletion: false }).success).toBe(false);
     expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: -1 }).success).toBe(false);
-    expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: 101 }).success).toBe(false);
   });
 });
 

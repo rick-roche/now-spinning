@@ -21,19 +21,23 @@ async function fetchRelease(
   const { discogsConsumerKey, discogsConsumerSecret } = environment;
   if (!discogsConsumerKey || !discogsConsumerSecret) return { ok: false, status: 500 };
 
-  const response = await fetch(`${DISCOGS_API_BASE}${path}`, {
-    headers: {
-      "User-Agent": DISCOGS_USER_AGENT,
-      Authorization: createAppAuthHeader(discogsConsumerKey, discogsConsumerSecret),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${DISCOGS_API_BASE}${path}`, {
+      headers: { "User-Agent": DISCOGS_USER_AGENT, Authorization: createAppAuthHeader(discogsConsumerKey, discogsConsumerSecret) },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return { ok: false, status: 502 };
+  }
   if (!response.ok) {
     return response.status === 429
       ? { ok: false, status: 429, retryAfter: response.headers.get("Retry-After") }
       : { ok: false, status: 502 };
   }
 
-  const data: unknown = await response.json();
+  let data: unknown;
+  try { data = await response.json(); } catch { return { ok: false, status: 502 }; }
   if (!data || typeof data !== "object") return { ok: false, status: 502 };
   return { ok: true, data: data as DiscogsReleaseApiResponse };
 }
@@ -57,11 +61,12 @@ export async function loadNormalizedDiscogsRelease(
     let master = storage.getCache<NormalizedRelease>(masterCacheKey);
     if (!master) {
       const masterResponse = await fetchRelease(environment, `/masters/${encodeURIComponent(release.masterId)}`);
-      if (!masterResponse.ok) return masterResponse;
-      master = normalizeDiscogsRelease(masterResponse.data);
-      storage.setCache(masterCacheKey, master, CACHE_TTL_SECONDS);
+      if (masterResponse.ok) {
+        master = normalizeDiscogsRelease(masterResponse.data);
+        storage.setCache(masterCacheKey, master, CACHE_TTL_SECONDS);
+      }
     }
-    release = mergeMissingTrackDurations(release, master);
+    if (master) release = mergeMissingTrackDurations(release, master);
   }
 
   storage.setCache(cacheKey, release, CACHE_TTL_SECONDS);

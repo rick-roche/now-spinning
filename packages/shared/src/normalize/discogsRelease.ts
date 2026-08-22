@@ -21,11 +21,11 @@ export function formatDiscogsFormats(
   });
 }
 
-export function derivePhysicalMediaType(formats: string[]): PhysicalMediaType {
-  const values = formats.join(" ").toLowerCase();
-  if (/(vinyl|\blp\b|\bep\b|\b7\"|\b10\"|\b12\")/.test(values)) return "vinyl";
-  if (/(cassette|\btape\b)/.test(values)) return "cassette";
+export function derivePhysicalMediaType(formats: readonly string[] | string | undefined): PhysicalMediaType {
+  const values = (Array.isArray(formats) ? formats : [formats ?? ""]).join(" ").toLowerCase();
   if (/(\bcd\b|compact disc)/.test(values)) return "cd";
+  if (/(cassette|\btape\b)/.test(values)) return "cassette";
+  if (/(vinyl|\blp\b|\b7\"|\b10\"|\b12\")/.test(values)) return "vinyl";
   return "unknown";
 }
 
@@ -47,16 +47,14 @@ export function parseDiscogsDuration(duration?: string | null): number | null {
     return null;
   }
 
-  const parts = trimmed.split(":").map((part) => Number.parseInt(part, 10));
-  if (parts.some((part) => Number.isNaN(part))) {
-    return null;
-  }
+  if (!/^\d+(?::\d{1,2}){0,2}$/.test(trimmed)) return null;
+  const parts = trimmed.split(":").map(Number);
 
-  if (parts.length === 3 && parts[0] !== undefined && parts[1] !== undefined && parts[2] !== undefined) {
+  if (parts.length === 3 && parts[0] !== undefined && parts[1] !== undefined && parts[2] !== undefined && parts[1] < 60 && parts[2] < 60) {
     return parts[0] * 3600 + parts[1] * 60 + parts[2];
   }
 
-  if (parts.length === 2 && parts[0] !== undefined && parts[1] !== undefined) {
+  if (parts.length === 2 && parts[0] !== undefined && parts[1] !== undefined && parts[1] < 60) {
     return parts[0] * 60 + parts[1];
   }
 
@@ -67,21 +65,21 @@ export function parseDiscogsDuration(duration?: string | null): number | null {
   return null;
 }
 
-function deriveSide(position?: string | null): NormalizedTrack["side"] {
+export function deriveSide(position?: string | null): NormalizedTrack["side"] {
   if (!position) {
     return null;
   }
 
-  const match = position.trim().toUpperCase().match(/^[ABCD]/);
+  const match = position.trim().toUpperCase().match(/^(?:SIDE\s*)?([A-Z])\s*\d/);
   if (!match) {
     return null;
   }
 
-  return match[0] as NormalizedTrack["side"];
+  return match[1] ?? null;
 }
 
-function deriveDiscNumber(position: string): number | null {
-  const match = position.match(/^(\d+)\s*[-.]\s*\d+/);
+export function deriveDiscNumber(position: string): number | null {
+  const match = position.trim().match(/^(?:CD|DISC\s*)?(\d+)\s*[-.]\s*\d+/i);
   return match?.[1] ? Number.parseInt(match[1], 10) : null;
 }
 
@@ -127,7 +125,7 @@ export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): Normal
 
 /**
  * Fills only missing concrete-release durations from its master. Exact track
- * positions win; a same-index, same-title match is a conservative fallback.
+ * title plus position wins; a same-index title match is a conservative fallback.
  */
 export function mergeMissingTrackDurations(
   release: NormalizedRelease,
@@ -136,12 +134,17 @@ export function mergeMissingTrackDurations(
   const tracks = release.tracks.map((track) => {
     if (track.durationSec !== null) return track;
 
-    const exactPosition = master.tracks.find(
-      (masterTrack) => masterTrack.position === track.position && masterTrack.durationSec !== null
+    const title = track.title.trim().toLocaleLowerCase();
+    const artist = track.artist.trim().toLocaleLowerCase();
+    const exactPosition = master.tracks.find((masterTrack) =>
+      masterTrack.position === track.position &&
+      masterTrack.title.trim().toLocaleLowerCase() === title &&
+      masterTrack.artist.trim().toLocaleLowerCase() === artist &&
+      masterTrack.durationSec !== null
     );
     const sameIndex = master.tracks[track.index];
     const fallback =
-      sameIndex?.title.trim().toLowerCase() === track.title.trim().toLowerCase() &&
+      sameIndex?.title.trim().toLocaleLowerCase() === title &&
       sameIndex.durationSec !== null
         ? sameIndex
         : undefined;

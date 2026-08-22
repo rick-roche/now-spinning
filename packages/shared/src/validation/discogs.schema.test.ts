@@ -126,6 +126,12 @@ describe("DiscogsReleaseIdSchema", () => {
     const result = DiscogsReleaseIdSchema.safeParse("   ");
     expect(result.success).toBe(false);
   });
+
+  it("rejects non-positive and non-numeric IDs", () => {
+    for (const value of ["0", "000", "-1", "1.5", "abc"]) {
+      expect(DiscogsReleaseIdSchema.safeParse(value).success).toBe(false);
+    }
+  });
 });
 
 describe("DiscogsReleaseParamSchema", () => {

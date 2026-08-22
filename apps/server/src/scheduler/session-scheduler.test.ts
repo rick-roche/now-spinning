@@ -28,7 +28,7 @@ describe("SessionScheduler", () => {
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
     const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
-    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 120_000 });
+    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 240_000 });
     storage.saveSession(session);
     storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
     storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });

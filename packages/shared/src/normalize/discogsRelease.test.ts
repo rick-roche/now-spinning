@@ -3,6 +3,8 @@ import {
   mergeMissingTrackDurations,
   normalizeDiscogsRelease,
   parseDiscogsDuration,
+  deriveDiscNumber,
+  derivePhysicalMediaType,
 } from "./discogsRelease.js";
 
 describe("parseDiscogsDuration", () => {
@@ -32,6 +34,12 @@ describe("parseDiscogsDuration", () => {
   it("returns null for partially invalid durations", () => {
     expect(parseDiscogsDuration("3:ab")).toBeNull();
     expect(parseDiscogsDuration("xx:30")).toBeNull();
+  });
+
+  it("rejects malformed duration components", () => {
+    expect(parseDiscogsDuration("3:99")).toBeNull();
+    expect(parseDiscogsDuration("3:30x")).toBeNull();
+    expect(parseDiscogsDuration("-1:30")).toBeNull();
   });
 });
 
@@ -312,5 +320,23 @@ describe("normalizeDiscogsRelease", () => {
       240,
       null,
     ]);
+  });
+
+  it("never fills a timing from a different title sharing the same position", () => {
+    const release = normalizeDiscogsRelease({ id: 1, tracklist: [{ position: "A1", title: "Single Edit" }] });
+    const master = normalizeDiscogsRelease({ id: 2, tracklist: [{ position: "A1", title: "Album Version", duration: "5:00" }] });
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
+  });
+
+  it("identifies explicit carriers without treating EP as vinyl", () => {
+    expect(derivePhysicalMediaType(["CD", "EP"])).toBe("cd");
+    expect(derivePhysicalMediaType(["Cassette", "EP"])).toBe("cassette");
+    expect(derivePhysicalMediaType(["Vinyl", "EP"])).toBe("vinyl");
+  });
+
+  it("parses common multi-CD positions", () => {
+    expect(deriveDiscNumber("1-01")).toBe(1);
+    expect(deriveDiscNumber("CD 2-01")).toBe(2);
+    expect(deriveDiscNumber("Disc 3.01")).toBe(3);
   });
 });

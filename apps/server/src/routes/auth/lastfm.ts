@@ -28,8 +28,8 @@ router.get("/start", async (c: HonoContext) => {
   setSessionCookie(c, sessionId);
 
   const apiKey = c.env.lastfmApiKey;
-  if (!apiKey) {
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm API key not configured"), 500);
+  if (!apiKey || !c.env.lastfmApiSecret) {
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Last.fm credentials not configured"), 500);
   }
 
   const callbackUrl = c.env.lastfmCallbackUrl;

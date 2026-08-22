@@ -39,7 +39,7 @@ export type DiscogsSearchQuery = z.infer<typeof DiscogsSearchQuerySchema>;
  * Release ID parameter validation.
  * Must be a non-empty string (release ID from Discogs).
  */
-export const DiscogsReleaseIdSchema = z.string().trim().regex(/^\d+$/, "Release ID must be numeric");
+export const DiscogsReleaseIdSchema = z.string().trim().regex(/^[1-9]\d*$/, "Release ID must be a positive number");
 
 export type DiscogsReleaseId = z.infer<typeof DiscogsReleaseIdSchema>;
 

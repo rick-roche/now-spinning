@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useApiMutation } from "./useApiMutation";
 import type { Session, SessionActionResponse } from "@repo/shared";
 
@@ -15,6 +15,7 @@ export function useSessionActions(
   onSessionUpdate: (session: Session | null) => void
 ) {
   const [localError, setLocalError] = useState<string | null>(null);
+  const actionInFlight = useRef(false);
   const sessionId = session?.id ?? "";
   const { mutate, loading, error, reset } = useApiMutation<SessionActionResponse, {
     action: "pause" | "resume" | "next" | "end";
@@ -27,7 +28,8 @@ export function useSessionActions(
 
   const executeAction = useCallback(
     async (action: "pause" | "resume" | "next" | "end") => {
-      if (!sessionId || !session) return;
+      if (!sessionId || !session || actionInFlight.current) return;
+      actionInFlight.current = true;
 
       setLocalError(null);
       const previousSession = session;
@@ -68,19 +70,17 @@ export function useSessionActions(
         onSessionUpdate(optimisticSession);
       }
 
-      const raw = await mutate({ action });
-      if (!raw) {
+      try {
+        const raw = await mutate({ action });
+        if (!raw) { onSessionUpdate(previousSession); return; }
+        if (!isSessionActionResponse(raw)) { setLocalError("Invalid session response"); onSessionUpdate(previousSession); return; }
+        onSessionUpdate(raw.session);
+      } catch (caught) {
         onSessionUpdate(previousSession);
-        return;
+        setLocalError(caught instanceof Error ? caught.message : "Session action failed");
+      } finally {
+        actionInFlight.current = false;
       }
-
-      if (!isSessionActionResponse(raw)) {
-        setLocalError("Invalid session response");
-        onSessionUpdate(previousSession);
-        return;
-      }
-
-      onSessionUpdate(raw.session);
     },
     [mutate, onSessionUpdate, session, sessionId]
   );

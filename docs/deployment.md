@@ -56,9 +56,13 @@ NODE_ENV=production
 PORT=3000
 DATABASE_PATH=/tmp/now-spinning.sqlite
 DEV_MODE=true
+PUBLIC_APP_ORIGIN=https://{{pr_id}}.preview.now-spinning.rickroche.com
+LASTFM_CALLBACK_URL=https://{{pr_id}}.preview.now-spinning.rickroche.com/api/auth/lastfm/callback
+DISCOGS_CALLBACK_URL=https://{{pr_id}}.preview.now-spinning.rickroche.com/api/auth/discogs/callback
+TOKEN_ENCRYPTION_KEY=<isolated-base64-32-byte-key>
 ```
 
-Set `PUBLIC_APP_ORIGIN` and callback URLs to the assigned preview hostname only when separate preview credentials are intentionally configured.
+Only configure provider credentials when using isolated preview OAuth applications.
 
 ## DNS
 

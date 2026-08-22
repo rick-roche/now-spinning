@@ -21,9 +21,7 @@ export const SessionStartRequestSchema = z.object({
  * Sent by the client when resuming from background to catch up on missed scrobbles.
  */
 export const SessionSyncRequestSchema = z.object({
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
-  notifyOnSideCompletion: z.boolean().optional().default(true),
-});
+}).strict();
 
 /**
  * Session ID validation.

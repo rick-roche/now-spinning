@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { derivePhysicalMediaType, DiscogsReleaseIdSchema, type DiscogsMasterVersionsResponse, type PhysicalMediaType } from "@repo/shared";
+import { DiscogsReleaseIdSchema, type DiscogsMasterVersionsResponse, type PhysicalMediaType } from "@repo/shared";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { Icon } from "../components/Icon";
 import { useApiQuery } from "../hooks/useApiQuery";
@@ -18,15 +18,13 @@ export function Master() {
     { enabled: Boolean(masterId), errorMessage: "Failed to load available pressings", retry: 0 }
   );
 
-  const availableMedia = useMemo(() => mediaTypes.filter((media) =>
-    data?.versions.some((version) => derivePhysicalMediaType(version.formats) === media)
-  ), [data]);
+  const availableMedia = useMemo(() => mediaTypes.filter((media) => data?.versions.some((version) => version.mediaType === media)), [data]);
   const versions = useMemo(() => data?.versions.filter((version) =>
-    selectedMedia ? derivePhysicalMediaType(version.formats) === selectedMedia : false
+    selectedMedia ? version.mediaType === selectedMedia : false
   ) ?? [], [data, selectedMedia]);
 
   if (!masterId) return <ErrorMessage fullPage message="Master id must be numeric." onRetry={() => void navigate("/search")} />;
-  if (loading) return <div className="p-6 text-center">Loading pressings...</div>;
+  if (loading) return <div className="p-6 text-center" role="status">Loading pressings...</div>;
   if (error || !data) return <ErrorMessage fullPage message={error ?? "Master release not found"} onRetry={() => void refetch()} />;
 
   return (
@@ -34,13 +32,15 @@ export function Master() {
       <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">Master Release</p>
       <h1 className="mt-2 text-2xl font-bold">Choose a format</h1>
       <p className="mt-2 text-sm text-text-muted">Select the physical medium you are listening to, then choose its pressing.</p>
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      {availableMedia.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-white/10 p-5 text-sm text-text-muted">No supported vinyl, CD, or cassette pressings are available for this master release.</div>
+      ) : <div className="mt-6 grid grid-cols-3 gap-3">
         {availableMedia.map((media) => (
           <button key={media} onClick={() => setSelectedMedia(media)} className={`rounded-xl border p-4 text-sm font-bold capitalize ${selectedMedia === media ? "border-primary bg-primary/10 text-primary" : "border-white/10"}`}>
             {media === "cd" ? "CD" : media}
           </button>
         ))}
-      </div>
+      </div>}
       {selectedMedia && <div className="mt-8 space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider">Choose a pressing</h2>
         {versions.map((version) => (

@@ -10,6 +10,8 @@ interface SideCompletionModalProps {
   onContinue: () => Promise<void>;
   onPause: () => void;
   isOpen: boolean;
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function SideCompletionModal(props: SideCompletionModalProps) {
@@ -21,7 +23,7 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
     nextTrackTitle,
     isOpen,
     onContinue,
-    onPause,
+    onPause, loading = false, error,
   } = props;
 
   return (
@@ -46,10 +48,11 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
         </Text>
 
         <Flex gap="3" justify="end" mt="6">
-          <Button variant="soft" onClick={onPause}>
+          {error && <Text as="p" color="red" size="2">{error}</Text>}
+          <Button variant="soft" onClick={onPause} disabled={loading}>
             Keep paused
           </Button>
-          <Button onClick={() => void onContinue()}>
+          <Button onClick={() => void onContinue()} disabled={loading}>
             Continue to {boundary === "flip" ? `side ${nextUnit}` : `disc ${nextUnit}`}
           </Button>
         </Flex>

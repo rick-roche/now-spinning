@@ -39,7 +39,7 @@ export interface NormalizedTrack {
   /** Duration in seconds (null if unknown) */
   durationSec: number | null;
   /** Side identifier derived from position (null if not applicable) */
-  side: "A" | "B" | "C" | "D" | null;
+  side: string | null;
   /** Disc number derived from a multi-disc position (null if not applicable). */
   discNumber?: number | null;
   /** 0-based index for stable internal ordering */

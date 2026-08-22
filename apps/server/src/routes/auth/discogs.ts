@@ -46,8 +46,9 @@ router.post("/start", async (c: HonoContext) => {
   setSessionCookie(c, sessionId);
 
   const consumerKey = c.env.discogsConsumerKey;
-  if (!consumerKey) {
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
+  const consumerSecret = c.env.discogsConsumerSecret;
+  if (!consumerKey || !consumerSecret) {
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const callbackUrl = c.env.discogsCallbackUrl;
@@ -67,7 +68,6 @@ router.post("/start", async (c: HonoContext) => {
     oauth_callback: callbackUrl,
   };
 
-  const consumerSecret = c.env.discogsConsumerSecret || "";
   const signature = encodeURIComponent(consumerSecret) + "&";
 
   const reqParams = new URLSearchParams({ ...oauthParams, oauth_signature: signature });
@@ -124,10 +124,10 @@ router.get("/callback", async (c: HonoContext) => {
   setSessionCookie(c, boundSessionId);
 
   const consumerKey = c.env.discogsConsumerKey;
-  const consumerSecret = c.env.discogsConsumerSecret || "";
+  const consumerSecret = c.env.discogsConsumerSecret;
 
-  if (!consumerKey) {
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
+  if (!consumerKey || !consumerSecret) {
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const nonce = generateRandomString(32);
