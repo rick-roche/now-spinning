@@ -32,7 +32,8 @@ export function setSessionCookie(c: Context<{ Bindings: AppEnvironment }>, sessi
   try {
     setCookie(c, SESSION_COOKIE, sessionId, {
       httpOnly: true,
-      secure: c.req.url.startsWith("https://"),
+      // Coolify terminates TLS before forwarding requests to Node. The configured external origin is the trusted scheme signal.
+      secure: c.env.publicAppOrigin.startsWith("https://"),
       sameSite: "Lax",
       maxAge: SESSION_COOKIE_MAX_AGE,
       path: "/",
@@ -43,22 +44,19 @@ export function setSessionCookie(c: Context<{ Bindings: AppEnvironment }>, sessi
   }
 }
 
-/**
- * KV storage key for user tokens.
- */
-export function loadStoredTokens(storage: SQLiteStorage, userId: string): Promise<StoredTokens> { return Promise.resolve(storage.loadTokens(userId)); }
+/** Load server-side tokens for a user from SQLite. */
+export function loadStoredTokens(storage: SQLiteStorage, userId: string): Promise<StoredTokens> {
+  return Promise.resolve(storage.loadTokens(userId));
+}
+
+/** Store server-side tokens for a user in SQLite. */
+export function storeTokens(storage: SQLiteStorage, userId: string, tokens: StoredTokens): Promise<void> {
+  storage.storeTokens(userId, tokens);
+  return Promise.resolve();
+}
 
 /**
- * Store tokens in KV.
- */
-export function storeTokens(storage: SQLiteStorage, userId: string, tokens: StoredTokens): Promise<void> { storage.storeTokens(userId, tokens); return Promise.resolve(); }
-
-/**
- * KV storage key for OAuth state tokens (short-lived, CSRF protection).
- */
-/**
- * Store OAuth state token for CSRF protection.
- * Expires after 10 minutes.
+ * Store short-lived OAuth state for CSRF protection.
  */
 export async function storeOAuthState(
   storage: SQLiteStorage,

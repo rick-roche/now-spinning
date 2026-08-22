@@ -107,7 +107,6 @@ router.post("/start", async (c: HonoContext) => {
 router.get("/callback", async (c: HonoContext) => {
   const storage = c.env.NOW_SPINNING_STORAGE;
   const sessionId = getOrCreateSessionId(c);
-  setSessionCookie(c, sessionId);
 
   const oauthToken = c.req.query("oauth_token") ?? "";
   const oauthVerifier = c.req.query("oauth_verifier") ?? "";
@@ -120,6 +119,9 @@ router.get("/callback", async (c: HonoContext) => {
   if (!storedState) {
     return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth state token expired or invalid"), 403);
   }
+
+  const boundSessionId = storedState.sessionId ?? sessionId;
+  setSessionCookie(c, boundSessionId);
 
   const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
   const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET || "";
@@ -163,14 +165,14 @@ router.get("/callback", async (c: HonoContext) => {
     const text = await response.text();
     const accessToken = parseFormEncoded(text);
 
-    const tokens = await loadStoredTokens(storage, storedState.sessionId ?? sessionId);
+    const tokens = await loadStoredTokens(storage, boundSessionId);
     tokens.discogs = {
       service: "discogs",
       accessToken: accessToken.oauth_token ?? "",
       accessTokenSecret: accessToken.oauth_token_secret ?? "",
       storedAt: Date.now(),
     };
-    await storeTokens(storage, storedState.sessionId ?? sessionId, tokens);
+    await storeTokens(storage, boundSessionId, tokens);
 
     const appOrigin = c.env.PUBLIC_APP_ORIGIN;
     const redirectUrl = new URL("/settings?auth=discogs", appOrigin).toString();

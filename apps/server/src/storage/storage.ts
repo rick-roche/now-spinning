@@ -55,7 +55,12 @@ export class SQLiteStorage {
 
   loadTokens(userId: string): StoredTokens {
     const row = this.db.prepare("SELECT json FROM tokens WHERE user_id = ?").get(userId) as { json: string } | undefined;
-    return row ? JSON.parse(row.json) as StoredTokens : { lastfm: null, discogs: null };
+    if (!row) return { lastfm: null, discogs: null };
+    try {
+      return JSON.parse(row.json) as StoredTokens;
+    } catch {
+      return { lastfm: null, discogs: null };
+    }
   }
 
   storeTokens(userId: string, tokens: StoredTokens): void {
@@ -130,6 +135,7 @@ export class SQLiteStorage {
   }
 
   setCache(key: string, value: unknown, ttlSeconds: number): void {
+    this.db.prepare("DELETE FROM cache_entries WHERE expires_at <= ?").run(Date.now());
     this.db.prepare("INSERT OR REPLACE INTO cache_entries(key,json,expires_at) VALUES(?,?,?)").run(key, JSON.stringify(value), Date.now() + ttlSeconds * 1000);
   }
 

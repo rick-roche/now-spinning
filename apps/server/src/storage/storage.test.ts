@@ -30,6 +30,17 @@ describe("SQLiteStorage", () => {
     storage.close();
   });
 
+  it("falls back safely when stored token JSON is corrupt", () => {
+    const path = `/tmp/now-spinning-test-${crypto.randomUUID()}.sqlite`;
+    paths.push(path);
+    const database = openDatabase(path);
+    const storage = new SQLiteStorage(database);
+    storage.storeTokens("user", { lastfm: null, discogs: null });
+    database.prepare("UPDATE tokens SET json = ? WHERE user_id = ?").run("not-json", "user");
+    expect(storage.loadTokens("user")).toEqual({ lastfm: null, discogs: null });
+    storage.close();
+  });
+
   it("allows only one live scheduler lease owner", () => {
     const storage = createStorage();
     expect(storage.acquireSchedulerLease("first", 1_000, 100)).toBe(true);

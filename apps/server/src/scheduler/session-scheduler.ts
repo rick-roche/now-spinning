@@ -19,19 +19,28 @@ export class SessionScheduler {
   constructor(private readonly storage: SQLiteStorage, private readonly env: AppEnvironment) {}
 
   start(): Promise<void> {
-    this.ownsLease = this.storage.acquireSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs);
-    if (!this.ownsLease) return Promise.resolve();
-    this.leaseTimer = setInterval(() => this.renewLease(), SessionScheduler.leaseRenewalMs);
+    this.maintainLease();
+    this.leaseTimer = setInterval(() => this.maintainLease(), SessionScheduler.leaseRenewalMs);
+    return Promise.resolve();
+  }
+
+  private bootstrapSchedules(): void {
     for (const schedule of this.storage.loadSchedules()) {
       const session = this.storage.loadSession(schedule.sessionId);
-      if (!session || session.state !== "running" || schedule.dueAt === null) {
-        if (!session || session.state !== "running") this.storage.deleteSchedule(schedule.sessionId);
+      if (!session || session.state === "ended") {
+        this.storage.deleteSchedule(schedule.sessionId);
+        continue;
+      }
+      if (session.state === "paused") {
+        if (schedule.dueAt !== null) this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+        continue;
+      }
+      if (schedule.dueAt === null) {
         continue;
       }
       if (schedule.dueAt <= Date.now()) void this.process(schedule.sessionId, schedule.dueAt);
       else this.arm(schedule.sessionId, schedule.dueAt);
     }
-    return Promise.resolve();
   }
 
   async stop(): Promise<void> {
@@ -50,10 +59,30 @@ export class SessionScheduler {
     await this.schedule(session.id, Date.now());
   }
 
-  async pause(sessionId: string): Promise<void> { await this.withLock(sessionId, async () => { this.clear(sessionId); const schedule = this.storage.loadSchedule(sessionId); if (schedule) this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() }); await Promise.resolve(); }); }
-  async resume(sessionId: string, at: number): Promise<void> { await this.withLock(sessionId, async () => { await this.schedule(sessionId, at); }); }
-  async next(sessionId: string, at: number): Promise<void> { await this.withLock(sessionId, async () => { this.clear(sessionId); await this.schedule(sessionId, at); }); }
-  async end(sessionId: string): Promise<void> { await this.withLock(sessionId, async () => { this.clear(sessionId); this.storage.deleteSchedule(sessionId); await Promise.resolve(); }); }
+  async pause(sessionId: string, locked = false): Promise<void> {
+    const action = (): Promise<void> => {
+      this.clear(sessionId);
+      const schedule = this.storage.loadSchedule(sessionId);
+      if (schedule) this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+      return Promise.resolve();
+    };
+    if (locked) await action(); else await this.withLock(sessionId, action);
+  }
+
+  async resume(sessionId: string, at: number, locked = false): Promise<void> {
+    const action = async (): Promise<void> => { await this.schedule(sessionId, at); };
+    if (locked) await action(); else await this.withLock(sessionId, action);
+  }
+
+  async next(sessionId: string, at: number, locked = false): Promise<void> {
+    const action = async (): Promise<void> => { this.clear(sessionId); await this.schedule(sessionId, at); };
+    if (locked) await action(); else await this.withLock(sessionId, action);
+  }
+
+  async end(sessionId: string, locked = false): Promise<void> {
+    const action = (): Promise<void> => { this.clear(sessionId); this.storage.deleteSchedule(sessionId); return Promise.resolve(); };
+    if (locked) await action(); else await this.withLock(sessionId, action);
+  }
 
   async runExclusive<T>(sessionId: string, action: () => Promise<T>): Promise<T> {
     let result!: T;
@@ -70,12 +99,18 @@ export class SessionScheduler {
 
   private clear(sessionId: string): void { const timer = this.timers.get(sessionId); if (timer) clearTimeout(timer); this.timers.delete(sessionId); }
 
-  private renewLease(): void {
-    if (this.stopped || !this.ownsLease) return;
-    if (!this.storage.renewSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs)) {
+  private maintainLease(): void {
+    if (this.stopped) return;
+    if (this.ownsLease) {
+      if (this.storage.renewSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs)) return;
       this.ownsLease = false;
       for (const timer of this.timers.values()) clearTimeout(timer);
       this.timers.clear();
+      return;
+    }
+    if (this.storage.acquireSchedulerLease(this.ownerId, Date.now(), SessionScheduler.leaseDurationMs)) {
+      this.ownsLease = true;
+      this.bootstrapSchedules();
     }
   }
 
@@ -106,7 +141,12 @@ export class SessionScheduler {
       const schedule = this.storage.loadSchedule(sessionId);
       if (!schedule || schedule.dueAt !== expectedDueAt) return;
       const session = this.storage.loadSession(sessionId);
-      if (!session || session.state !== "running") { this.clear(sessionId); this.storage.deleteSchedule(sessionId); return; }
+      if (!session || session.state === "ended") { this.clear(sessionId); this.storage.deleteSchedule(sessionId); return; }
+      if (session.state !== "running") {
+        this.clear(sessionId);
+        this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+        return;
+      }
       const current = session.tracks[session.currentIndex];
       const track = session.release.tracks[session.currentIndex];
       if (!current || !track || current.status === "scrobbled") { this.clear(sessionId); return; }

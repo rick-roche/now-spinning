@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { createSession, type NormalizedRelease } from "@repo/shared";
+import { createSession, pauseSession, type NormalizedRelease } from "@repo/shared";
 import { openDatabase } from "../storage/database.js";
 import { SQLiteStorage } from "../storage/storage.js";
 import type { AppEnvironment } from "../types.js";
@@ -46,6 +46,43 @@ describe("SessionScheduler", () => {
 
     await second.stop();
     await first.stop();
+    storage.close();
+  });
+
+  it("retries startup ownership after an existing lease expires", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path));
+    const session = createSession({ sessionId: "session-retry", userId: "user-retry", release, startedAt: -120_000 });
+    storage.saveSession(session);
+    storage.storeTokens("user-retry", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: 0, updatedAt: 0 });
+    expect(storage.acquireSchedulerLease("blocker", 0, 60_000)).toBe(true);
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(storage.loadSession(session.id)?.state).toBe("ended");
+    await scheduler.stop();
+    storage.close();
+    vi.useRealTimers();
+  });
+
+  it("preserves paused schedules across restart", async () => {
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path));
+    const running = createSession({ sessionId: "session-paused", userId: "user-paused", release, startedAt: Date.now() - 120_000 });
+    const paused = pauseSession(running);
+    storage.saveSession(paused);
+    storage.saveSchedule({ sessionId: paused.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    expect(storage.loadSchedule(paused.id)?.dueAt).toBeNull();
+    await scheduler.stop();
     storage.close();
   });
 });

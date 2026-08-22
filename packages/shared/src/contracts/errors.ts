@@ -35,21 +35,21 @@ export interface APIError {
   };
 }
 
-declare const crypto: { randomUUID(): string };
-
 /**
- * Create a standardized API error response with generated request ID.
+ * Create a standardized API error response with an optional generated request ID.
  */
 export function createAPIError(
   code: string,
   message: string,
   details?: unknown
 ): APIError {
+  const runtimeCrypto = (globalThis as typeof globalThis & { crypto?: { randomUUID?: () => string } }).crypto;
+  const requestId = typeof runtimeCrypto?.randomUUID === "function" ? runtimeCrypto.randomUUID() : undefined;
   return {
     error: {
       code,
       message,
-      requestId: crypto.randomUUID(),
+      ...(requestId ? { requestId } : {}),
       ...(details !== undefined && { details }),
     },
   };

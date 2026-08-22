@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createApp } from "./app.js";
 import type { AppEnvironment } from "./types.js";
+
+const staticRoots: string[] = [];
+afterEach(() => { for (const root of staticRoots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 function environment(): AppEnvironment {
   return {
@@ -26,5 +32,28 @@ describe("application", () => {
     const response = await createApp(environment()).request("http://localhost/api/missing");
     expect(response.status).toBe(404);
     expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("treats /api and malformed paths as safe API/404 responses", async () => {
+    const app = createApp(environment());
+    const apiResponse = await app.request("http://localhost/api");
+    const malformedResponse = await app.request("http://localhost/%25%25%25");
+    expect(apiResponse.status).toBe(404);
+    expect(apiResponse.headers.get("content-type")).toContain("application/json");
+    expect(malformedResponse.status).toBe(404);
+  });
+
+  it("serves safe filenames containing dots without allowing traversal", async () => {
+    const staticRoot = join(tmpdir(), `now-spinning-static-${crypto.randomUUID()}`);
+    staticRoots.push(staticRoot);
+    mkdirSync(staticRoot, { recursive: true });
+    writeFileSync(join(staticRoot, "version..json"), "safe");
+    writeFileSync(join(staticRoot, "index.html"), "shell");
+    const app = createApp({ ...environment(), staticRoot });
+
+    const safeResponse = await app.request("http://localhost/version..json");
+    const traversalResponse = await app.request("http://localhost/%2e%2e/%2e%2e/etc/passwd");
+    expect(await safeResponse.text()).toBe("safe");
+    expect(await traversalResponse.text()).toBe("shell");
   });
 });

@@ -162,18 +162,19 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
 
-    const updated = pauseSession(session);
-    await storeSession(storage, updated);
+      const updated = pauseSession(session);
+      await storeSession(storage, updated);
+      await c.env.scheduler.pause(sessionId, true);
 
-    await c.env.scheduler.pause(sessionId);
-
-    const response: SessionActionResponse = { session: updated };
-    return c.json(response);
+      const response: SessionActionResponse = { session: updated };
+      return c.json(response);
+    });
   }
 );
 
@@ -196,32 +197,34 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
-
-    const tokens = await loadStoredTokens(storage, userId);
-    const now = Date.now();
-    const updated = resumeSession(session, now);
-    await storeSession(storage, updated);
-
-    if (updated.state !== "ended") {
-      const npResult = await sendNowPlaying(
-        c.env,
-        tokens.lastfm!.accessToken,
-        updated.release,
-        updated.currentIndex
-      );
-      if (!npResult.ok) {
-        console.error("[POST /:id/resume] Failed to send now playing:", npResult.message);
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
       }
 
-      await c.env.scheduler.resume(sessionId, now);
-    }
+      const tokens = await loadStoredTokens(storage, userId);
+      const now = Date.now();
+      const updated = resumeSession(session, now);
+      await storeSession(storage, updated);
 
-    const response: SessionActionResponse = { session: updated };
-    return c.json(response);
+      if (updated.state !== "ended") {
+        const npResult = await sendNowPlaying(
+          c.env,
+          tokens.lastfm!.accessToken,
+          updated.release,
+          updated.currentIndex
+        );
+        if (!npResult.ok) {
+          console.error("[POST /:id/resume] Failed to send now playing:", npResult.message);
+        }
+
+        await c.env.scheduler.resume(sessionId, now, true);
+      }
+
+      const response: SessionActionResponse = { session: updated };
+      return c.json(response);
+    });
   }
 );
 
@@ -264,72 +267,62 @@ router.post(
     const { id: sessionId } = paramResult.data;
     const { elapsedMs, thresholdPercent } = bodyResult.data;
 
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
 
-    const currentIndex = session.currentIndex;
-    if (currentIndex < 0 || currentIndex >= session.tracks.length) {
-      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
-    }
+      const currentIndex = session.currentIndex;
+      if (currentIndex < 0 || currentIndex >= session.tracks.length) {
+        return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
+      }
 
-    const currentTrack = session.tracks[currentIndex];
-    if (!currentTrack) {
-      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track not found"), 500);
-    }
+      const currentTrack = session.tracks[currentIndex];
+      if (!currentTrack) {
+        return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track not found"), 500);
+      }
 
-    // Check if already scrobbled (idempotent)
-    if (currentTrack.status === "scrobbled") {
-      const response: SessionActionResponse = { session };
+      if (currentTrack.status === "scrobbled") {
+        const response: SessionActionResponse = { session };
+        return c.json(response);
+      }
+
+      const releaseTrack = session.release.tracks[currentIndex];
+      const durationMs = releaseTrack?.durationSec ? releaseTrack.durationSec * 1000 : null;
+      if (!isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent)) {
+        return c.json(
+          createAPIError(ErrorCode.VALIDATION_ERROR, "Track has not been played long enough to scrobble"),
+          400
+        );
+      }
+
+      const tokens = await loadStoredTokens(storage, userId);
+      const currentStartedAt = currentTrack.startedAt ?? Date.now();
+      const scrobbleResult = await scrobbleTrack(
+        c.env,
+        tokens.lastfm!.accessToken,
+        session.release,
+        currentIndex,
+        Math.floor(currentStartedAt / 1000)
+      );
+      if (!scrobbleResult.ok) {
+        console.error("[POST /:id/scrobble-current] Failed to scrobble track:", scrobbleResult.message);
+        return c.json(
+          createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"),
+          502
+        );
+      }
+
+      const updatedTrack = { ...currentTrack, status: "scrobbled" as const, scrobbledAt: Date.now() };
+      const updatedTracks = [...session.tracks];
+      updatedTracks[currentIndex] = updatedTrack;
+      const updated = { ...session, tracks: updatedTracks };
+      await storeSession(storage, updated);
+
+      const response: SessionActionResponse = { session: updated };
       return c.json(response);
-    }
-
-    // thresholdPercent passed from frontend, already defaults to 50 in schema
-
-    // Get track duration in milliseconds from release track data
-    const releaseTrack = session.release.tracks[currentIndex];
-    const durationMs = releaseTrack?.durationSec ? releaseTrack.durationSec * 1000 : null;
-
-    // Check eligibility
-    const eligible = isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent);
-    
-    if (!eligible) {
-      return c.json(
-        createAPIError(ErrorCode.VALIDATION_ERROR, "Track has not been played long enough to scrobble"),
-        400
-      );
-    }
-
-    const tokens = await loadStoredTokens(storage, userId);
-    const currentStartedAt = currentTrack.startedAt ?? Date.now();
-
-    // Scrobble the track
-    const scrobbleResult = await scrobbleTrack(
-      c.env,
-      tokens.lastfm!.accessToken,
-      session.release,
-      currentIndex,
-      Math.floor(currentStartedAt / 1000)
-    );
-    if (!scrobbleResult.ok) {
-      console.error("[POST /:id/scrobble-current] Failed to scrobble track:", scrobbleResult.message);
-      return c.json(
-        createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"),
-        502
-      );
-    }
-
-    // Mark track as scrobbled
-    const updatedTrack = { ...currentTrack, status: "scrobbled" as const, scrobbledAt: Date.now() };
-    const updatedTracks = [...session.tracks];
-    updatedTracks[currentIndex] = updatedTrack;
-    const updated = { ...session, tracks: updatedTracks };
-    
-    await storeSession(storage, updated);
-
-    const response: SessionActionResponse = { session: updated };
-    return c.json(response);
+    });
   }
 );
 
@@ -352,58 +345,55 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
-
-    const tokens = await loadStoredTokens(storage, userId);
-
-    const now = Date.now();
-    const previousIndex = session.currentIndex;
-    
-    if (previousIndex < 0 || previousIndex >= session.tracks.length) {
-      return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
-    }
-    
-    const previousTrack = session.tracks[previousIndex];
-    const previousStartedAt = previousTrack?.startedAt ?? now;
-    const wasAlreadyScrobbled = previousTrack?.status === "scrobbled";
-    
-    const updated = advanceSession(session, now);
-
-    await storeSession(storage, updated);
-
-    // Only scrobble if not already scrobbled (e.g., by proactive scrobble-current endpoint)
-    if (!wasAlreadyScrobbled) {
-      const scrobbleResult = await scrobbleTrack(
-        c.env,
-        tokens.lastfm!.accessToken,
-        updated.release,
-        previousIndex,
-        Math.floor(previousStartedAt / 1000)
-      );
-      if (!scrobbleResult.ok) {
-        console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
       }
-    }
 
-    if (updated.state !== "ended") {
-      const npResult = await sendNowPlaying(
-        c.env,
-        tokens.lastfm!.accessToken,
-        updated.release,
-        updated.currentIndex
-      );
-      if (!npResult.ok) {
-        console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+      const tokens = await loadStoredTokens(storage, userId);
+      const now = Date.now();
+      const previousIndex = session.currentIndex;
+
+      if (previousIndex < 0 || previousIndex >= session.tracks.length) {
+        return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
       }
-    }
 
-    await c.env.scheduler.next(sessionId, now);
+      const previousTrack = session.tracks[previousIndex];
+      const previousStartedAt = previousTrack?.startedAt ?? now;
+      const wasAlreadyScrobbled = previousTrack?.status === "scrobbled";
+      const updated = advanceSession(session, now);
+      await storeSession(storage, updated);
 
-    const response: SessionActionResponse = { session: updated };
-    return c.json(response);
+      if (!wasAlreadyScrobbled) {
+        const scrobbleResult = await scrobbleTrack(
+          c.env,
+          tokens.lastfm!.accessToken,
+          updated.release,
+          previousIndex,
+          Math.floor(previousStartedAt / 1000)
+        );
+        if (!scrobbleResult.ok) {
+          console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+        }
+      }
+
+      if (updated.state !== "ended") {
+        const npResult = await sendNowPlaying(
+          c.env,
+          tokens.lastfm!.accessToken,
+          updated.release,
+          updated.currentIndex
+        );
+        if (!npResult.ok) {
+          console.error("[POST /:id/next] Failed to send now playing:", npResult.message);
+        }
+      }
+
+      await c.env.scheduler.next(sessionId, now, true);
+      const response: SessionActionResponse = { session: updated };
+      return c.json(response);
+    });
   }
 );
 
@@ -425,39 +415,38 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
-
-    const tokens = await loadStoredTokens(storage, userId);
-
-    const now = Date.now();
-    const currentIndex = session.currentIndex;
-    const currentTrack = session.tracks[currentIndex];
-    const currentStartedAt = currentTrack?.startedAt ?? now;
-    const wasAlreadyScrobbled = currentTrack?.status === "scrobbled";
-
-    const updated = endSession(session);
-    await storeSession(storage, updated);
-
-    await c.env.scheduler.end(sessionId);
-
-    if (session.state !== "ended" && !wasAlreadyScrobbled) {
-      const scrobbleResult = await scrobbleTrack(
-        c.env,
-        tokens.lastfm!.accessToken,
-        updated.release,
-        currentIndex,
-        Math.floor(currentStartedAt / 1000)
-      );
-      if (!scrobbleResult.ok) {
-        console.error("[POST /:id/end] Failed to scrobble track:", scrobbleResult.message);
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
       }
-    }
 
-    const response: SessionActionResponse = { session: updated };
-    return c.json(response);
+      const tokens = await loadStoredTokens(storage, userId);
+      const now = Date.now();
+      const currentIndex = session.currentIndex;
+      const currentTrack = session.tracks[currentIndex];
+      const currentStartedAt = currentTrack?.startedAt ?? now;
+      const wasAlreadyScrobbled = currentTrack?.status === "scrobbled";
+      const updated = endSession(session);
+      await storeSession(storage, updated);
+      await c.env.scheduler.end(sessionId, true);
+
+      if (session.state !== "ended" && !wasAlreadyScrobbled) {
+        const scrobbleResult = await scrobbleTrack(
+          c.env,
+          tokens.lastfm!.accessToken,
+          updated.release,
+          currentIndex,
+          Math.floor(currentStartedAt / 1000)
+        );
+        if (!scrobbleResult.ok) {
+          console.error("[POST /:id/end] Failed to scrobble track:", scrobbleResult.message);
+        }
+      }
+
+      const response: SessionActionResponse = { session: updated };
+      return c.json(response);
+    });
   }
 );
 
@@ -478,15 +467,6 @@ router.post(
       );
     }
 
-    const { id: sessionId } = paramResult.data;
-    const session = await loadSession(storage, sessionId);
-    if (!session || session.userId !== userId) {
-      return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
-    }
-
-    const tokens = await loadStoredTokens(storage, userId);
-    const now = Date.now();
-
     let thresholdPercent = 50;
     let notifyOnSideCompletion = true;
     try {
@@ -500,40 +480,50 @@ router.post(
       // No JSON body — use defaults
     }
 
-    const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent, notifyOnSideCompletion);
-
-    for (const action of scrobbleActions) {
-      const scrobbleResult = await scrobbleTrack(
-        c.env,
-        tokens.lastfm!.accessToken,
-        synced.release,
-        action.trackIndex,
-        Math.floor(action.startedAt / 1000)
-      );
-      if (!scrobbleResult.ok) {
-        console.error(`[POST /:id/sync] Failed to scrobble track ${action.trackIndex}:`, scrobbleResult.message);
+    const { id: sessionId } = paramResult.data;
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
       }
-    }
 
-    if (synced.state === "running" && scrobbleActions.length > 0) {
-      const npResult = await sendNowPlaying(
-        c.env,
-        tokens.lastfm!.accessToken,
-        synced.release,
-        synced.currentIndex
-      );
-      if (!npResult.ok) {
-        console.error("[POST /:id/sync] Failed to send now playing:", npResult.message);
+      const tokens = await loadStoredTokens(storage, userId);
+      const now = Date.now();
+      const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent, notifyOnSideCompletion);
+
+      for (const action of scrobbleActions) {
+        const scrobbleResult = await scrobbleTrack(
+          c.env,
+          tokens.lastfm!.accessToken,
+          synced.release,
+          action.trackIndex,
+          Math.floor(action.startedAt / 1000)
+        );
+        if (!scrobbleResult.ok) {
+          console.error(`[POST /:id/sync] Failed to scrobble track ${action.trackIndex}:`, scrobbleResult.message);
+        }
       }
-    }
 
-    await storeSession(storage, synced);
+      if (synced.state === "running" && scrobbleActions.length > 0) {
+        const npResult = await sendNowPlaying(
+          c.env,
+          tokens.lastfm!.accessToken,
+          synced.release,
+          synced.currentIndex
+        );
+        if (!npResult.ok) {
+          console.error("[POST /:id/sync] Failed to send now playing:", npResult.message);
+        }
+      }
 
-    const response: SessionSyncResponse = {
-      session: synced,
-      scrobbledCount: scrobbleActions.length,
-    };
-    return c.json(response);
+      await storeSession(storage, synced);
+
+      const response: SessionSyncResponse = {
+        session: synced,
+        scrobbledCount: scrobbleActions.length,
+      };
+      return c.json(response);
+    });
   }
 );
 
