@@ -114,6 +114,22 @@ describe("Release Page", () => {
     expect(screen.getByText("The Dark Side of the Moon")).toBeInTheDocument();
   });
 
+  it("links to the release on Discogs in a new tab", async () => {
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+      })
+    );
+
+    renderWithRouter();
+
+    const discogsLink = await screen.findByRole("link", { name: /View on Discogs/i });
+    expect(discogsLink).toHaveAttribute("href", "https://www.discogs.com/release/12345");
+    expect(discogsLink).toHaveAttribute("target", "_blank");
+    expect(discogsLink).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
   it("displays cover image when available", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({

@@ -151,6 +151,15 @@ export function Release() {
           {release.formats && release.formats.length > 0 && (
             <p className="text-xs text-primary mt-2">{release.formats.join(" · ")}</p>
           )}
+          <a
+            href={`https://www.discogs.com/release/${release.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-primary hover:bg-primary/10"
+          >
+            View on Discogs
+            <Icon name="open_in_new" className="text-base" />
+          </a>
         </div>
 
         {/* Start Session Button */}
