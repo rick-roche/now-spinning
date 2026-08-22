@@ -49,12 +49,16 @@ describe("application", () => {
     staticRoots.push(staticRoot);
     mkdirSync(staticRoot, { recursive: true });
     writeFileSync(join(staticRoot, "version..json"), "safe");
+    writeFileSync(join(staticRoot, "robots"), "plain");
     writeFileSync(join(staticRoot, "index.html"), "shell");
     const app = createApp({ ...environment(), staticRoot });
 
     const safeResponse = await app.request("http://localhost/version..json");
+    const extensionlessResponse = await app.request("http://localhost/robots");
     const traversalResponse = await app.request("http://localhost/%2e%2e/%2e%2e/etc/passwd");
     expect(await safeResponse.text()).toBe("safe");
+    expect(await extensionlessResponse.text()).toBe("plain");
+    expect(extensionlessResponse.headers.get("content-type")).toContain("application/octet-stream");
     expect(await traversalResponse.text()).toBe("shell");
   });
 });

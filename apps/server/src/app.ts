@@ -64,7 +64,8 @@ export function createApp(environment: AppEnvironment): Hono<{ Bindings: AppEnvi
     if (requestedFile === staticRoot || requestedFile.startsWith(`${staticRoot}${sep}`)) {
       try {
         const file = await readFile(requestedFile);
-        const extension = requestedPath.slice(requestedPath.lastIndexOf(".")).toLowerCase();
+        const lastDot = requestedPath.lastIndexOf(".");
+        const extension = lastDot >= 0 ? requestedPath.slice(lastDot).toLowerCase() : "";
         const contentType = contentTypes[extension] ?? "application/octet-stream";
         return new Response(file, { headers: { ...(contentType ? { "Content-Type": contentType } : {}), "Cache-Control": requestedPath.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache" } });
       } catch {
