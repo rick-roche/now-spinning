@@ -8,7 +8,7 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
-RUN pnpm --filter @repo/server deploy --prod /prod
+RUN pnpm --filter @repo/server deploy --prod /prod --legacy
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
