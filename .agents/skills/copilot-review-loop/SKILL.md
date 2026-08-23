@@ -5,7 +5,13 @@ description: Use when evaluating GitHub Copilot PR review comments, fixing actio
 
 # Copilot Review Loop
 
-Use this workflow for repeated Copilot review passes on a pull request.
+Use this workflow for repeated Copilot review passes on a pull request. Track the number of Copilot review iterations during the current task.
+
+## Stop Conditions
+
+- **Approval stop:** Stop immediately when the latest Copilot review says `Approval recommended` or equivalent, even if suppressed non-blocking suggestions remain. Report those suggestions without implementing them unless the user explicitly requests another pass.
+- **Three-iteration hard stop:** Stop after three Copilot review iterations maximum. Do not request or perform a fourth review pass; report remaining feedback and ask the user whether to continue in a separate task.
+- A user explicitly asking to evaluate another newly posted review starts a new task, but the three-iteration limit still applies within that task.
 
 ## Workflow
 
@@ -17,7 +23,7 @@ Use this workflow for repeated Copilot review passes on a pull request.
 6. Run the repository validation commands. If local tooling is unavailable, use GitHub CI and report the exact blocker.
 7. Inspect the final diff and worktree, then commit only intended files and push the PR branch.
 8. Resolve addressed review threads through the GitHub GraphQL API. Do not resolve feedback that remains unaddressed.
-9. Re-fetch reviews, threads, and checks after the push. Repeat until no actionable feedback remains.
+9. Re-fetch reviews, threads, and checks after the push. Repeat only if the stop conditions have not been reached and the latest review is not an approval.
 
 ## Review Rules
 
@@ -27,6 +33,8 @@ Use this workflow for repeated Copilot review passes on a pull request.
 - Preserve the repository's API, security, testing, and mobile UX boundaries.
 - Never resolve a thread before its fix is present in the pushed branch.
 - Report stale comments, unresolved risks, CI failures, local environment blockers, and the final resolved-thread count.
+- Treat `Approval recommended` as a successful terminal state, not as permission to continue polishing suppressed suggestions.
+- Count every Copilot review result that triggers a new evaluation as one iteration, including reviews with suppressed comments and reviews with no inline comments.
 
 ## Useful Commands
 
