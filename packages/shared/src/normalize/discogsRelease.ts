@@ -131,17 +131,19 @@ export function mergeMissingTrackDurations(
   release: NormalizedRelease,
   master: Pick<NormalizedRelease, "tracks">
 ): NormalizedRelease {
+  const masterTracksByMatch = new Map<string, NormalizedTrack>();
+  for (const masterTrack of master.tracks) {
+    if (masterTrack.durationSec === null) continue;
+    const key = `${masterTrack.position}\u0000${masterTrack.title.trim().toLowerCase()}\u0000${masterTrack.artist.trim().toLowerCase()}`;
+    if (!masterTracksByMatch.has(key)) masterTracksByMatch.set(key, masterTrack);
+  }
+
   const tracks = release.tracks.map((track) => {
     if (track.durationSec !== null) return track;
 
     const title = track.title.trim().toLowerCase();
     const artist = track.artist.trim().toLowerCase();
-    const exactPosition = master.tracks.find((masterTrack) =>
-      masterTrack.position === track.position &&
-      masterTrack.title.trim().toLowerCase() === title &&
-      masterTrack.artist.trim().toLowerCase() === artist &&
-      masterTrack.durationSec !== null
-    );
+    const exactPosition = masterTracksByMatch.get(`${track.position}\u0000${title}\u0000${artist}`);
     const sameIndex = master.tracks[track.index];
     const fallback =
       sameIndex?.title.trim().toLowerCase() === title &&

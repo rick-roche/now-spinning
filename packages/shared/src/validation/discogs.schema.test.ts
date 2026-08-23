@@ -120,6 +120,9 @@ describe("DiscogsReleaseIdSchema", () => {
   it("rejects empty string", () => {
     const result = DiscogsReleaseIdSchema.safeParse("");
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("Release ID is required");
+    }
   });
 
   it("rejects whitespace-only string", () => {

@@ -1,8 +1,9 @@
 import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
+import type { PhysicalMediaBoundary } from "@repo/shared";
 import { Icon } from "./Icon";
 
 interface SideCompletionModalProps {
-  boundary: "flip" | "change-disc";
+  boundary: PhysicalMediaBoundary;
   currentUnit: string;
   nextUnit: string;
   currentTrackTitle: string;
