@@ -90,6 +90,8 @@ describe("SessionScheduler", () => {
   });
 
   it("advances an already-scrobbled track when Last.fm credentials disappear", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
     const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
@@ -111,5 +113,6 @@ describe("SessionScheduler", () => {
     expect(storage.loadSchedule(session.id)).toBeNull();
     await scheduler.stop();
     storage.close();
+    vi.useRealTimers();
   });
 });
