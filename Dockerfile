@@ -1,5 +1,12 @@
-FROM node:22-bookworm AS build
-RUN npm install --global pnpm@11.1.2
+FROM node:22-bookworm-slim AS build
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME/bin:$PNPM_HOME:$PATH
+RUN npm install --global pnpm@11.1.2 --prefix "$PNPM_HOME" && pnpm --version
+# Compile native dependencies without downloading Node headers during the build.
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends python3 build-essential \
+  && rm -rf /var/lib/apt/lists/*
+ENV npm_config_nodedir=/usr/local
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json .npmrc* ./
 COPY apps/server/package.json apps/server/package.json
