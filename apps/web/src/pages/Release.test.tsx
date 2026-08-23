@@ -92,7 +92,7 @@ describe("Release Page", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Release ID must be a positive number")).toBeInTheDocument();
+      expect(screen.getByText("Release ID is required")).toBeInTheDocument();
     });
   });
 
