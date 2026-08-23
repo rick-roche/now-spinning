@@ -25,6 +25,8 @@ const release: NormalizedRelease = {
 
 describe("SessionScheduler", () => {
   it("starts background work only for the scheduler holding the SQLite lease", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
     const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
@@ -38,7 +40,7 @@ describe("SessionScheduler", () => {
     const second = new SessionScheduler(storage, environment);
     await first.start();
     await second.start();
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await vi.advanceTimersByTimeAsync(1_100);
 
     const updated = storage.loadSession(session.id);
     expect(updated?.state).toBe("ended");
@@ -47,6 +49,7 @@ describe("SessionScheduler", () => {
     await second.stop();
     await first.stop();
     storage.close();
+    vi.useRealTimers();
   });
 
   it("retries startup ownership after an existing lease expires", async () => {
@@ -102,7 +105,7 @@ describe("SessionScheduler", () => {
 
     const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
     await scheduler.start();
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await vi.advanceTimersByTimeAsync(1_100);
 
     expect(storage.loadSession(session.id)?.state).toBe("ended");
     expect(storage.loadSchedule(session.id)).toBeNull();
