@@ -4,13 +4,14 @@
  */
 
 import { z } from "zod";
+import { DiscogsReleaseIdSchema } from "./discogs.schema.js";
 
 /**
  * Session start request body.
  * Requires a valid Discogs release ID.
  */
 export const SessionStartRequestSchema = z.object({
-  releaseId: z.string().trim().min(1, "Release ID is required"),
+  releaseId: DiscogsReleaseIdSchema,
   thresholdPercent: z.number().min(0).max(100).optional().default(50),
   notifyOnSideCompletion: z.boolean().optional().default(true),
 });
@@ -20,9 +21,7 @@ export const SessionStartRequestSchema = z.object({
  * Sent by the client when resuming from background to catch up on missed scrobbles.
  */
 export const SessionSyncRequestSchema = z.object({
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
-  notifyOnSideCompletion: z.boolean().optional().default(true),
-});
+}).strict();
 
 /**
  * Session ID validation.

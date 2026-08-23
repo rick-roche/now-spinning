@@ -8,7 +8,7 @@
 
 import type { Session, SessionTrackState } from "../domain/session.js";
 import { isEligibleToScrobble } from "./eligibility.js";
-import { getSideFromTrack } from "./utils.js";
+import { getPhysicalMediaBoundary } from "./utils.js";
 
 export interface SyncScrobbleAction {
   trackIndex: number;
@@ -49,7 +49,6 @@ export function syncSession(
     const track = currentSession.tracks[currentIndex];
 
     if (!track) break;
-    if (track.status === "scrobbled") break;
     if (track.startedAt === null) break;
 
     const elapsedMs = syncAt - track.startedAt;
@@ -60,22 +59,19 @@ export function syncSession(
         ? releaseTrack.durationSec * 1000
         : null;
 
-    if (!isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent)) {
-      break;
+    const updatedTracks: SessionTrackState[] = [...currentSession.tracks];
+    if (track.status === "pending") {
+      if (!isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent)) break;
+      scrobbleActions.push({ trackIndex: currentIndex, elapsedMs, startedAt: track.startedAt });
+      updatedTracks[currentIndex] = { ...track, status: "scrobbled", scrobbledAt: syncAt };
     }
 
-    scrobbleActions.push({
-      trackIndex: currentIndex,
-      elapsedMs,
-      startedAt: track.startedAt,
-    });
-
-    const updatedTracks: SessionTrackState[] = [...currentSession.tracks];
-    updatedTracks[currentIndex] = {
-      ...track,
-      status: "scrobbled",
-      scrobbledAt: syncAt,
-    };
+    // Eligibility is not playback completion. Unknown-duration tracks require
+    // an explicit user advance because there is no reliable completion time.
+    if (durationMs === null || elapsedMs < durationMs) {
+      currentSession = { ...currentSession, tracks: updatedTracks };
+      break;
+    }
 
     const nextIndex = currentIndex + 1;
     if (nextIndex >= currentSession.tracks.length) {
@@ -87,13 +83,11 @@ export function syncSession(
       break;
     }
 
-    // Pause at a side boundary instead of advancing through it.
+    // Pause at a physical-media boundary instead of advancing through it.
     if (pauseAtSideChange) {
       const currentReleaseTrack = currentSession.release.tracks[currentIndex];
       const nextReleaseTrack = currentSession.release.tracks[nextIndex];
-      const currentSide = getSideFromTrack(currentReleaseTrack);
-      const nextSide = getSideFromTrack(nextReleaseTrack);
-      if (currentSide !== null && nextSide !== null && currentSide !== nextSide) {
+      if (getPhysicalMediaBoundary(currentSession.release, currentReleaseTrack, nextReleaseTrack)) {
         currentSession = {
           ...currentSession,
           tracks: updatedTracks,

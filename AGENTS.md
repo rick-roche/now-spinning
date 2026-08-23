@@ -1,4 +1,4 @@
-# AGENTS.md — Now Spinning Vinyl Scrobbler
+# AGENTS.md — Now Spinning: Play. Track. Collect.
 
 This file is the repo-wide operating guide for coding agents.
 
@@ -6,7 +6,7 @@ Use it as the first read, then load only the docs needed for the current task.
 
 ## 1) Project Snapshot
 
-Now Spinning is a mobile-first app that lets users pick a Discogs release, start a listening session, and scrobble vinyl tracks to Last.fm.
+Now Spinning is a mobile-first app that lets users pick a Discogs release, start a listening session, and scrobble physical music tracks to Last.fm.
 
 - Frontend: React/Vite SPA (`apps/web`)
 - Backend: Hono Node.js API (`apps/server`)

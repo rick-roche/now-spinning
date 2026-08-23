@@ -40,10 +40,6 @@ describe("session routes", () => {
       staticRoot: "/nonexistent",
       NOW_SPINNING_STORAGE: storage,
       scheduler: undefined,
-      PUBLIC_APP_ORIGIN: "http://localhost:3000",
-      LASTFM_CALLBACK_URL: "http://localhost:3000/api/auth/lastfm/callback",
-      DISCOGS_CALLBACK_URL: "http://localhost:3000/api/auth/discogs/callback",
-      DEV_MODE: "true",
     } as unknown as AppEnvironment;
     const scheduler = new SessionScheduler(storage, environment);
     environment.scheduler = scheduler;

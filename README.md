@@ -1,4 +1,4 @@
-# Now Spinning — Vinyl Scrobbler
+# Now Spinning — Play. Track. Collect.
 
 [![CI](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml) [![Deploy](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml)
 
@@ -6,14 +6,14 @@
   <img src="apps/web/public/now-spinning-logo.svg" alt="Now Spinning logo" width="520" />
 </p>
 
-A mobile-first app for scrobbling vinyl listening sessions to [last.fm](https://www.last.fm/).
+A mobile-first app for tracking physical music listening sessions with [last.fm](https://www.last.fm/).
 
 Connect your [last.fm](https://www.last.fm/) and [Discogs](https://www.discogs.com/) accounts and then
 
 - Pick a record from your [Discogs](https://www.discogs.com/) collection
 - Tap **Start Scrobbling**, and let the app scrobble each track as you listen.
 
-Deployed version running at [https://now-spinning.apps.rickroche.com](https://now-spinning.apps.rickroche.com/).
+Deployed version running at [https://now-spinning.rickroche.com](https://now-spinning.rickroche.com/).
 
 ## Documentation
 

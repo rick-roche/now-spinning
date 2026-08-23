@@ -342,7 +342,7 @@ export function Settings() {
             </a>
           </div>
           <p className="text-center text-[10px] text-slate-500 mt-6 leading-relaxed">
-            Designed for vinyl enthusiasts.
+            Designed for physical music enthusiasts.
           </p>
         </section>
 

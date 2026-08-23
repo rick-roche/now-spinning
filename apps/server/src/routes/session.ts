@@ -7,7 +7,6 @@ import {
   endSession,
   ErrorCode,
   isEligibleToScrobble,
-  normalizeDiscogsRelease,
   pauseSession,
   resumeSession,
   syncSession,
@@ -15,7 +14,6 @@ import {
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
   SessionSyncRequestSchema,
-  type NormalizedRelease,
   type SessionActionResponse,
   type SessionCurrentResponse,
   type SessionStartResponse,
@@ -31,56 +29,12 @@ import {
   storeSession,
 } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
-import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials } from "../utils/discogs.js";
+import { loadNormalizedDiscogsRelease } from "../utils/discogs-release.js";
 import { formatZodErrors } from "../utils/validation.js";
 
 type HonoContext = Context<{ Bindings: AppEnvironment }>;
 
 const router = new Hono<{ Bindings: AppEnvironment }>();
-
-async function fetchDiscogsRelease(
-  c: HonoContext,
-  releaseId: string
-): Promise<
-  | { ok: true; release: NormalizedRelease }
-  | { ok: false; status: 400 | 502 | 500; message: string }
-> {
-  const appCredentials = getDiscogsAppCredentials(c);
-  if (!appCredentials) {
-    return { ok: false, status: 500, message: "Discogs credentials not configured" };
-  }
-
-  const releaseUrl = new URL(`${DISCOGS_API_BASE}/releases/${releaseId}`);
-
-  const response = await fetch(releaseUrl.toString(), {
-    headers: {
-      "User-Agent": DISCOGS_USER_AGENT,
-      "Authorization": `Discogs key=${appCredentials.consumerKey}, secret=${appCredentials.consumerSecret}`,
-    },
-  });
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status >= 500 ? 502 : 400,
-      message: "Discogs release lookup failed",
-    };
-  }
-
-  const raw: unknown = await response.json();
-  if (!raw || typeof raw !== "object") {
-    return {
-      ok: false,
-      status: 502,
-      message: "Discogs release lookup returned invalid data",
-    };
-  }
-
-  return {
-    ok: true,
-    release: normalizeDiscogsRelease(raw),
-  };
-}
 
 router.post(
   "/start",
@@ -110,16 +64,28 @@ router.post(
 
     const { releaseId, thresholdPercent, notifyOnSideCompletion } = bodyResult.data;
 
-    if (!/^[0-9]+$/.test(releaseId)) {
-      return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
-    }
-
     const tokens = await loadStoredTokens(storage, userId);
 
-    const releaseResponse = await fetchDiscogsRelease(c, releaseId);
+    const releaseResponse = await loadNormalizedDiscogsRelease(c.env, storage, releaseId);
     if (!releaseResponse.ok) {
-      const status = releaseResponse.status;
-      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, releaseResponse.message), status);
+      if (releaseResponse.status === 429) {
+        if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
+        return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
+      }
+      const code = releaseResponse.status === 500
+        ? ErrorCode.CONFIG_ERROR
+        : releaseResponse.status === 404
+          ? ErrorCode.NOT_FOUND
+          : ErrorCode.DISCOGS_ERROR;
+      const message = releaseResponse.status === 500
+        ? "Discogs credentials not configured"
+        : releaseResponse.status === 404
+          ? "Discogs release not found"
+          : "Discogs release lookup failed";
+      return c.json(createAPIError(code, message), releaseResponse.status);
+    }
+    if (releaseResponse.release.tracks.length === 0) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "This release has no playable tracks"), 400);
     }
 
     const now = Date.now();
@@ -467,17 +433,21 @@ router.post(
       );
     }
 
-    let thresholdPercent = 50;
-    let notifyOnSideCompletion = true;
-    try {
-      const body: unknown = await c.req.json();
-      const bodyResult = SessionSyncRequestSchema.safeParse(body);
-      if (bodyResult.success) {
-        thresholdPercent = bodyResult.data.thresholdPercent;
-        notifyOnSideCompletion = bodyResult.data.notifyOnSideCompletion;
+    const rawBody = await c.req.text();
+    if (rawBody.trim()) {
+      let body: unknown;
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
       }
-    } catch {
-      // No JSON body — use defaults
+      const bodyResult = SessionSyncRequestSchema.safeParse(body);
+      if (!bodyResult.success) {
+        return c.json(
+          createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)),
+          400
+        );
+      }
     }
 
     const { id: sessionId } = paramResult.data;
@@ -489,7 +459,13 @@ router.post(
 
       const tokens = await loadStoredTokens(storage, userId);
       const now = Date.now();
-      const { session: synced, scrobbleActions } = syncSession(session, now, thresholdPercent, notifyOnSideCompletion);
+      const schedule = storage.loadSchedule(sessionId);
+      const { session: synced, scrobbleActions } = syncSession(
+        session,
+        now,
+        schedule?.thresholdPercent ?? 50,
+        schedule?.notifyOnSideCompletion ?? true
+      );
 
       for (const action of scrobbleActions) {
         const scrobbleResult = await scrobbleTrack(
@@ -517,6 +493,7 @@ router.post(
       }
 
       await storeSession(storage, synced);
+      if (synced.state === "running") await c.env.scheduler.resume(sessionId, now, true);
 
       const response: SessionSyncResponse = {
         session: synced,

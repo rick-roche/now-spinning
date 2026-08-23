@@ -5,10 +5,12 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import {
-  normalizeDiscogsRelease,
   createAPIError,
   ErrorCode,
   DiscogsCollectionQuerySchema,
+  DiscogsReleaseParamSchema,
+  DiscogsSearchQuerySchema,
+  derivePhysicalMediaType,
   stripDiscogsDisambiguation,
 } from "@repo/shared";
 import type {
@@ -16,8 +18,9 @@ import type {
   DiscogsCollectionItem,
   DiscogsCollectionSortDir,
   DiscogsCollectionSortField,
-  DiscogsReleaseApiResponse,
   DiscogsReleaseResponse,
+  DiscogsMasterVersion,
+  DiscogsMasterVersionsResponse,
   DiscogsSearchItem,
   DiscogsSearchResponse,
   NormalizedRelease,
@@ -31,9 +34,12 @@ import {
 import type { AppEnvironment } from "../types.js";
 import type { SQLiteStorage } from "../storage/storage.js";
 import { DISCOGS_API_BASE, DISCOGS_USER_AGENT, getDiscogsAppCredentials, createAppAuthHeader } from "../utils/discogs.js";
+import { loadNormalizedDiscogsRelease } from "../utils/discogs-release.js";
+import { formatZodErrors } from "../utils/validation.js";
 
 type HonoContext = Context<{ Bindings: AppEnvironment }>;
 const CACHE_TTL_SECONDS = 3600;
+const MAX_MASTER_VERSION_PAGES = 10;
 const COLLECTION_SNAPSHOT_TTL_SECONDS = 43_200;
 const CACHE_VERSION = "v3";
 const COLLECTION_INDEX_PER_PAGE = 100;
@@ -77,6 +83,7 @@ interface DiscogsCollectionApiResponse {
 
 interface DiscogsCollectionRelease {
   id?: number;
+  instance_id?: number;
   date_added?: string;
   basic_information?: {
     id?: number;
@@ -108,6 +115,11 @@ interface DiscogsSearchResult {
   format?: string[];
   type?: string;
   artist?: string;
+}
+
+interface DiscogsMasterVersionsApiResponse {
+  pagination?: { page?: number; pages?: number };
+  versions?: Array<{ id?: number; title?: string; released?: string; thumb?: string; format?: string; major_formats?: string[] }>;
 }
 
 interface DiscogsCollectionSnapshot {
@@ -154,8 +166,8 @@ function createOAuthHeader(params: {
 
 function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsCollectionItem | null {
   const basic = release.basic_information ?? {};
-  const instanceId = release.id;
-  const releaseId = basic.id;
+  const instanceId = release.instance_id;
+  const releaseId = basic.id ?? release.id;
   if (!instanceId || !releaseId) {
     return null;
   }
@@ -178,6 +190,7 @@ function normalizeCollectionItem(release: DiscogsCollectionRelease): DiscogsColl
     year,
     thumbUrl: basic.thumb ?? basic.cover_image ?? null,
     formats,
+    mediaType: derivePhysicalMediaType(formats),
     dateAdded: release.date_added ?? null,
   };
 }
@@ -200,13 +213,15 @@ function normalizeSearchItem(result: DiscogsSearchResult): DiscogsSearchItem | n
   }
 
   return {
-    instanceId: String(result.id),
+    instanceId: `${result.type === "master" ? "master" : "release"}:${result.id}`,
     releaseId: String(result.id),
     title,
     artist,
     year: Number.isFinite(result.year) ? (result.year as number) : null,
     thumbUrl: result.thumb ?? result.cover_image ?? null,
     formats: result.format ?? [],
+    mediaType: derivePhysicalMediaType(result.format),
+    isMaster: result.type === "master",
   };
 }
 
@@ -281,7 +296,12 @@ async function fetchDiscogsJson<T>(
   const urlPath = (() => { try { return new URL(url).pathname; } catch { return url; } })();
 
   for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
-    const response = await fetch(url, { method: "GET", headers });
+    let response: Response;
+    try {
+      response = await fetch(url, { method: "GET", headers, signal: AbortSignal.timeout(15_000) });
+    } catch {
+      return { ok: false, status: 502 };
+    }
 
     console.log(
       `[Discogs] ${urlPath} → ${response.status} | ratelimit=${response.headers.get("X-Discogs-Ratelimit")} remaining=${response.headers.get("X-Discogs-Ratelimit-Remaining")} used=${response.headers.get("X-Discogs-Ratelimit-Used")} auth=${authHeader ? "yes" : "no"}${attempt > 0 ? ` attempt=${attempt + 1}` : ""}`
@@ -291,8 +311,13 @@ async function fetchDiscogsJson<T>(
       if (!response.ok) {
         return { ok: false, status: response.status };
       }
-      const data = (await response.json()) as T;
-      return { ok: true, data };
+      try {
+        const data: unknown = await response.json();
+        if (!data || typeof data !== "object") return { ok: false, status: 502 };
+        return { ok: true, data: data as T };
+      } catch {
+        return { ok: false, status: 502 };
+      }
     }
 
     // 429: rate limited — retry with backoff unless we've exhausted attempts
@@ -410,8 +435,8 @@ router.get("/collection", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.DISCOGS_NOT_CONNECTED, "Discogs is not connected"), 401);
   }
 
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET;
+  const consumerKey = c.env.discogsConsumerKey;
+  const consumerSecret = c.env.discogsConsumerSecret;
   if (!consumerKey || !consumerSecret) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
@@ -424,7 +449,10 @@ router.get("/collection", async (c: HonoContext) => {
     sortDir: c.req.query("sortDir"),
   });
   if (!parsedQuery.success) {
-    return c.json(createAPIError(ErrorCode.INVALID_QUERY, "Invalid collection query parameters"), 400);
+    return c.json(
+      createAPIError(ErrorCode.VALIDATION_ERROR, "Collection query validation failed", formatZodErrors(parsedQuery.error)),
+      400
+    );
   }
   const { page, perPage, query, sortBy, sortDir } = parsedQuery.data;
 
@@ -450,8 +478,7 @@ router.get("/collection", async (c: HonoContext) => {
         if (identityResponse.retryAfter) c.header("Retry-After", identityResponse.retryAfter);
         return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
       }
-      const statusCode = identityResponse.status >= 500 ? 502 : 400;
-      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs identity lookup failed"), statusCode);
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs identity lookup failed"), 502);
     }
 
     identity = identityResponse.data;
@@ -484,8 +511,7 @@ router.get("/collection", async (c: HonoContext) => {
         if (collectionResponse.retryAfter) c.header("Retry-After", collectionResponse.retryAfter);
         return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
       }
-      const statusCode = collectionResponse.status >= 500 ? 502 : 400;
-      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), statusCode);
+      return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), 502);
     }
 
     const rawData = collectionResponse.data;
@@ -525,8 +551,7 @@ router.get("/collection", async (c: HonoContext) => {
       if (snapshotResult.retryAfter) c.header("Retry-After", snapshotResult.retryAfter);
       return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
-    const statusCode = snapshotResult.status >= 500 ? 502 : 400;
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), statusCode);
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs collection fetch failed"), 502);
   }
 
   const filteredItems = filterCollectionItems(snapshotResult.snapshot.items, query);
@@ -552,21 +577,23 @@ router.get("/collection", async (c: HonoContext) => {
 
 router.get("/search", async (c: HonoContext) => {
   const storage = c.env.NOW_SPINNING_STORAGE;
-  const query = (c.req.query("query") ?? "").trim();
-  if (!query) {
-    return c.json(createAPIError(ErrorCode.INVALID_QUERY, "Query is required"), 400);
+  const parsedQuery = DiscogsSearchQuerySchema.safeParse({
+    query: c.req.query("query"),
+    page: c.req.query("page"),
+    perPage: c.req.query("perPage"),
+  });
+  if (!parsedQuery.success) {
+    return c.json(
+      createAPIError(ErrorCode.VALIDATION_ERROR, "Search query validation failed", formatZodErrors(parsedQuery.error)),
+      400
+    );
   }
+  const { query, page = 1, perPage = 25 } = parsedQuery.data;
 
   const appCredentials = getDiscogsAppCredentials(c);
   if (!appCredentials) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
-
-  const page = Math.max(1, Number.parseInt(c.req.query("page") ?? "1", 10) || 1);
-  const perPage = Math.min(
-    50,
-    Math.max(5, Number.parseInt(c.req.query("perPage") ?? "25", 10) || 25)
-  );
 
   const cacheKey = `discogs:search:${query.toLowerCase()}:${page}:${perPage}`;
   const cached = storage.getCache<DiscogsSearchResponse>(cacheKey);
@@ -576,7 +603,6 @@ router.get("/search", async (c: HonoContext) => {
 
   const searchUrl = new URL(`${DISCOGS_API_BASE}/database/search`);
   searchUrl.searchParams.set("q", query);
-  searchUrl.searchParams.set("type", "release");
   searchUrl.searchParams.set("page", page.toString());
   searchUrl.searchParams.set("per_page", perPage.toString());
   const searchAuthHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
@@ -587,13 +613,12 @@ router.get("/search", async (c: HonoContext) => {
       if (searchResponse.retryAfter) c.header("Retry-After", searchResponse.retryAfter);
       return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
-    const statusCode = searchResponse.status >= 500 ? 502 : 400;
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs search failed"), statusCode);
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs search failed"), 502);
   }
 
   const rawData = searchResponse.data;
   const items = (rawData.results ?? [])
-    .filter((result) => !result.type || result.type === "release")
+    .filter((result) => !result.type || result.type === "release" || result.type === "master")
     .map((result) => normalizeSearchItem(result))
     .filter((item): item is DiscogsSearchItem => item !== null);
 
@@ -613,46 +638,103 @@ router.get("/search", async (c: HonoContext) => {
 
 router.get("/release/:id", async (c: HonoContext) => {
   const storage = c.env.NOW_SPINNING_STORAGE;
-  const releaseId = c.req.param("id");
-
-  if (!releaseId || !/^[0-9]+$/.test(releaseId)) {
-    return c.json(createAPIError(ErrorCode.INVALID_RELEASE_ID, "Release id must be numeric"), 400);
+  const parsedParams = DiscogsReleaseParamSchema.safeParse(c.req.param());
+  if (!parsedParams.success) {
+    return c.json(
+      createAPIError(ErrorCode.VALIDATION_ERROR, "Release path validation failed", formatZodErrors(parsedParams.error)),
+      400
+    );
   }
+  const { id: releaseId } = parsedParams.data;
 
   const appCredentials = getDiscogsAppCredentials(c);
   if (!appCredentials) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
-  const cacheKey = `discogs:release:${releaseId}`;
-  const cached = storage.getCache<DiscogsReleaseResponse<NormalizedRelease>>(cacheKey);
-  if (cached) {
-    return c.json(cached);
-  }
-
-  const releaseUrl = new URL(`${DISCOGS_API_BASE}/releases/${releaseId}`);
-  const releaseAuthHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
-
-  const releaseResponse = await fetchDiscogsJson<DiscogsReleaseApiResponse>(
-    releaseUrl.toString(),
-    releaseAuthHeader
-  );
-
+  const releaseResponse = await loadNormalizedDiscogsRelease(c.env, storage, releaseId);
   if (!releaseResponse.ok) {
     if (releaseResponse.status === 429) {
       if (releaseResponse.retryAfter) c.header("Retry-After", releaseResponse.retryAfter);
       return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
     }
-    const statusCode = releaseResponse.status >= 500 ? 502 : 400;
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs release lookup failed"), statusCode);
+    const code = releaseResponse.status === 500
+      ? ErrorCode.CONFIG_ERROR
+      : releaseResponse.status === 404
+        ? ErrorCode.NOT_FOUND
+        : ErrorCode.DISCOGS_ERROR;
+    const message = releaseResponse.status === 500
+      ? "Discogs credentials not configured"
+      : releaseResponse.status === 404
+        ? "Discogs release not found"
+        : "Discogs release lookup failed";
+    return c.json(createAPIError(code, message), releaseResponse.status);
   }
 
-  const normalized = normalizeDiscogsRelease(releaseResponse.data);
-  const response: DiscogsReleaseResponse<NormalizedRelease> = { release: normalized };
-
-  storage.setCache(cacheKey, response, CACHE_TTL_SECONDS);
-
+  const response: DiscogsReleaseResponse<NormalizedRelease> = { release: releaseResponse.release };
   return c.json(response);
+});
+
+router.get("/master/:id/versions", async (c: HonoContext) => {
+  const storage = c.env.NOW_SPINNING_STORAGE;
+  const parsedParams = DiscogsReleaseParamSchema.safeParse(c.req.param());
+  if (!parsedParams.success) {
+    return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Master path validation failed", formatZodErrors(parsedParams.error)), 400);
+  }
+  const appCredentials = getDiscogsAppCredentials(c);
+  if (!appCredentials) return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
+
+  const { id: masterId } = parsedParams.data;
+  const cacheKey = `discogs:master:versions:${masterId}`;
+  const cached = storage.getCache<DiscogsMasterVersionsResponse>(cacheKey);
+  if (cached) return c.json(cached);
+
+  const authHeader = createAppAuthHeader(appCredentials.consumerKey, appCredentials.consumerSecret);
+  const upstreamVersions: NonNullable<DiscogsMasterVersionsApiResponse["versions"]> = [];
+  let page = 1;
+  let pages = 1;
+  while (page <= pages && page <= MAX_MASTER_VERSION_PAGES) {
+    const response = await fetchDiscogsJson<DiscogsMasterVersionsApiResponse>(
+      `${DISCOGS_API_BASE}/masters/${masterId}/versions?per_page=100&page=${page}`,
+      authHeader
+    );
+    if (!response.ok) {
+      if (response.status === 429) {
+        if (response.retryAfter) c.header("Retry-After", response.retryAfter);
+        return c.json(createAPIError(ErrorCode.DISCOGS_RATE_LIMIT, "Discogs rate limit reached. Please retry shortly."), 429);
+      }
+      const status = response.status === 404 ? 404 : 502;
+      const code = response.status === 404 ? ErrorCode.NOT_FOUND : ErrorCode.DISCOGS_ERROR;
+      const message = response.status === 404 ? "Discogs master release not found" : "Discogs master lookup failed";
+      return c.json(createAPIError(code, message), status);
+    }
+    upstreamVersions.push(...(response.data.versions ?? []));
+    pages = Math.max(1, response.data.pagination?.pages ?? 1);
+    page += 1;
+  }
+  const seenReleaseIds = new Set<string>();
+  const versions: DiscogsMasterVersion[] = upstreamVersions.flatMap((version) => {
+    if (!version.id) return [];
+    if (seenReleaseIds.has(String(version.id))) return [];
+    seenReleaseIds.add(String(version.id));
+    const year = version.released ? Number.parseInt(version.released, 10) : NaN;
+    const formats = [...(version.major_formats ?? []), ...(version.format ? version.format.split(",").map((value) => value.trim()).filter(Boolean) : [])];
+    return [{
+      releaseId: String(version.id),
+      title: version.title ?? "Untitled",
+      year: Number.isFinite(year) ? year : null,
+      thumbUrl: version.thumb ?? null,
+      formats,
+      mediaType: derivePhysicalMediaType(version.major_formats ?? formats),
+    }];
+  });
+  const payload: DiscogsMasterVersionsResponse = {
+    masterId,
+    versions,
+    hasMore: page <= pages,
+  };
+  storage.setCache(cacheKey, payload, CACHE_TTL_SECONDS);
+  return c.json(payload);
 });
 
 export const discogsRoutes = router;

@@ -1,8 +1,8 @@
-## Now Spinning Vinyl Scrobbler
+## Now Spinning: Play. Track. Collect.
 
 ### 1) Problem statement
 
-When I listen to vinyl, my listening history on Last.fm stays incomplete. I want a lightweight mobile-first app that lets me pick a record (from my Discogs collection or a Discogs search), tap **Now Playing**, and have the app **scrobble each track** to Last.fm at the right time—so physical listening is reflected in Last.fm.
+When I listen to physical media, my listening history on Last.fm stays incomplete. I want a lightweight mobile-first app that lets me pick a vinyl record, CD, or cassette (from my Discogs collection or a Discogs search), tap **Now Playing**, and have the app **scrobble each track** to Last.fm at the right time—so physical listening is reflected in Last.fm.
 
 ### 2) Goals
 
@@ -220,7 +220,7 @@ Records are messy (no durations, wrong durations, hidden tracks).
 **MVP approach (robust + simple):**
 
 * If track durations exist: use them to schedule auto-advance.
-* If durations missing: see if the discogs master release has track timings and use those, else if not, use a default per-track duration (configurable) OR require manual advance.
+* If durations are missing on a concrete release: fill only those missing tracks from matching Discogs master-release timings, never overwrite concrete-release timings; otherwise use a default per-track duration (configurable) OR require manual advance.
 * Always allow user overrides:
 
   * “Advance to next track”
@@ -486,6 +486,7 @@ MVP is done when:
 * Default scrobble threshold behavior (choose conservative defaults)
 * Whether to store session history server-side (D1) or local-only initially
 * Whether multi-device continuity is required (probably not for MVP)
+* **2026-08-22:** A global Discogs master selection requires medium selection followed by a concrete pressing selection. Vinyl/cassette pause at side changes; multi-disc CDs pause for disc changes.
 
 ---
 

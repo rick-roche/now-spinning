@@ -27,10 +27,10 @@ const router = new Hono<{ Bindings: AppEnvironment }>();
 
 function discogsError(response: Response): Response {
   const retryAfter = response.headers.get("Retry-After");
-  const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+  const status = response.status === 429 ? 429 : 502;
   const code = status === 429 ? ErrorCode.DISCOGS_RATE_LIMIT : ErrorCode.DISCOGS_ERROR;
   const message =
-    status === 429 ? "Discogs rate limit reached. Please retry shortly." : `Discogs returned ${status}`;
+    status === 429 ? "Discogs rate limit reached. Please retry shortly." : "Discogs authorization request failed";
 
   const headers = new Headers({ "content-type": "application/json" });
   if (retryAfter) {
@@ -45,12 +45,13 @@ router.post("/start", async (c: HonoContext) => {
   const sessionId = getOrCreateSessionId(c);
   setSessionCookie(c, sessionId);
 
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  if (!consumerKey) {
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
+  const consumerKey = c.env.discogsConsumerKey;
+  const consumerSecret = c.env.discogsConsumerSecret;
+  if (!consumerKey || !consumerSecret) {
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
-  const callbackUrl = c.env.DISCOGS_CALLBACK_URL;
+  const callbackUrl = c.env.discogsCallbackUrl;
   if (!callbackUrl) {
     return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs callback URL not configured"), 500);
   }
@@ -67,7 +68,6 @@ router.post("/start", async (c: HonoContext) => {
     oauth_callback: callbackUrl,
   };
 
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET || "";
   const signature = encodeURIComponent(consumerSecret) + "&";
 
   const reqParams = new URLSearchParams({ ...oauthParams, oauth_signature: signature });
@@ -99,8 +99,8 @@ router.post("/start", async (c: HonoContext) => {
 
     const authorizeUrl = `${DISCOGS_AUTHORIZE_URL}?oauth_token=${encodeURIComponent(tokenStr)}`;
     return c.json({ redirectUrl: authorizeUrl });
-  } catch (err) {
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, (err as Error).message), 500);
+  } catch {
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs authorization request failed"), 502);
   }
 });
 
@@ -123,11 +123,11 @@ router.get("/callback", async (c: HonoContext) => {
   const boundSessionId = storedState.sessionId ?? sessionId;
   setSessionCookie(c, boundSessionId);
 
-  const consumerKey = c.env.DISCOGS_CONSUMER_KEY;
-  const consumerSecret = c.env.DISCOGS_CONSUMER_SECRET || "";
+  const consumerKey = c.env.discogsConsumerKey;
+  const consumerSecret = c.env.discogsConsumerSecret;
 
-  if (!consumerKey) {
-    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs consumer key not configured"), 500);
+  if (!consumerKey || !consumerSecret) {
+    return c.json(createAPIError(ErrorCode.CONFIG_ERROR, "Discogs credentials not configured"), 500);
   }
 
   const nonce = generateRandomString(32);
@@ -174,12 +174,12 @@ router.get("/callback", async (c: HonoContext) => {
     };
     await storeTokens(storage, boundSessionId, tokens);
 
-    const appOrigin = c.env.PUBLIC_APP_ORIGIN;
+    const appOrigin = c.env.publicAppOrigin;
     const redirectUrl = new URL("/settings?auth=discogs", appOrigin).toString();
 
     return c.redirect(redirectUrl);
-  } catch (err) {
-    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, (err as Error).message), 500);
+  } catch {
+    return c.json(createAPIError(ErrorCode.DISCOGS_ERROR, "Discogs authorization request failed"), 502);
   }
 });
 

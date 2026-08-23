@@ -2,6 +2,7 @@
 export type {
   NormalizedRelease,
   NormalizedTrack,
+  PhysicalMediaType,
 } from "./domain/release.js";
 export type {
   Session,
@@ -22,7 +23,8 @@ export {
 } from "./session/eligibility.js";
 export { syncSession } from "./session/sync.js";
 export type { SyncScrobbleAction, SyncSessionResult } from "./session/sync.js";
-export { getSideFromTrack } from "./session/utils.js";
+export { getPhysicalMediaBoundary, getSideFromTrack } from "./session/utils.js";
+export type { PhysicalMediaBoundary } from "./session/utils.js";
 
 // Contracts
 export type { APIError } from "./contracts/errors.js";
@@ -45,6 +47,8 @@ export type {
   DiscogsCollectionSortField,
   DiscogsCollectionResponse,
   DiscogsReleaseResponse,
+  DiscogsMasterVersion,
+  DiscogsMasterVersionsResponse,
   DiscogsSearchItem,
   DiscogsSearchResponse,
 } from "./contracts/discogs.js";
@@ -57,7 +61,13 @@ export type {
 } from "./contracts/session.js";
 
 export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";
-export { normalizeDiscogsRelease, parseDiscogsDuration } from "./normalize/discogsRelease.js";
+export {
+  derivePhysicalMediaType,
+  formatDiscogsFormats,
+  mergeMissingTrackDurations,
+  normalizeDiscogsRelease,
+  parseDiscogsDuration,
+} from "./normalize/discogsRelease.js";
 export { stripDiscogsDisambiguation } from "./normalize/artistName.js";
 
 // Validation schemas

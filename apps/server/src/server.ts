@@ -12,14 +12,6 @@ const storage = new SQLiteStorage(database, config.tokenEncryptionKey);
 const environment = {
   ...config,
   NOW_SPINNING_STORAGE: storage,
-  PUBLIC_APP_ORIGIN: config.publicAppOrigin,
-  LASTFM_CALLBACK_URL: config.lastfmCallbackUrl,
-  DISCOGS_CALLBACK_URL: config.discogsCallbackUrl,
-  DEV_MODE: String(config.devMode),
-  LASTFM_API_KEY: config.lastfmApiKey,
-  LASTFM_API_SECRET: config.lastfmApiSecret,
-  DISCOGS_CONSUMER_KEY: config.discogsConsumerKey,
-  DISCOGS_CONSUMER_SECRET: config.discogsConsumerSecret,
 } as AppEnvironment;
 const scheduler = new SessionScheduler(storage, environment);
 environment.scheduler = scheduler;

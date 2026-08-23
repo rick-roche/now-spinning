@@ -120,11 +120,20 @@ describe("DiscogsReleaseIdSchema", () => {
   it("rejects empty string", () => {
     const result = DiscogsReleaseIdSchema.safeParse("");
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("Release ID is required");
+    }
   });
 
   it("rejects whitespace-only string", () => {
     const result = DiscogsReleaseIdSchema.safeParse("   ");
     expect(result.success).toBe(false);
+  });
+
+  it("rejects non-positive and non-numeric IDs", () => {
+    for (const value of ["0", "000", "-1", "1.5", "abc"]) {
+      expect(DiscogsReleaseIdSchema.safeParse(value).success).toBe(false);
+    }
   });
 });
 

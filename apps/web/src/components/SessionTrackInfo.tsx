@@ -1,5 +1,5 @@
 import { Icon } from "./Icon";
-import type { NormalizedRelease, NormalizedTrack } from "@repo/shared";
+import { getSideFromTrack, type NormalizedRelease, type NormalizedTrack } from "@repo/shared";
 
 interface SessionTrackInfoProps {
   track: NormalizedTrack;
@@ -32,9 +32,12 @@ export function SessionTrackInfo({ track, release }: SessionTrackInfoProps) {
       {/* Track Details */}
       <div className="mt-8 text-center space-y-2">
         <div className="flex items-center justify-center gap-2">
-          {track.side && (
+          {release.mediaType === "cd" && track.discNumber != null && (
+            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded bg-white/10 opacity-60">Disc {track.discNumber}</span>
+          )}
+          {release.mediaType !== "cd" && getSideFromTrack(track) && (
             <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded bg-white/10 opacity-60">
-              Side {track.side}
+              Side {getSideFromTrack(track)}
             </span>
           )}
           {track.position && (

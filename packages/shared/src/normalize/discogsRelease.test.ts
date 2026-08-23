@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDiscogsRelease, parseDiscogsDuration } from "./discogsRelease.js";
+import {
+  mergeMissingTrackDurations,
+  normalizeDiscogsRelease,
+  parseDiscogsDuration,
+  deriveDiscNumber,
+  derivePhysicalMediaType,
+} from "./discogsRelease.js";
 
 describe("parseDiscogsDuration", () => {
   it("parses mm:ss and hh:mm:ss values", () => {
@@ -28,6 +34,12 @@ describe("parseDiscogsDuration", () => {
   it("returns null for partially invalid durations", () => {
     expect(parseDiscogsDuration("3:ab")).toBeNull();
     expect(parseDiscogsDuration("xx:30")).toBeNull();
+  });
+
+  it("rejects malformed duration components", () => {
+    expect(parseDiscogsDuration("3:99")).toBeNull();
+    expect(parseDiscogsDuration("3:30x")).toBeNull();
+    expect(parseDiscogsDuration("-1:30")).toBeNull();
   });
 });
 
@@ -264,5 +276,73 @@ describe("normalizeDiscogsRelease", () => {
     expect(normalized.tracks[0]?.artist).toBe("John Smith");
     expect(normalized.tracks[1]?.artist).toBe("Jane Doe");
     expect(normalized.tracks[2]?.artist).toBe("Plain Artist");
+  });
+
+  it("derives physical medium, formats, master ID, and CD disc numbers", () => {
+    const normalized = normalizeDiscogsRelease({
+      id: 15,
+      master_id: 9,
+      formats: [{ name: "CD", descriptions: ["Album", "2xCD"] }],
+      tracklist: [
+        { position: "1-1", title: "Disc one" },
+        { position: "2-1", title: "Disc two" },
+      ],
+    });
+
+    expect(normalized).toMatchObject({
+      mediaType: "cd",
+      formats: ["CD Album 2xCD"],
+      masterId: "9",
+    });
+    expect(normalized.tracks.map((track) => track.discNumber)).toEqual([1, 2]);
+  });
+
+  it("fills only missing track durations from matching master tracks", () => {
+    const release = normalizeDiscogsRelease({
+      id: 16,
+      tracklist: [
+        { position: "A1", title: "Existing", duration: "2:00" },
+        { position: "A2", title: "Missing" },
+        { position: "A3", title: "Unmatched" },
+      ],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 17,
+      tracklist: [
+        { position: "A1", title: "Existing", duration: "3:00" },
+        { position: "A2", title: "Missing", duration: "4:00" },
+        { position: "B3", title: "Different", duration: "5:00" },
+      ],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks.map((track) => track.durationSec)).toEqual([
+      120,
+      240,
+      null,
+    ]);
+  });
+
+  it("never fills a timing from a different title sharing the same position", () => {
+    const release = normalizeDiscogsRelease({ id: 1, tracklist: [{ position: "A1", title: "Single Edit" }] });
+    const master = normalizeDiscogsRelease({ id: 2, tracklist: [{ position: "A1", title: "Album Version", duration: "5:00" }] });
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
+  });
+
+  it("never fills a timing from a different artist sharing the same index", () => {
+    const release = normalizeDiscogsRelease({ id: 1, tracklist: [{ position: "A1", title: "Duet", artists: [{ name: "Release Artist" }] }] });
+    const master = normalizeDiscogsRelease({ id: 2, tracklist: [{ position: "A1", title: "Duet", artists: [{ name: "Other Artist" }], duration: "5:00" }] });
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
+  });
+
+  it("identifies explicit carriers without treating EP as vinyl", () => {
+    expect(derivePhysicalMediaType(["CD", "EP"])).toBe("cd");
+    expect(derivePhysicalMediaType(["Cassette", "EP"])).toBe("cassette");
+    expect(derivePhysicalMediaType(["Vinyl", "EP"])).toBe("vinyl");
+  });
+
+  it("parses common multi-CD positions", () => {
+    expect(deriveDiscNumber("1-01")).toBe(1);
+    expect(deriveDiscNumber("CD 2-01")).toBe(2);
+    expect(deriveDiscNumber("Disc 3.01")).toBe(3);
   });
 });

@@ -53,7 +53,7 @@ export function Release() {
     const order: string[] = [];
 
     release.tracks.forEach((track) => {
-      const key = track.side ?? "Tracks";
+      const key = release.mediaType === "cd" && track.discNumber ? `Disc ${track.discNumber}` : track.side ? `Side ${track.side}` : "Tracks";
       if (!groups.has(key)) {
         groups.set(key, []);
         order.push(key);
@@ -63,7 +63,7 @@ export function Release() {
 
     return order.map((key) => ({
       key,
-      label: key === "Tracks" ? "Tracks" : `Side ${key}`,
+      label: key,
       tracks: groups.get(key) ?? [],
     }));
   }, [release]);
@@ -106,6 +106,7 @@ export function Release() {
   }
 
   if (!release) return null;
+  const hasTracks = release.tracks.length > 0;
 
   return (
     <>
@@ -147,23 +148,36 @@ export function Release() {
           <p className="text-base opacity-60 mt-1 font-medium">
             {release.artist}{release.year ? ` · ${release.year}` : ""}
           </p>
+          {release.formats && release.formats.length > 0 && (
+            <p className="text-xs text-primary mt-2">{release.formats.join(" · ")}</p>
+          )}
+          <a
+            href={`https://www.discogs.com/release/${release.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-primary hover:bg-primary/10 focus-ring"
+          >
+            View on Discogs
+            <Icon name="open_in_new" className="text-base" />
+          </a>
         </div>
 
         {/* Start Session Button */}
         <div className="mt-6">
           <button
             onClick={() => void handleStartSession()}
-            disabled={starting}
+            disabled={starting || !hasTracks}
             className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-primary text-white font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
           >
             <Icon name={starting ? "sync" : "play_arrow"} className={starting ? "animate-spin" : ""} />
-            {starting ? "Starting..." : "Start Scrobbling"}
+            {starting ? "Starting..." : hasTracks ? "Start Scrobbling" : "No playable tracks"}
           </button>
         </div>
         </div>{/* end left column */}
 
         {/* Right column on desktop / continuation on mobile: tracklist */}
         <div className="mt-8 md:mt-4">
+          {!hasTracks && <p className="text-sm text-text-muted">Discogs does not provide a playable tracklist for this release.</p>}
           {groupedTracks.map((group) => (
             <div key={group.key} className="mb-6">
               <div className="flex items-center justify-between mb-3 px-1">

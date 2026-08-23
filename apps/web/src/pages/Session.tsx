@@ -16,7 +16,7 @@ import { useAutoAdvance } from "../hooks/useAutoAdvance";
 import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
 import { useVisibilityResume } from "../hooks/useVisibilityResume";
-import { getSideFromTrack } from "@repo/shared";
+import { getPhysicalMediaBoundary, getSideFromTrack } from "@repo/shared";
 import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
@@ -33,8 +33,9 @@ export function SessionPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [showSideCompletionModal, setShowSideCompletionModal] = useState(false);
   const [sideCompletionInfo, setSideCompletionInfo] = useState<{
-    currentSide: string;
-    nextSide: string;
+    boundary: "flip" | "change-disc";
+    currentUnit: string;
+    nextUnit: string;
     currentTitle: string;
     nextTitle: string;
   } | null>(null);
@@ -156,12 +157,12 @@ export function SessionPage() {
         const nextReleaseTrack = syncedSession.release.tracks[currentIdx + 1];
 
         if (currentReleaseTrack && nextReleaseTrack && currentTrackState?.status === "scrobbled") {
-          const currentSide = getSideFromTrack(currentReleaseTrack);
-          const nextSide = getSideFromTrack(nextReleaseTrack);
-          if (currentSide && nextSide && currentSide !== nextSide) {
+          const boundary = getPhysicalMediaBoundary(syncedSession.release, currentReleaseTrack, nextReleaseTrack);
+          if (boundary) {
             setSideCompletionInfo({
-              currentSide,
-              nextSide,
+              boundary,
+              currentUnit: boundary === "flip" ? getSideFromTrack(currentReleaseTrack) ?? "" : String(currentReleaseTrack.discNumber),
+              nextUnit: boundary === "flip" ? getSideFromTrack(nextReleaseTrack) ?? "" : String(nextReleaseTrack.discNumber),
               currentTitle: currentReleaseTrack.title || "Unknown",
               nextTitle: nextReleaseTrack.title || "Unknown",
             });
@@ -183,13 +184,13 @@ export function SessionPage() {
     const next = session.release.tracks[session.currentIndex + 1];
     if (!current || !next) return null;
 
-    const currentSide = getSideFromTrack(current);
-    const nextSide = getSideFromTrack(next);
-    if (!currentSide || !nextSide || currentSide === nextSide) return null;
+    const boundary = getPhysicalMediaBoundary(session.release, current, next);
+    if (!boundary) return null;
 
     return {
-      currentSide,
-      nextSide,
+      boundary,
+      currentUnit: boundary === "flip" ? getSideFromTrack(current) ?? "" : String(current.discNumber),
+      nextUnit: boundary === "flip" ? getSideFromTrack(next) ?? "" : String(next.discNumber),
       currentTitle: current.title || "Unknown",
       nextTitle: next.title || "Unknown",
     };
@@ -217,9 +218,11 @@ export function SessionPage() {
   );
 
   const handleSideCompletionContinue = useCallback(async () => {
-    setShowSideCompletionModal(false);
-    setSideCompletionInfo(null);
-    await sessionActions.next();
+    const succeeded = await sessionActions.next();
+    if (succeeded) {
+      setShowSideCompletionModal(false);
+      setSideCompletionInfo(null);
+    }
   }, [sessionActions]);
 
   const handleSideCompletionPause = useCallback(() => {
@@ -421,13 +424,16 @@ export function SessionPage() {
 
       {sideCompletionInfo && (
         <SideCompletionModal
-          currentSide={sideCompletionInfo.currentSide}
-          nextSide={sideCompletionInfo.nextSide}
+          boundary={sideCompletionInfo.boundary}
+          currentUnit={sideCompletionInfo.currentUnit}
+          nextUnit={sideCompletionInfo.nextUnit}
           currentTrackTitle={sideCompletionInfo.currentTitle}
           nextTrackTitle={sideCompletionInfo.nextTitle}
           isOpen={showSideCompletionModal}
           onContinue={handleSideCompletionContinue}
           onPause={handleSideCompletionPause}
+          loading={sessionActions.isLoading}
+          error={sessionActions.error}
         />
       )}
     </>

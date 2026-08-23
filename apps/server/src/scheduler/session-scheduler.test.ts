@@ -25,10 +25,12 @@ const release: NormalizedRelease = {
 
 describe("SessionScheduler", () => {
   it("starts background work only for the scheduler holding the SQLite lease", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);
     const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
-    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 120_000 });
+    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() - 240_000 });
     storage.saveSession(session);
     storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
     storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
@@ -38,7 +40,7 @@ describe("SessionScheduler", () => {
     const second = new SessionScheduler(storage, environment);
     await first.start();
     await second.start();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await vi.advanceTimersByTimeAsync(1_100);
 
     const updated = storage.loadSession(session.id);
     expect(updated?.state).toBe("ended");
@@ -47,6 +49,7 @@ describe("SessionScheduler", () => {
     await second.stop();
     await first.stop();
     storage.close();
+    vi.useRealTimers();
   });
 
   it("retries startup ownership after an existing lease expires", async () => {
@@ -63,7 +66,7 @@ describe("SessionScheduler", () => {
 
     const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
     await scheduler.start();
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(61_000);
     expect(storage.loadSession(session.id)?.state).toBe("ended");
     await scheduler.stop();
     storage.close();
@@ -84,5 +87,32 @@ describe("SessionScheduler", () => {
     expect(storage.loadSchedule(paused.id)?.dueAt).toBeNull();
     await scheduler.stop();
     storage.close();
+  });
+
+  it("advances an already-scrobbled track when Last.fm credentials disappear", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const created = createSession({ sessionId: "session-no-lastfm", userId: "user-no-lastfm", release, startedAt: Date.now() - 240_000 });
+    const firstTrack = created.tracks[0];
+    if (!firstTrack) throw new Error("Expected a session track");
+    const session = {
+      ...created,
+      tracks: [{ ...firstTrack, status: "scrobbled" as const, scrobbledAt: Date.now() - 60_000 }],
+    };
+    storage.saveSession(session);
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: Date.now() - 1, updatedAt: Date.now() });
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    expect(storage.loadSession(session.id)?.state).toBe("ended");
+    expect(storage.loadSchedule(session.id)).toBeNull();
+    await scheduler.stop();
+    storage.close();
+    vi.useRealTimers();
   });
 });

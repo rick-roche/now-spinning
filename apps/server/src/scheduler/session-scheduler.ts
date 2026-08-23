@@ -1,4 +1,4 @@
-import { advanceSession, getScrobbleThresholdMs, getSideFromTrack, pauseSession, type Session } from "@repo/shared";
+import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, pauseSession, type Session } from "@repo/shared";
 import { randomUUID } from "node:crypto";
 import { scrobbleTrack, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
@@ -127,11 +127,16 @@ export class SessionScheduler {
     if (!session || !schedule || session.state !== "running") return Promise.resolve();
     const track = session.release.tracks[session.currentIndex];
     const state = session.tracks[session.currentIndex];
-    if (!track || !state || state.status === "scrobbled") return Promise.resolve();
+    if (!track || !state || state.startedAt === null) return Promise.resolve();
     const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
-    const dueAt = Math.max(referenceTime + 1000, (state.startedAt ?? referenceTime) + (getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000));
-    this.storage.saveSchedule({ ...schedule, dueAt, updatedAt: Date.now() });
-    this.arm(sessionId, dueAt);
+    const scrobbleDueAt = state.startedAt + (getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000);
+    const dueAt = state.status === "pending" ? scrobbleDueAt : durationMs === null ? null : state.startedAt + durationMs;
+    if (dueAt === null) {
+      this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+      return Promise.resolve();
+    }
+    this.storage.saveSchedule({ ...schedule, dueAt: Math.max(referenceTime + 1000, dueAt), updatedAt: Date.now() });
+    this.arm(sessionId, Math.max(referenceTime + 1000, dueAt));
     return Promise.resolve();
   }
 
@@ -149,22 +154,48 @@ export class SessionScheduler {
       }
       const current = session.tracks[session.currentIndex];
       const track = session.release.tracks[session.currentIndex];
-      if (!current || !track || current.status === "scrobbled") { this.clear(sessionId); return; }
+      if (!current || !track || current.startedAt === null) { this.clear(sessionId); return; }
       const now = Date.now();
       const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
-      const startedAt = current.startedAt ?? now;
-      if (now - startedAt < (getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000)) { await this.schedule(sessionId, now); return; }
-      const tokens = this.storage.loadTokens(session.userId);
-      if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
-      const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
-      if (!result.ok) console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message);
-      const trackEnd = durationMs === null ? now : startedAt + durationMs;
-      const nextTrack = session.release.tracks[session.currentIndex + 1];
-      if (schedule.notifyOnSideCompletion && nextTrack && getSideFromTrack(track) !== null && getSideFromTrack(nextTrack) !== null && getSideFromTrack(track) !== getSideFromTrack(nextTrack)) {
+      const startedAt = current.startedAt;
+      const thresholdMs = getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000;
+      if (current.status === "pending") {
+        if (now - startedAt < thresholdMs) { await this.schedule(sessionId, now); return; }
+        const tokens = this.storage.loadTokens(session.userId);
+        if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
+        const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
+        if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: now };
+        await storeSession(this.storage, { ...session, tracks });
+        await this.schedule(sessionId, now);
+        return;
+      }
+      if (durationMs === null || now - startedAt < durationMs) { await this.schedule(sessionId, now); return; }
+      const trackEnd = startedAt + durationMs;
+      const nextTrack = session.release.tracks[session.currentIndex + 1];
+      if (schedule.notifyOnSideCompletion && nextTrack && getPhysicalMediaBoundary(session.release, track, nextTrack)) {
+        const tracks = [...session.tracks];
+        tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: current.scrobbledAt ?? now };
         const paused = pauseSession({ ...session, tracks });
         await storeSession(this.storage, paused); this.clear(sessionId); this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now }); return;
+      }
+      const tokens = this.storage.loadTokens(session.userId);
+      if (!tokens.lastfm) {
+        if (current.status !== "scrobbled") {
+          this.clear(sessionId);
+          this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now });
+          return;
+        }
+        const advancedWithoutLastFm = advanceSession(session, trackEnd);
+        await storeSession(this.storage, advancedWithoutLastFm);
+        if (advancedWithoutLastFm.state === "ended") {
+          this.clear(sessionId);
+          this.storage.deleteSchedule(sessionId);
+        } else {
+          await this.schedule(sessionId, now);
+        }
+        return;
       }
       const advanced = advanceSession(session, trackEnd);
       const tracks = [...advanced.tracks];

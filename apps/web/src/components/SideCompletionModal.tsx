@@ -1,25 +1,30 @@
 import { Button, Dialog, Flex, Text } from "@radix-ui/themes";
+import type { PhysicalMediaBoundary } from "@repo/shared";
 import { Icon } from "./Icon";
 
 interface SideCompletionModalProps {
-  currentSide: string;
-  nextSide: string;
+  boundary: PhysicalMediaBoundary;
+  currentUnit: string;
+  nextUnit: string;
   currentTrackTitle: string;
   nextTrackTitle: string;
   onContinue: () => Promise<void>;
   onPause: () => void;
   isOpen: boolean;
+  loading?: boolean;
+  error?: string | null;
 }
 
 export function SideCompletionModal(props: SideCompletionModalProps) {
   const {
-    currentSide,
-    nextSide,
+    boundary,
+    currentUnit,
+    nextUnit,
     currentTrackTitle,
     nextTrackTitle,
     isOpen,
     onContinue,
-    onPause,
+    onPause, loading = false, error,
   } = props;
 
   return (
@@ -28,11 +33,13 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
         <Dialog.Title>
           <Flex gap="2" align="center">
             <Icon name="album" />
-            Time to flip the record
+            {boundary === "flip" ? "Time to flip" : "Time to change disc"}
           </Flex>
         </Dialog.Title>
         <Dialog.Description>
-          You just finished side {currentSide}. Flip to side {nextSide} to keep listening.
+          {boundary === "flip"
+            ? `You just finished side ${currentUnit}. Flip to side ${nextUnit} to keep listening.`
+            : `You just finished disc ${currentUnit}. Change to disc ${nextUnit} to keep listening.`}
         </Dialog.Description>
 
         <Text as="p" size="2" color="gray" mt="3" mb="5">
@@ -42,11 +49,12 @@ export function SideCompletionModal(props: SideCompletionModalProps) {
         </Text>
 
         <Flex gap="3" justify="end" mt="6">
-          <Button variant="soft" onClick={onPause}>
+          {error && <Text as="p" role="alert" aria-live="assertive" color="red" size="2">{error}</Text>}
+          <Button variant="soft" onClick={onPause} disabled={loading}>
             Keep paused
           </Button>
-          <Button onClick={() => void onContinue()}>
-            Continue to side {nextSide}
+          <Button onClick={() => void onContinue()} disabled={loading}>
+            Continue to {boundary === "flip" ? `side ${nextUnit}` : `disc ${nextUnit}`}
           </Button>
         </Flex>
       </Dialog.Content>
