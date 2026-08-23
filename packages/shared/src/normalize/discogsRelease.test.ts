@@ -328,6 +328,12 @@ describe("normalizeDiscogsRelease", () => {
     expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
   });
 
+  it("never fills a timing from a different artist sharing the same index", () => {
+    const release = normalizeDiscogsRelease({ id: 1, tracklist: [{ position: "A1", title: "Duet", artists: [{ name: "Release Artist" }] }] });
+    const master = normalizeDiscogsRelease({ id: 2, tracklist: [{ position: "A1", title: "Duet", artists: [{ name: "Other Artist" }], duration: "5:00" }] });
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
+  });
+
   it("identifies explicit carriers without treating EP as vinyl", () => {
     expect(derivePhysicalMediaType(["CD", "EP"])).toBe("cd");
     expect(derivePhysicalMediaType(["Cassette", "EP"])).toBe("cassette");

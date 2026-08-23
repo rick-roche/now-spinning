@@ -147,6 +147,8 @@ export function mergeMissingTrackDurations(
     const sameIndex = master.tracks[track.index];
     const fallback =
       sameIndex?.title.trim().toLowerCase() === title &&
+      sameIndex.artist.trim().toLowerCase() === artist &&
+      sameIndex.position === track.position &&
       sameIndex.durationSec !== null
         ? sameIndex
         : undefined;
