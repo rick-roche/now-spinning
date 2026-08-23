@@ -16,8 +16,8 @@
   "dependencies": {
     "@repo/shared": "workspace:*",
     "@hono/node-server": "^1.19.10",
-    "better-sqlite3": "^12.6.2",
-    "hono": "^4.12.19",
+    "better-sqlite3": "^13.0.3",
+    "hono": "^4.12.34",
     "js-md5": "^0.8.3"
   },
   "devDependencies": {
