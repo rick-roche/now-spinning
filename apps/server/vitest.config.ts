@@ -5,6 +5,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     testTimeout: 10000,
+    pool: "forks",
+    fileParallelism: false,
+    maxWorkers: 1,
+    isolate: false,
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "json", "html"],
