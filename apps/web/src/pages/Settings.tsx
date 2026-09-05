@@ -180,7 +180,7 @@ export function Settings() {
               <div className="relative w-full h-6 flex items-center">
                 <input
                   type="range"
-                  min="0"
+                  min="1"
                   max="100"
                   step="5"
                   value={scrobbleDelayPercent}

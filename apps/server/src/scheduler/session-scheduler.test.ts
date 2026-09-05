@@ -126,6 +126,35 @@ describe("SessionScheduler", () => {
     vi.useRealTimers();
   });
 
+  it("does not automatically scrobble tracks shorter than 30 seconds", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(60_000);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const shortRelease: NormalizedRelease = {
+      ...release,
+      tracks: [{ ...release.tracks[0]!, durationSec: 10 }],
+    };
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-short", userId: "user-short", release: shortRelease, startedAt: 0 });
+    storage.startSession(session, 50, false);
+    storage.storeTokens("user-short", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: 1, updatedAt: 1 });
+    const providerFetch = vi.spyOn(globalThis, "fetch");
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("pending");
+    expect(storage.loadSchedule(session.id)?.dueAt).toBeNull();
+    expect(providerFetch).not.toHaveBeenCalled();
+
+    await scheduler.stop();
+    providerFetch.mockRestore();
+    storage.close();
+    vi.useRealTimers();
+  });
+
   it("supersedes the previous user's session when starting a new one", async () => {
     const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
     paths.push(path);

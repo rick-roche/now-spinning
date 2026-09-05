@@ -20,6 +20,7 @@ export {
 export {
   isEligibleToScrobble,
   getScrobbleThresholdMs,
+  isScrobblableDuration,
 } from "./session/eligibility.js";
 export { syncSession } from "./session/sync.js";
 export type { SyncScrobbleAction, SyncSessionResult } from "./session/sync.js";

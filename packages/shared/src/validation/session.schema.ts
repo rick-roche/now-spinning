@@ -12,7 +12,7 @@ import { DiscogsReleaseIdSchema } from "./discogs.schema.js";
  */
 export const SessionStartRequestSchema = z.object({
   releaseId: DiscogsReleaseIdSchema,
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  thresholdPercent: z.number().min(1).max(100).optional().default(50),
   notifyOnSideCompletion: z.boolean().optional().default(true),
 });
 
@@ -62,7 +62,7 @@ export const SessionScrobbleCurrentRequestSchema = z.object({
   expectedRevision: z.number().int().min(0),
   expectedTrackIndex: z.number().int().min(0),
   elapsedMs: z.number().min(0, "Elapsed time must be non-negative"),
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  thresholdPercent: z.number().min(1).max(100).optional().default(50),
 });
 
 export type SessionScrobbleCurrentRequest = z.infer<typeof SessionScrobbleCurrentRequestSchema>;

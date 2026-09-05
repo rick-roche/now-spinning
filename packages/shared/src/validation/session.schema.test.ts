@@ -60,6 +60,10 @@ describe("SessionStartRequestSchema", () => {
     }
   });
 
+  it("rejects a zero threshold percent", () => {
+    expect(SessionStartRequestSchema.safeParse({ releaseId: "123", thresholdPercent: 0 }).success).toBe(false);
+  });
+
   it("defaults notifyOnSideCompletion to true", () => {
     const result = SessionStartRequestSchema.safeParse({ releaseId: "123" });
     expect(result.success).toBe(true);

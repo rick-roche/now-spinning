@@ -1,4 +1,4 @@
-import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, pauseSession, type Session } from "@repo/shared";
+import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, isScrobblableDuration, pauseSession, type Session } from "@repo/shared";
 import { randomUUID } from "node:crypto";
 import { deliverScrobble, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
@@ -140,6 +140,10 @@ export class SessionScheduler {
     const state = session.tracks[session.currentIndex];
     if (!track || !state || state.startedAt === null) return Promise.resolve();
     const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
+    if (!isScrobblableDuration(durationMs)) {
+      this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+      return Promise.resolve();
+    }
     const scrobbleDueAt = state.startedAt + (getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000);
     const dueAt = state.status === "pending" ? scrobbleDueAt : durationMs === null ? null : state.startedAt + durationMs;
     if (dueAt === null) {
@@ -168,6 +172,11 @@ export class SessionScheduler {
       if (!current || !track || current.startedAt === null) { this.clear(sessionId); return; }
       const now = Date.now();
       const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
+      if (!isScrobblableDuration(durationMs)) {
+        this.clear(sessionId);
+        this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now });
+        return;
+      }
       const startedAt = current.startedAt;
       const thresholdMs = getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000;
       if (current.status === "pending") {
