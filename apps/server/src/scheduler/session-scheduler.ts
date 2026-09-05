@@ -64,7 +64,7 @@ export class SessionScheduler {
   }
 
   async startSession(session: Session, thresholdPercent: number, notifyOnSideCompletion: boolean): Promise<void> {
-    this.storage.saveSchedule({ sessionId: session.id, thresholdPercent, notifyOnSideCompletion, dueAt: null, updatedAt: Date.now() });
+    this.storage.startSession(session, thresholdPercent, notifyOnSideCompletion);
     await this.schedule(session.id, Date.now());
   }
 
@@ -174,6 +174,7 @@ export class SessionScheduler {
         if (now - startedAt < thresholdMs) { await this.schedule(sessionId, now); return; }
         const tokens = this.storage.loadTokens(session.userId);
         if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
+        if (!this.storage.isCurrentSession(session.userId, session.id)) return;
         const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
         if (this.stopped) return;
         if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }

@@ -1,4 +1,4 @@
-import type { Session, StoredToken } from "@repo/shared";
+import { endSession, type Session, type StoredToken } from "@repo/shared";
 import type { SqliteDatabase } from "./database.js";
 import { decryptJson, encryptJson, StorageCryptoError } from "./crypto.js";
 
@@ -92,11 +92,31 @@ export class SQLiteStorage {
   }
 
   saveSession(session: Session): void {
+    this.db.prepare("INSERT INTO sessions(id,user_id,session_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, session_json=excluded.session_json, updated_at=excluded.updated_at")
+      .run(session.id, session.userId, JSON.stringify(session), Date.now());
+  }
+
+  startSession(session: Session, thresholdPercent: number, notifyOnSideCompletion: boolean): void {
+    const now = Date.now();
     const transaction = this.db.transaction(() => {
+      const previousSessions = this.db.prepare("SELECT id, session_json FROM sessions WHERE user_id = ? AND id != ?")
+        .all(session.userId, session.id) as Array<{ id: string; session_json: string }>;
+      for (const row of previousSessions) {
+        let previous: Session | null = null;
+        try { previous = JSON.parse(row.session_json) as Session; } catch { /* loadSession treats corrupt history as unavailable */ }
+        if (previous && previous.state !== "ended") {
+          this.db.prepare("UPDATE sessions SET session_json = ?, updated_at = ? WHERE id = ?")
+            .run(JSON.stringify(endSession(previous)), now, previous.id);
+        }
+        this.db.prepare("DELETE FROM session_schedules WHERE session_id = ?").run(row.id);
+      }
+
       this.db.prepare("INSERT INTO sessions(id,user_id,session_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, session_json=excluded.session_json, updated_at=excluded.updated_at")
-        .run(session.id, session.userId, JSON.stringify(session), Date.now());
+        .run(session.id, session.userId, JSON.stringify(session), now);
       this.db.prepare("INSERT INTO current_sessions(user_id,session_id) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET session_id=excluded.session_id")
         .run(session.userId, session.id);
+      this.db.prepare("INSERT INTO session_schedules(session_id,threshold_percent,notify_on_side_completion,due_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET threshold_percent=excluded.threshold_percent, notify_on_side_completion=excluded.notify_on_side_completion, due_at=excluded.due_at, updated_at=excluded.updated_at")
+        .run(session.id, thresholdPercent, notifyOnSideCompletion ? 1 : 0, null, now);
     });
     transaction();
   }
@@ -110,6 +130,12 @@ export class SQLiteStorage {
   loadCurrentSession(userId: string): Session | null {
     const row = this.db.prepare("SELECT session_id FROM current_sessions WHERE user_id = ?").get(userId) as { session_id: string } | undefined;
     return row ? this.loadSession(row.session_id) : null;
+  }
+
+  isCurrentSession(userId: string, sessionId: string): boolean {
+    const row = this.db.prepare("SELECT 1 FROM current_sessions WHERE user_id = ? AND session_id = ?")
+      .get(userId, sessionId);
+    return row !== undefined;
   }
 
   saveSchedule(record: ScheduleRecord): void {
