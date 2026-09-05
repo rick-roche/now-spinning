@@ -10,6 +10,7 @@ const fetchMock = createFetchMock();
 const mockSession: Session = {
   id: "sess-123",
   state: "running",
+  revision: 0,
   currentIndex: 0,
   userId: "user-1",
   startedAt: Date.now() - 10000,
@@ -358,8 +359,8 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/pause", {
-        credentials: "include",
-        method: "POST",
+        credentials: "include", method: "POST", headers: { "Content-Type": "application/json" },
+        body: expect.stringContaining('"expectedRevision":0'),
       });
     });
   });
@@ -395,8 +396,8 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/resume", {
-        credentials: "include",
-        method: "POST",
+        credentials: "include", method: "POST", headers: { "Content-Type": "application/json" },
+        body: expect.stringContaining('"expectedRevision":0'),
       });
     });
   });
@@ -430,8 +431,8 @@ describe("SessionPage", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/next", {
-        credentials: "include",
-        method: "POST",
+        credentials: "include", method: "POST", headers: { "Content-Type": "application/json" },
+        body: expect.stringContaining('"expectedTrackIndex":0'),
       });
     });
   });

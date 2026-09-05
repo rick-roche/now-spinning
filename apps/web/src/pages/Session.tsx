@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { SessionControls } from "../components/SessionControls";
@@ -8,23 +8,16 @@ import { SideCompletionModal } from "../components/SideCompletionModal";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { SessionComplete } from "../components/SessionComplete";
 import { SessionSkeleton } from "../components/SessionSkeleton";
+import { apiFetch } from "../lib/api";
 import { getNotifyOnSideCompletion } from "../lib/settings";
-import { useApiMutation } from "../hooks/useApiMutation";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { useSessionTimer } from "../hooks/useSessionTimer";
-import { useAutoAdvance } from "../hooks/useAutoAdvance";
-import { useScrobbleScheduler } from "../hooks/useScrobbleScheduler";
 import { useSessionActions } from "../hooks/useSessionActions";
 import { useVisibilityResume } from "../hooks/useVisibilityResume";
 import { getPhysicalMediaBoundary, getSideFromTrack } from "@repo/shared";
-import type { Session, SessionCurrentResponse, SessionActionResponse } from "@repo/shared";
+import type { Session, SessionCurrentResponse } from "@repo/shared";
 
 function isSessionCurrentResponse(value: unknown): value is SessionCurrentResponse {
-  if (!value || typeof value !== "object") return false;
-  return "session" in value;
-}
-
-function isSessionActionResponse(value: unknown): value is SessionActionResponse {
   if (!value || typeof value !== "object") return false;
   return "session" in value;
 }
@@ -39,7 +32,6 @@ export function SessionPage() {
     currentTitle: string;
     nextTitle: string;
   } | null>(null);
-  const sessionRef = useRef<Session | null>(null);
 
   const {
     data: currentResponse,
@@ -50,6 +42,27 @@ export function SessionPage() {
     errorMessage: "Failed to load session",
     retry: 0,
   });
+
+  const applySession = useCallback((nextSession: Session | null) => {
+    setSession((currentSession) => {
+      if (!currentSession || !nextSession || currentSession.id !== nextSession.id) return nextSession;
+      return currentSession.revision > nextSession.revision ? currentSession : nextSession;
+    });
+  }, []);
+
+  const recoverSession = useCallback(async (): Promise<Session | null> => {
+    try {
+      const response = await apiFetch("/api/session/current");
+      if (!response.ok) return null;
+      const body: unknown = await response.json();
+      if (!isSessionCurrentResponse(body)) return null;
+      const recovered = body.session ?? null;
+      applySession(recovered);
+      return recovered;
+    } catch {
+      return null;
+    }
+  }, [applySession]);
 
   // Sync session state from API response
   useEffect(() => {
@@ -62,14 +75,8 @@ export function SessionPage() {
       return;
     }
 
-    const newSession = currentResponse.session ?? null;
-    setSession(newSession);
-  }, [currentResponse]);
-
-  // Keep sessionRef in sync
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
+    applySession(currentResponse.session ?? null);
+  }, [applySession, currentResponse]);
 
   const currentTrack = useMemo(() => {
     if (!session) return null;
@@ -94,56 +101,11 @@ export function SessionPage() {
     isRunning
   );
 
-  const sessionActions = useSessionActions(session, setSession);
-
-  const { mutate: scrobbleCurrent } = useApiMutation<
-    SessionActionResponse,
-    { sessionId: string; elapsedMs: number; thresholdPercent: number }
-  >((vars) => ({
-    url: `/api/session/${vars.sessionId}/scrobble-current`,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      elapsedMs: vars.elapsedMs,
-      thresholdPercent: vars.thresholdPercent,
-    }),
-  }));
-
-  const handleScrobbleCurrent = useCallback(
-    async (elapsedMs: number, thresholdPercent: number) => {
-      const currentSession = sessionRef.current;
-      if (!currentSession) return;
-
-      const raw = await scrobbleCurrent({
-        sessionId: currentSession.id,
-        elapsedMs,
-        thresholdPercent,
-      });
-
-      if (raw && isSessionActionResponse(raw)) {
-        setSession(raw.session);
-      }
-    },
-    [scrobbleCurrent]
-  );
-
-  const { markAsScrobbled } = useScrobbleScheduler(
-    session?.id ?? null,
-    session?.currentIndex ?? 0,
-    isRunning,
-    durationMs,
-    elapsedMs,
-    handleScrobbleCurrent
-  );
+  const sessionActions = useSessionActions(session, applySession, recoverSession);
 
   const handleVisibilitySync = useCallback(
     (syncedSession: Session, _scrobbledCount: number) => {
-      for (const track of syncedSession.tracks) {
-        if (track.status === "scrobbled") {
-          markAsScrobbled(syncedSession.id, track.index);
-        }
-      }
-      setSession(syncedSession);
+      applySession(syncedSession);
 
       // If the server paused the session at a side boundary (because the DO
       // fired while the phone was locked), detect that and show the flip modal.
@@ -171,7 +133,7 @@ export function SessionPage() {
         }
       }
     },
-    [markAsScrobbled]
+    [applySession]
   );
 
   useVisibilityResume(session?.id ?? null, isRunning, {
@@ -209,13 +171,6 @@ export function SessionPage() {
 
     await sessionActions.next();
   }, [getSideCompletionInfo, session, sessionActions]);
-
-  useAutoAdvance(
-    isRunning,
-    durationMs,
-    elapsedMs,
-    handleNext
-  );
 
   const handleSideCompletionContinue = useCallback(async () => {
     const succeeded = await sessionActions.next();

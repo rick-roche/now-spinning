@@ -4,6 +4,7 @@ import {
   SessionSyncRequestSchema,
   SessionIdSchema,
   SessionParamSchema,
+  SessionMutationRequestSchema,
 } from "./session.schema.js";
 
 describe("SessionStartRequestSchema", () => {
@@ -86,6 +87,25 @@ describe("SessionSyncRequestSchema", () => {
     expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: 75 }).success).toBe(false);
     expect(SessionSyncRequestSchema.safeParse({ notifyOnSideCompletion: false }).success).toBe(false);
     expect(SessionSyncRequestSchema.safeParse({ thresholdPercent: -1 }).success).toBe(false);
+  });
+});
+
+describe("SessionMutationRequestSchema", () => {
+  it("requires a mutation ID and the session revision it was created for", () => {
+    expect(SessionMutationRequestSchema.safeParse({
+      mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2",
+      expectedRevision: 4,
+      expectedTrackIndex: 1,
+    }).success).toBe(true);
+    expect(SessionMutationRequestSchema.safeParse({
+      expectedRevision: 4,
+      expectedTrackIndex: 1,
+    }).success).toBe(false);
+    expect(SessionMutationRequestSchema.safeParse({
+      mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2",
+      expectedRevision: -1,
+      expectedTrackIndex: 1,
+    }).success).toBe(false);
   });
 });
 

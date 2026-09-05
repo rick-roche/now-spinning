@@ -13,6 +13,7 @@ import {
   SessionStartRequestSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionMutationRequestSchema,
   SessionSyncRequestSchema,
   type SessionActionResponse,
   type SessionCurrentResponse,
@@ -128,17 +129,30 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
+    let body: unknown;
+    try { body = await c.req.json(); } catch {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+    }
+    const bodyResult = SessionMutationRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
+    }
+    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
     return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "pause");
+      if (replay) return c.json(replay);
       const session = await loadSession(storage, sessionId);
       if (!session || session.userId !== userId) {
         return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
       }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
+      }
 
       const updated = pauseSession(session);
-      await storeSession(storage, updated);
-      await c.env.scheduler.pause(sessionId, true);
-
       const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "pause", response);
+      await c.env.scheduler.pause(sessionId, true);
       return c.json(response);
     });
   }
@@ -163,16 +177,31 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
+    let body: unknown;
+    try { body = await c.req.json(); } catch {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+    }
+    const bodyResult = SessionMutationRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
+    }
+    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
     return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "resume");
+      if (replay) return c.json(replay);
       const session = await loadSession(storage, sessionId);
       if (!session || session.userId !== userId) {
         return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
       const tokens = await loadStoredTokens(storage, userId);
       const now = Date.now();
       const updated = resumeSession(session, now);
-      await storeSession(storage, updated);
+      const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "resume", response);
 
       if (updated.state !== "ended") {
         const npResult = await sendNowPlaying(
@@ -187,8 +216,6 @@ router.post(
 
         await c.env.scheduler.resume(sessionId, now, true);
       }
-
-      const response: SessionActionResponse = { session: updated };
       return c.json(response);
     });
   }
@@ -231,12 +258,17 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
-    const { elapsedMs, thresholdPercent } = bodyResult.data;
+    const { mutationId, elapsedMs, thresholdPercent, expectedRevision, expectedTrackIndex } = bodyResult.data;
 
     return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "scrobble-current");
+      if (replay) return c.json(replay);
       const session = await loadSession(storage, sessionId);
       if (!session || session.userId !== userId) {
         return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
       const currentIndex = session.currentIndex;
@@ -277,10 +309,9 @@ router.post(
       const updatedTrack = { ...currentTrack, status: "scrobbled" as const, scrobbledAt: Date.now() };
       const updatedTracks = [...session.tracks];
       updatedTracks[currentIndex] = updatedTrack;
-      const updated = { ...session, tracks: updatedTracks };
-      await storeSession(storage, updated);
-
+      const updated = { ...session, tracks: updatedTracks, revision: session.revision + 1 };
       const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "scrobble-current", response);
       return c.json(response);
     });
   }
@@ -305,10 +336,26 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+    }
+    const bodyResult = SessionMutationRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
+    }
+    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
     return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "next");
+      if (replay) return c.json(replay);
       const session = await loadSession(storage, sessionId);
       if (!session || session.userId !== userId) {
         return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
       const tokens = await loadStoredTokens(storage, userId);
@@ -330,7 +377,8 @@ router.post(
         }
       }
       const updated = advanceSession(session, now);
-      await storeSession(storage, updated);
+      const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "next", response);
 
       if (updated.state !== "ended") {
         const npResult = await sendNowPlaying(
@@ -345,7 +393,6 @@ router.post(
       }
 
       await c.env.scheduler.next(sessionId, now, true);
-      const response: SessionActionResponse = { session: updated };
       return c.json(response);
     });
   }
@@ -369,10 +416,24 @@ router.post(
     }
 
     const { id: sessionId } = paramResult.data;
+    let body: unknown;
+    try { body = await c.req.json(); } catch {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+    }
+    const bodyResult = SessionMutationRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
+    }
+    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
     return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "end");
+      if (replay) return c.json(replay);
       const session = await loadSession(storage, sessionId);
       if (!session || session.userId !== userId) {
         return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
       const tokens = await loadStoredTokens(storage, userId);
@@ -393,10 +454,9 @@ router.post(
         tracks[currentIndex] = { ...currentTrack, status: "scrobbled", scrobbledAt: now };
       }
       const updated = endSession({ ...session, tracks });
-      await storeSession(storage, updated);
-      await c.env.scheduler.end(sessionId, true);
-
       const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "end", response);
+      await c.env.scheduler.end(sessionId, true);
       return c.json(response);
     });
   }
@@ -466,7 +526,7 @@ router.post(
             if (index >= action.trackIndex) return { ...track, status: "pending" as const, scrobbledAt: null };
             return confirmed.has(index) ? { ...track, status: "scrobbled" as const, scrobbledAt: now } : track;
           });
-          persisted = { ...session, currentIndex: action.trackIndex, state: "running", tracks };
+          persisted = { ...session, currentIndex: action.trackIndex, state: "running", tracks, revision: session.revision + 1 };
           break;
         }
         deliveredCount += 1;

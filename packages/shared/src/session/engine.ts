@@ -26,6 +26,7 @@ export function createSession(input: CreateSessionInput): Session {
     userId: input.userId,
     release: input.release,
     state: "running",
+    revision: 0,
     currentIndex: 0,
     startedAt: input.startedAt,
     tracks,
@@ -37,7 +38,7 @@ export function pauseSession(session: Session): Session {
     return session;
   }
 
-  return { ...session, state: "paused" };
+  return { ...session, state: "paused", revision: session.revision + 1 };
 }
 
 export function resumeSession(session: Session, resumedAt: number): Session {
@@ -51,19 +52,19 @@ export function resumeSession(session: Session, resumedAt: number): Session {
     tracks[session.currentIndex] = { ...current, startedAt: resumedAt };
   }
 
-  return { ...session, state: "running", tracks };
+  return { ...session, state: "running", tracks, revision: session.revision + 1 };
 }
 
 export function endSession(session: Session): Session {
   if (session.state === "ended") {
     return session;
   }
-  return { ...session, state: "ended" };
+  return { ...session, state: "ended", revision: session.revision + 1 };
 }
 
 export function advanceSession(session: Session, advancedAt: number): Session {
   if (session.tracks.length === 0) {
-    return { ...session, state: "ended" };
+    return { ...session, state: "ended", revision: session.revision + 1 };
   }
 
   const tracks = [...session.tracks];
@@ -80,12 +81,12 @@ export function advanceSession(session: Session, advancedAt: number): Session {
 
   const nextIndex = currentIndex + 1;
   if (nextIndex >= tracks.length) {
-    return { ...session, state: "ended", tracks };
+    return { ...session, state: "ended", tracks, revision: session.revision + 1 };
   }
 
   const nextTrack = tracks[nextIndex];
   if (!nextTrack) {
-    return { ...session, state: "ended", tracks };
+    return { ...session, state: "ended", tracks, revision: session.revision + 1 };
   }
 
   tracks[nextIndex] = {
@@ -98,5 +99,6 @@ export function advanceSession(session: Session, advancedAt: number): Session {
     currentIndex: nextIndex,
     state: "running",
     tracks,
+    revision: session.revision + 1,
   };
 }

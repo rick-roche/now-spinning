@@ -37,6 +37,8 @@ export interface Session {
   release: NormalizedRelease;
   /** Current playback state */
   state: SessionState;
+  /** Monotonically increasing version used to reject stale mutations */
+  revision: number;
   /** Index of currently playing track (0-based) */
   currentIndex: number;
   /** Timestamp when session started (epoch ms) */

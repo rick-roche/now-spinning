@@ -180,7 +180,7 @@ export class SessionScheduler {
         if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: now };
-        await storeSession(this.storage, { ...session, tracks });
+        await storeSession(this.storage, { ...session, tracks, revision: session.revision + 1 });
         await this.schedule(sessionId, now);
         return;
       }

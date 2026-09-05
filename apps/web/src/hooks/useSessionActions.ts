@@ -12,18 +12,29 @@ function isSessionActionResponse(value: unknown): value is SessionActionResponse
  */
 export function useSessionActions(
   session: Session | null,
-  onSessionUpdate: (session: Session | null) => void
+  onSessionUpdate: (session: Session | null) => void,
+  recoverSession: () => Promise<Session | null>
 ) {
   const [localError, setLocalError] = useState<string | null>(null);
   const actionInFlight = useRef(false);
   const sessionId = session?.id ?? "";
   const { mutate, loading, error, reset } = useApiMutation<SessionActionResponse, {
     action: "pause" | "resume" | "next" | "end";
+    mutationId: string;
+    expectedRevision: number;
+    expectedTrackIndex: number;
   }>(
-    ({ action }) => ({
+    ({ action, mutationId, expectedRevision, expectedTrackIndex }) => ({
       url: `/api/session/${sessionId}/${action}`,
       method: "POST",
-    })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mutationId,
+        expectedRevision,
+        expectedTrackIndex,
+      }),
+    }),
+    { retry: 1 }
   );
 
   const executeAction = useCallback(
@@ -32,63 +43,30 @@ export function useSessionActions(
       actionInFlight.current = true;
 
       setLocalError(null);
-      const previousSession = session;
-
-      const optimisticSession = (() => {
-        if (action === "pause") {
-          return { ...session, state: "paused" as const };
-        }
-        if (action === "resume") {
-          return { ...session, state: "running" as const };
-        }
-        if (action === "next") {
-          const nextIndex = Math.min(
-            session.currentIndex + 1,
-            session.release.tracks.length - 1
-          );
-          
-          // Mark current track as scrobbled (matching backend behavior)
-          const updatedTracks = session.tracks.map((track, index) =>
-            index === session.currentIndex
-              ? { ...track, status: "scrobbled" as const, scrobbledAt: Date.now() }
-              : track
-          );
-          
-          if (nextIndex === session.currentIndex) {
-            return { ...session, state: "ended" as const, tracks: updatedTracks };
-          }
-          
-          return { ...session, currentIndex: nextIndex, tracks: updatedTracks };
-        }
-        if (action === "end") {
-          return { ...session, state: "ended" as const };
-        }
-        return session;
-      })();
-
-      if (optimisticSession !== session) {
-        onSessionUpdate(optimisticSession);
-      }
-
       try {
-        const raw = await mutate({ action });
-        if (!raw) { onSessionUpdate(previousSession); return false; }
+        const raw = await mutate({
+          action,
+          mutationId: crypto.randomUUID(),
+          expectedRevision: session.revision,
+          expectedTrackIndex: session.currentIndex,
+        });
+        if (!raw) { await recoverSession(); return false; }
         if (!isSessionActionResponse(raw)) {
           setLocalError("Invalid session response");
-          onSessionUpdate(previousSession);
+          await recoverSession();
           return false;
         }
         onSessionUpdate(raw.session);
         return true;
       } catch (caught) {
-        onSessionUpdate(previousSession);
+        await recoverSession();
         setLocalError(caught instanceof Error ? caught.message : "Session action failed");
         return false;
       } finally {
         actionInFlight.current = false;
       }
     },
-    [mutate, onSessionUpdate, session, sessionId]
+    [mutate, onSessionUpdate, recoverSession, session, sessionId]
   );
 
   const pause = useCallback(() => executeAction("pause"), [executeAction]);

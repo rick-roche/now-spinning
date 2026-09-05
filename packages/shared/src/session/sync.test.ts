@@ -82,6 +82,7 @@ describe("syncSession", () => {
     const result = syncSession(session, 92_000, 50);
 
     expect(result.scrobbleActions).toHaveLength(1);
+    expect(result.session.revision).toBe(session.revision + 1);
     expect(result.scrobbleActions[0]).toEqual({
       trackIndex: 0,
       elapsedMs: 91_000,

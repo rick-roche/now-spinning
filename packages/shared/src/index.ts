@@ -94,8 +94,10 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionMutationRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,
+  type SessionMutationRequest,
 } from "./validation/index.js";

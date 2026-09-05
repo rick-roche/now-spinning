@@ -17,6 +17,7 @@ export interface ScheduleRecord {
 
 const SCHEDULER_LEASE_NAME = "session-scheduler";
 const SCROBBLE_DEDUPLICATION_TTL_MS = 86_400_000;
+const SESSION_MUTATION_TTL_MS = 86_400_000;
 
 export class SQLiteStorage {
   constructor(private readonly db: SqliteDatabase, private readonly encryptionKey: Buffer) {}
@@ -97,6 +98,24 @@ export class SQLiteStorage {
       .run(session.id, session.userId, JSON.stringify(session), Date.now());
   }
 
+  loadSessionMutation<T>(userId: string, sessionId: string, mutationId: string, action: string, now = Date.now()): T | null {
+    this.db.prepare("DELETE FROM session_mutations WHERE expires_at <= ?").run(now);
+    const row = this.db.prepare("SELECT response_json, action FROM session_mutations WHERE user_id = ? AND session_id = ? AND mutation_id = ?")
+      .get(userId, sessionId, mutationId) as { response_json: string; action: string } | undefined;
+    if (!row || row.action !== action) return null;
+    try { return JSON.parse(row.response_json) as T; } catch { return null; }
+  }
+
+  saveSessionMutation<T>(session: Session, mutationId: string, action: string, response: T, now = Date.now()): void {
+    const transaction = this.db.transaction(() => {
+      this.db.prepare("INSERT INTO sessions(id,user_id,session_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, session_json=excluded.session_json, updated_at=excluded.updated_at")
+        .run(session.id, session.userId, JSON.stringify(session), now);
+      this.db.prepare("INSERT INTO session_mutations(user_id,session_id,mutation_id,action,response_json,expires_at) VALUES(?,?,?,?,?,?)")
+        .run(session.userId, session.id, mutationId, action, JSON.stringify(response), now + SESSION_MUTATION_TTL_MS);
+    });
+    transaction();
+  }
+
   startSession(session: Session, thresholdPercent: number, notifyOnSideCompletion: boolean): void {
     const now = Date.now();
     const transaction = this.db.transaction(() => {
@@ -125,7 +144,10 @@ export class SQLiteStorage {
   loadSession(sessionId: string): Session | null {
     const row = this.db.prepare("SELECT session_json FROM sessions WHERE id = ?").get(sessionId) as { session_json: string } | undefined;
     if (!row) return null;
-    try { return JSON.parse(row.session_json) as Session; } catch { return null; }
+    try {
+      const session = JSON.parse(row.session_json) as Session;
+      return { ...session, revision: session.revision ?? 0 };
+    } catch { return null; }
   }
 
   loadCurrentSession(userId: string): Session | null {
