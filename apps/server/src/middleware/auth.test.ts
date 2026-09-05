@@ -129,6 +129,37 @@ describe("session cookies", () => {
     }
   });
 
+  it.each([
+    ["lastfm", "/api/auth/lastfm/callback?token=provider-token&state=cross-cookie-lastfm", "cross-cookie-lastfm"],
+    ["discogs", "/api/auth/discogs/callback?oauth_token=cross-cookie-discogs&oauth_verifier=verifier", "cross-cookie-discogs"],
+  ])("rejects %s callbacks from a different browser session", async (service, path, state) => {
+    const { app, environment, storage } = oauthApp();
+    const providerFetch = vi.spyOn(globalThis, "fetch");
+    try {
+      storage.storeOAuthState(service, state, {
+        sessionId: `initiator-${service}`,
+        ...(service === "discogs" ? { oauth_token_secret: "oauth-secret" } : {}),
+      });
+      const response = await app.fetch(
+        new Request(`http://localhost${path}`, {
+          headers: { Cookie: "now_spinning_session=other-browser" },
+        }),
+        environment
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: "INVALID_STATE" } });
+      expect(providerFetch).not.toHaveBeenCalled();
+      expect(storage.loadTokens("initiator-lastfm").lastfm).toBeNull();
+      expect(storage.loadTokens("initiator-discogs").discogs).toBeNull();
+      expect(storage.loadTokens("other-browser").lastfm).toBeNull();
+      expect(storage.loadTokens("other-browser").discogs).toBeNull();
+    } finally {
+      providerFetch.mockRestore();
+      storage.close();
+    }
+  });
+
   it("rejects replayed and expired Last.fm state without contacting the provider", async () => {
     const { app, environment, storage } = oauthApp();
     const providerFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -152,6 +183,42 @@ describe("session cookies", () => {
         }),
         environment
       )).status).toBe(400);
+      expect(providerFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      providerFetch.mockRestore();
+      storage.close();
+    }
+  });
+
+  it("rejects replayed and expired Discogs state without contacting the provider", async () => {
+    const { app, environment, storage } = oauthApp();
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("oauth_token=discogs-access-token&oauth_token_secret=discogs-access-secret", { status: 200 })
+    );
+    try {
+      storage.storeOAuthState("discogs", "state-discogs-replay", {
+        sessionId: "initiator-discogs",
+        oauth_token_secret: "oauth-secret",
+      });
+      const request = () => app.fetch(
+        new Request("http://localhost/api/auth/discogs/callback?oauth_token=state-discogs-replay&oauth_verifier=verifier", {
+          headers: { Cookie: "now_spinning_session=initiator-discogs" },
+        }),
+        environment
+      );
+
+      expect((await request()).status).toBe(302);
+      expect((await request()).status).toBe(403);
+      storage.storeOAuthState("discogs", "state-discogs-expired", {
+        sessionId: "initiator-discogs",
+        oauth_token_secret: "oauth-secret",
+      }, -1);
+      expect((await app.fetch(
+        new Request("http://localhost/api/auth/discogs/callback?oauth_token=state-discogs-expired&oauth_verifier=verifier", {
+          headers: { Cookie: "now_spinning_session=initiator-discogs" },
+        }),
+        environment
+      )).status).toBe(403);
       expect(providerFetch).toHaveBeenCalledTimes(1);
     } finally {
       providerFetch.mockRestore();
