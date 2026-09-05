@@ -23,6 +23,14 @@ const release: NormalizedRelease = {
   tracks: [{ index: 0, position: "A1", title: "First", artist: "Test Artist", durationSec: 180, side: "A" }],
 };
 
+const multiSideRelease: NormalizedRelease = {
+  ...release,
+  tracks: [
+    ...release.tracks,
+    { index: 1, position: "B1", title: "Second", artist: "Test Artist", durationSec: 180, side: "B" },
+  ],
+};
+
 describe("SessionScheduler", () => {
   it("starts background work only for the scheduler holding the SQLite lease", async () => {
     vi.useFakeTimers();
@@ -87,6 +95,35 @@ describe("SessionScheduler", () => {
     expect(storage.loadSchedule(paused.id)?.dueAt).toBeNull();
     await scheduler.stop();
     storage.close();
+  });
+
+  it("timestamps automatic pauses at a side boundary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(600_000);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const created = createSession({ sessionId: "session-side-pause", userId: "user-side-pause", release: multiSideRelease, startedAt: 0 });
+    const firstTrack = created.tracks[0];
+    if (!firstTrack) throw new Error("Expected a session track");
+    const session = {
+      ...created,
+      tracks: [{ ...firstTrack, status: "scrobbled" as const, scrobbledAt: 90_000 }, ...created.tracks.slice(1)],
+    };
+    storage.startSession(session, 50, true);
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: true, dueAt: 599_999, updatedAt: 599_999 });
+
+    const scheduler = new SessionScheduler(storage, { devMode: true } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1);
+
+    const paused = storage.loadSession(session.id);
+    expect(paused?.state).toBe("paused");
+    expect(paused?.pausedAt).toBe(600_000);
+
+    await scheduler.stop();
+    storage.close();
+    vi.useRealTimers();
   });
 
   it("supersedes the previous user's session when starting a new one", async () => {

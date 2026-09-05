@@ -98,7 +98,8 @@ export function SessionPage() {
   const { elapsedMs, formatTime } = useSessionTimer(
     session?.id ?? null,
     session?.currentIndex ?? 0,
-    isRunning
+    isRunning,
+    session ? session.tracks[session.currentIndex]?.startedAt ?? null : null
   );
 
   const sessionActions = useSessionActions(session, applySession, recoverSession);

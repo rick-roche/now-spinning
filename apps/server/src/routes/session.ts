@@ -149,7 +149,7 @@ router.post(
         return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
-      const updated = pauseSession(session);
+      const updated = pauseSession(session, Date.now());
       const response: SessionActionResponse = { session: updated };
       storage.saveSessionMutation(updated, mutationId, "pause", response);
       await c.env.scheduler.pause(sessionId, true);

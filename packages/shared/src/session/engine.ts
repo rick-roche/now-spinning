@@ -26,6 +26,7 @@ export function createSession(input: CreateSessionInput): Session {
     userId: input.userId,
     release: input.release,
     state: "running",
+    pausedAt: null,
     revision: 0,
     currentIndex: 0,
     startedAt: input.startedAt,
@@ -33,12 +34,12 @@ export function createSession(input: CreateSessionInput): Session {
   };
 }
 
-export function pauseSession(session: Session): Session {
+export function pauseSession(session: Session, pausedAt: number | null = null): Session {
   if (session.state !== "running") {
     return session;
   }
 
-  return { ...session, state: "paused", revision: session.revision + 1 };
+  return { ...session, state: "paused", pausedAt, revision: session.revision + 1 };
 }
 
 export function resumeSession(session: Session, resumedAt: number): Session {
@@ -47,12 +48,21 @@ export function resumeSession(session: Session, resumedAt: number): Session {
   }
 
   const tracks = [...session.tracks];
+  const pauseDuration = session.pausedAt == null ? 0 : Math.max(0, resumedAt - session.pausedAt);
+  if (pauseDuration > 0) {
+    for (let index = session.currentIndex; index < tracks.length; index += 1) {
+      const track = tracks[index];
+      if (track?.startedAt !== null && track?.startedAt !== undefined) {
+        tracks[index] = { ...track, startedAt: track.startedAt + pauseDuration };
+      }
+    }
+  }
   const current = tracks[session.currentIndex];
   if (current && current.startedAt === null) {
     tracks[session.currentIndex] = { ...current, startedAt: resumedAt };
   }
 
-  return { ...session, state: "running", tracks, revision: session.revision + 1 };
+  return { ...session, state: "running", pausedAt: null, tracks, revision: session.revision + 1 };
 }
 
 export function endSession(session: Session): Session {

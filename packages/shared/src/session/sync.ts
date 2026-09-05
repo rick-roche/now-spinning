@@ -95,6 +95,7 @@ export function syncSession(
           ...currentSession,
           tracks: updatedTracks,
           state: "paused",
+          pausedAt: syncAt,
         };
         changed = true;
         break;

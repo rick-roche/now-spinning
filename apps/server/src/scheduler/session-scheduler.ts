@@ -190,7 +190,7 @@ export class SessionScheduler {
       if (schedule.notifyOnSideCompletion && nextTrack && getPhysicalMediaBoundary(session.release, track, nextTrack)) {
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: current.scrobbledAt ?? now };
-        const paused = pauseSession({ ...session, tracks });
+        const paused = pauseSession({ ...session, tracks }, now);
         await storeSession(this.storage, paused); this.clear(sessionId); this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now }); return;
       }
       const tokens = this.storage.loadTokens(session.userId);

@@ -57,6 +57,20 @@ describe("session engine", () => {
     expect(resumed.state).toBe("running");
   });
 
+  it("does not count paused time in the current track", () => {
+    const session = createSession({
+      sessionId: "sess-paused-time",
+      userId: "user-paused-time",
+      release,
+      startedAt: 1_000,
+    });
+
+    const paused = { ...pauseSession(session), pausedAt: 11_000 };
+    const resumed = resumeSession(paused, 611_000);
+
+    expect(resumed.tracks[0]?.startedAt).toBe(601_000);
+  });
+
   it("advances and scrobbles the current track", () => {
     const session = createSession({
       sessionId: "sess-3",
