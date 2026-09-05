@@ -1,6 +1,6 @@
 import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, pauseSession, type Session } from "@repo/shared";
 import { randomUUID } from "node:crypto";
-import { scrobbleTrack, sendNowPlaying, storeSession } from "../session-helpers.js";
+import { deliverScrobble, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
 import type { SQLiteStorage } from "../storage/storage.js";
 
@@ -175,7 +175,7 @@ export class SessionScheduler {
         const tokens = this.storage.loadTokens(session.userId);
         if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         if (!this.storage.isCurrentSession(session.userId, session.id)) return;
-        const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
+        const result = await deliverScrobble(this.storage, this.env, tokens.lastfm.accessToken, session.userId, session.release, session.currentIndex, startedAt);
         if (this.stopped) return;
         if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const tracks = [...session.tracks];

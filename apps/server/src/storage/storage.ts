@@ -16,6 +16,7 @@ export interface ScheduleRecord {
 }
 
 const SCHEDULER_LEASE_NAME = "session-scheduler";
+const SCROBBLE_DEDUPLICATION_TTL_MS = 86_400_000;
 
 export class SQLiteStorage {
   constructor(private readonly db: SqliteDatabase, private readonly encryptionKey: Buffer) {}
@@ -155,6 +156,26 @@ export class SQLiteStorage {
   }
 
   deleteSchedule(sessionId: string): void { this.db.prepare("DELETE FROM session_schedules WHERE session_id = ?").run(sessionId); }
+
+  claimScrobble(scrobbleId: string, userId: string, createdAt = Date.now()): "claimed" | "delivered" | "in_flight" {
+    this.db.prepare("DELETE FROM scrobble_deliveries WHERE expires_at <= ?").run(createdAt);
+    const result = this.db.prepare(
+      "INSERT OR IGNORE INTO scrobble_deliveries(scrobble_id,user_id,status,created_at,delivered_at,expires_at) VALUES(?,?,?, ?, NULL, ?)"
+    ).run(scrobbleId, userId, "in_flight", createdAt, createdAt + SCROBBLE_DEDUPLICATION_TTL_MS);
+    if (result.changes === 1) return "claimed";
+    const row = this.db.prepare("SELECT status FROM scrobble_deliveries WHERE scrobble_id = ?")
+      .get(scrobbleId) as { status: "in_flight" | "delivered" };
+    return row.status;
+  }
+
+  completeScrobble(scrobbleId: string, deliveredAt = Date.now()): void {
+    this.db.prepare("UPDATE scrobble_deliveries SET status = 'delivered', delivered_at = ? WHERE scrobble_id = ? AND status = 'in_flight'")
+      .run(deliveredAt, scrobbleId);
+  }
+
+  releaseScrobble(scrobbleId: string): void {
+    this.db.prepare("DELETE FROM scrobble_deliveries WHERE scrobble_id = ? AND status = 'in_flight'").run(scrobbleId);
+  }
 
   getCache<T>(key: string): T | null {
     const row = this.db.prepare("SELECT json, expires_at FROM cache_entries WHERE key = ?").get(key) as { json: string; expires_at: number } | undefined;

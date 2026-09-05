@@ -24,7 +24,7 @@ import { getOrCreateSessionId, loadStoredTokens, setSessionCookie, requireLastFm
 import {
   loadCurrentSession,
   loadSession,
-  scrobbleTrack,
+  deliverScrobble,
   sendNowPlaying,
   storeSession,
 } from "../session-helpers.js";
@@ -265,13 +265,7 @@ router.post(
 
       const tokens = await loadStoredTokens(storage, userId);
       const currentStartedAt = currentTrack.startedAt ?? Date.now();
-      const scrobbleResult = await scrobbleTrack(
-        c.env,
-        tokens.lastfm!.accessToken,
-        session.release,
-        currentIndex,
-        Math.floor(currentStartedAt / 1000)
-      );
+      const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, currentIndex, currentStartedAt);
       if (!scrobbleResult.ok) {
         console.error("[POST /:id/scrobble-current] Failed to scrobble track:", scrobbleResult.message);
         return c.json(
@@ -328,21 +322,15 @@ router.post(
       const previousTrack = session.tracks[previousIndex];
       const previousStartedAt = previousTrack?.startedAt ?? now;
       const wasAlreadyScrobbled = previousTrack?.status === "scrobbled";
-      const updated = advanceSession(session, now);
-      await storeSession(storage, updated);
-
       if (!wasAlreadyScrobbled) {
-        const scrobbleResult = await scrobbleTrack(
-          c.env,
-          tokens.lastfm!.accessToken,
-          updated.release,
-          previousIndex,
-          Math.floor(previousStartedAt / 1000)
-        );
+        const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, previousIndex, previousStartedAt);
         if (!scrobbleResult.ok) {
           console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
+          return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
         }
       }
+      const updated = advanceSession(session, now);
+      await storeSession(storage, updated);
 
       if (updated.state !== "ended") {
         const npResult = await sendNowPlaying(
@@ -393,22 +381,20 @@ router.post(
       const currentTrack = session.tracks[currentIndex];
       const currentStartedAt = currentTrack?.startedAt ?? now;
       const wasAlreadyScrobbled = currentTrack?.status === "scrobbled";
-      const updated = endSession(session);
-      await storeSession(storage, updated);
-      await c.env.scheduler.end(sessionId, true);
-
       if (session.state !== "ended" && !wasAlreadyScrobbled) {
-        const scrobbleResult = await scrobbleTrack(
-          c.env,
-          tokens.lastfm!.accessToken,
-          updated.release,
-          currentIndex,
-          Math.floor(currentStartedAt / 1000)
-        );
+        const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, currentIndex, currentStartedAt);
         if (!scrobbleResult.ok) {
           console.error("[POST /:id/end] Failed to scrobble track:", scrobbleResult.message);
+          return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
         }
       }
+      const tracks = [...session.tracks];
+      if (session.state !== "ended" && !wasAlreadyScrobbled && currentTrack) {
+        tracks[currentIndex] = { ...currentTrack, status: "scrobbled", scrobbledAt: now };
+      }
+      const updated = endSession({ ...session, tracks });
+      await storeSession(storage, updated);
+      await c.env.scheduler.end(sessionId, true);
 
       const response: SessionActionResponse = { session: updated };
       return c.json(response);
@@ -467,37 +453,43 @@ router.post(
         schedule?.notifyOnSideCompletion ?? true
       );
 
-      for (const action of scrobbleActions) {
-        const scrobbleResult = await scrobbleTrack(
-          c.env,
-          tokens.lastfm!.accessToken,
-          synced.release,
-          action.trackIndex,
-          Math.floor(action.startedAt / 1000)
+      let deliveredCount = 0;
+      let persisted = synced;
+      for (const [actionIndex, action] of scrobbleActions.entries()) {
+        const scrobbleResult = await deliverScrobble(
+          storage, c.env, tokens.lastfm!.accessToken, userId, synced.release, action.trackIndex, action.startedAt
         );
         if (!scrobbleResult.ok) {
           console.error(`[POST /:id/sync] Failed to scrobble track ${action.trackIndex}:`, scrobbleResult.message);
+          const confirmed = new Set(scrobbleActions.slice(0, actionIndex).map((item) => item.trackIndex));
+          const tracks = persisted.tracks.map((track, index) => {
+            if (index >= action.trackIndex) return { ...track, status: "pending" as const, scrobbledAt: null };
+            return confirmed.has(index) ? { ...track, status: "scrobbled" as const, scrobbledAt: now } : track;
+          });
+          persisted = { ...session, currentIndex: action.trackIndex, state: "running", tracks };
+          break;
         }
+        deliveredCount += 1;
       }
 
-      if (synced.state === "running" && scrobbleActions.length > 0) {
+      if (persisted.state === "running" && deliveredCount > 0) {
         const npResult = await sendNowPlaying(
           c.env,
           tokens.lastfm!.accessToken,
-          synced.release,
-          synced.currentIndex
+          persisted.release,
+          persisted.currentIndex
         );
         if (!npResult.ok) {
           console.error("[POST /:id/sync] Failed to send now playing:", npResult.message);
         }
       }
 
-      await storeSession(storage, synced);
-      if (synced.state === "running") await c.env.scheduler.resume(sessionId, now, true);
+      await storeSession(storage, persisted);
+      if (persisted.state === "running") await c.env.scheduler.resume(sessionId, now, true);
 
       const response: SessionSyncResponse = {
-        session: synced,
-        scrobbledCount: scrobbleActions.length,
+        session: persisted,
+        scrobbledCount: deliveredCount,
       };
       return c.json(response);
     });

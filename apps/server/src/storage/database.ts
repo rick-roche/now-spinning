@@ -40,6 +40,14 @@ export function openDatabase(path: string): SqliteDatabase {
       due_at INTEGER,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS scrobble_deliveries (
+      scrobble_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('in_flight', 'delivered')),
+      created_at INTEGER NOT NULL,
+      delivered_at INTEGER,
+      expires_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS scheduler_leases (
       name TEXT PRIMARY KEY,
       owner_id TEXT NOT NULL,
@@ -52,5 +60,11 @@ export function openDatabase(path: string): SqliteDatabase {
       expires_at INTEGER NOT NULL
     );
   `);
+  const deliveryColumns = database.prepare("PRAGMA table_info(scrobble_deliveries)").all() as Array<{ name: string }>;
+  if (!deliveryColumns.some((column) => column.name === "expires_at")) {
+    database.exec("ALTER TABLE scrobble_deliveries ADD COLUMN expires_at INTEGER");
+    database.prepare("UPDATE scrobble_deliveries SET expires_at = created_at + ? WHERE expires_at IS NULL")
+      .run(86_400_000);
+  }
   return database;
 }
