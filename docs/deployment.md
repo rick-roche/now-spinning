@@ -20,7 +20,7 @@ Configure the Coolify resource as follows:
 | Persistent volume | `/data` |
 | Replicas | `1` |
 
-Disable Coolify automatic main-branch deployments. The GitHub Actions `Deploy` workflow triggers the Coolify webhook only after `CI` succeeds, preventing duplicate builds.
+Disable Coolify automatic main-branch deployments. The GitHub Actions `Deploy` workflow triggers the Coolify webhook only after `CI` succeeds and confirms that `main` still points at the validated workflow SHA. If another commit has arrived, the deployment is declined rather than building the newer, unvalidated branch head. The workflow summary records the validated SHA for deployment traceability.
 
 The SQLite database must use `DATABASE_PATH=/data/now-spinning.sqlite`. Back up `/data` before upgrades. SQLite and the in-process scheduler currently require one production replica.
 
