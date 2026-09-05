@@ -8,6 +8,7 @@ export default defineConfig({
     pool: "forks",
     fileParallelism: false,
     maxWorkers: 1,
+    isolate: false,
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "json", "html"],
