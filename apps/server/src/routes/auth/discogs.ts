@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { createAPIError, ErrorCode } from "@repo/shared";
 import { generateRandomString, parseFormEncoded } from "../../oauth.js";
 import {
@@ -106,7 +107,7 @@ router.post("/start", async (c: HonoContext) => {
 
 router.get("/callback", async (c: HonoContext) => {
   const storage = c.env.NOW_SPINNING_STORAGE;
-  const sessionId = getOrCreateSessionId(c);
+  const currentSessionId = getCookie(c, "now_spinning_session");
 
   const oauthToken = c.req.query("oauth_token") ?? "";
   const oauthVerifier = c.req.query("oauth_verifier") ?? "";
@@ -120,7 +121,11 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth state token expired or invalid"), 403);
   }
 
-  const boundSessionId = storedState.sessionId ?? sessionId;
+  const boundSessionId = storedState.sessionId;
+  if (!currentSessionId || !boundSessionId || currentSessionId !== boundSessionId) {
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth session mismatch"), 400);
+  }
+
   setSessionCookie(c, boundSessionId);
 
   const consumerKey = c.env.discogsConsumerKey;
