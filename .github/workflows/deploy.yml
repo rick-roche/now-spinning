@@ -21,22 +21,25 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Check out the validated commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Trigger Coolify deployment
+      - name: Deploy the validated image
         env:
-          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_API_URL: ${{ secrets.COOLIFY_API_URL }}
+          COOLIFY_APPLICATION_UUID: ${{ secrets.COOLIFY_APPLICATION_UUID }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
-          REPOSITORY: ${{ github.repository }}
+          VALIDATED_TAG: ${{ github.event.workflow_run.head_sha }}
         run: |
-          read -r current_sha _ < <(git ls-remote "https://github.com/${REPOSITORY}.git" refs/heads/main)
-          if ! bash .github/scripts/validated-commit-is-current.sh "${VALIDATED_SHA}" "${current_sha}"; then
-            echo "Deployment skipped because main moved after CI completed."
-            exit 0
-          fi
-          echo "Validated deployment SHA: ${VALIDATED_SHA}" >> "$GITHUB_STEP_SUMMARY"
-          curl --fail-with-body --retry 3 --request POST --header "Authorization: Bearer ${COOLIFY_TOKEN}" "${COOLIFY_WEBHOOK}"
+          set -euo pipefail
+          api_url="${COOLIFY_API_URL%/}/api/v1"
+          auth_header="Authorization: Bearer ${COOLIFY_TOKEN}"
+          application_url="${api_url}/applications/${COOLIFY_APPLICATION_UUID}"
+          deploy_url="${api_url}/deploy?uuid=${COOLIFY_APPLICATION_UUID}"
+
+          curl --fail-with-body --retry 3 --request PATCH \
+            --header "${auth_header}" \
+            --header 'Content-Type: application/json' \
+            --data "{\"docker_registry_image_tag\":\"${VALIDATED_TAG}\"}" \
+            "${application_url}"
+          curl --fail-with-body --retry 3 --request POST \
+            --header "${auth_header}" \
+            "${deploy_url}"
+          echo "Validated deployment SHA: ${VALIDATED_TAG}" >> "$GITHUB_STEP_SUMMARY"

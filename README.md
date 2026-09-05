@@ -91,7 +91,7 @@ The app is available at http://localhost:3000 and stores SQLite data in the name
 
 ### Coolify deployment
 
-Coolify connects to this repository through its GitHub App and builds the root Dockerfile directly. Production deploys are triggered by the successful `CI` workflow through the authenticated Coolify webhook; disable Coolify automatic main-branch deploys to avoid duplicate builds. Pull Request previews are enabled for trusted contributors only and use isolated storage rather than the production `/data` volume.
+Coolify deploys an immutable GHCR image tagged with the successful `CI` workflow's Git SHA through its authenticated API. Disable automatic source deploys to avoid duplicate builds. Pull Request previews remain enabled for trusted contributors only and use isolated storage rather than the production `/data` volume.
 
 See [docs/deployment.md](docs/deployment.md) for the exact production, preview, DNS, environment, persistence, and rollback configuration.
 
