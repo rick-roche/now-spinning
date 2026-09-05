@@ -12,7 +12,7 @@ import { DiscogsReleaseIdSchema } from "./discogs.schema.js";
  */
 export const SessionStartRequestSchema = z.object({
   releaseId: DiscogsReleaseIdSchema,
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  thresholdPercent: z.number().min(1).max(100).optional().default(50),
   notifyOnSideCompletion: z.boolean().optional().default(true),
 });
 
@@ -42,13 +42,31 @@ export const SessionParamSchema = z.object({
 export type SessionParam = z.infer<typeof SessionParamSchema>;
 
 /**
+ * Preconditions identifying one logical command against a session snapshot.
+ */
+export const SessionMutationRequestSchema = z.object({
+  mutationId: z.uuid("Mutation ID must be a UUID"),
+  expectedRevision: z.number().int().min(0),
+  expectedTrackIndex: z.number().int().min(0),
+}).strict();
+
+export type SessionMutationRequest = z.infer<typeof SessionMutationRequestSchema>;
+
+export const SessionEndRequestSchema = SessionMutationRequestSchema.extend({
+  endMode: z.enum(["end-without-scrobbling", "scrobble-current-and-remaining", "skip-remaining"]),
+}).strict();
+
+/**
  * Session scrobble-current request body.
  * Requires elapsed time to validate scrobble eligibility.
  * Threshold percent is optional and defaults to 50%.
  */
 export const SessionScrobbleCurrentRequestSchema = z.object({
+  mutationId: z.uuid("Mutation ID must be a UUID"),
+  expectedRevision: z.number().int().min(0),
+  expectedTrackIndex: z.number().int().min(0),
   elapsedMs: z.number().min(0, "Elapsed time must be non-negative"),
-  thresholdPercent: z.number().min(0).max(100).optional().default(50),
+  thresholdPercent: z.number().min(1).max(100).optional().default(50),
 });
 
 export type SessionScrobbleCurrentRequest = z.infer<typeof SessionScrobbleCurrentRequestSchema>;

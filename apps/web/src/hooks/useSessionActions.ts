@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useApiMutation } from "./useApiMutation";
-import type { Session, SessionActionResponse } from "@repo/shared";
+import type { Session, SessionActionResponse, SessionEndMode } from "@repo/shared";
 
 function isSessionActionResponse(value: unknown): value is SessionActionResponse {
   if (!value || typeof value !== "object") return false;
@@ -12,89 +12,70 @@ function isSessionActionResponse(value: unknown): value is SessionActionResponse
  */
 export function useSessionActions(
   session: Session | null,
-  onSessionUpdate: (session: Session | null) => void
+  onSessionUpdate: (session: Session | null) => void,
+  recoverSession: () => Promise<Session | null>
 ) {
   const [localError, setLocalError] = useState<string | null>(null);
   const actionInFlight = useRef(false);
   const sessionId = session?.id ?? "";
   const { mutate, loading, error, reset } = useApiMutation<SessionActionResponse, {
     action: "pause" | "resume" | "next" | "end";
+    endMode?: SessionEndMode;
+    mutationId: string;
+    expectedRevision: number;
+    expectedTrackIndex: number;
   }>(
-    ({ action }) => ({
+    ({ action, endMode, mutationId, expectedRevision, expectedTrackIndex }) => ({
       url: `/api/session/${sessionId}/${action}`,
       method: "POST",
-    })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mutationId,
+        expectedRevision,
+        expectedTrackIndex,
+        ...(action === "end" ? { endMode } : {}),
+      }),
+    }),
+    { retry: 1 }
   );
 
   const executeAction = useCallback(
-    async (action: "pause" | "resume" | "next" | "end"): Promise<boolean> => {
+    async (action: "pause" | "resume" | "next" | "end", endMode?: SessionEndMode): Promise<boolean> => {
       if (!sessionId || !session || actionInFlight.current) return false;
       actionInFlight.current = true;
 
       setLocalError(null);
-      const previousSession = session;
-
-      const optimisticSession = (() => {
-        if (action === "pause") {
-          return { ...session, state: "paused" as const };
-        }
-        if (action === "resume") {
-          return { ...session, state: "running" as const };
-        }
-        if (action === "next") {
-          const nextIndex = Math.min(
-            session.currentIndex + 1,
-            session.release.tracks.length - 1
-          );
-          
-          // Mark current track as scrobbled (matching backend behavior)
-          const updatedTracks = session.tracks.map((track, index) =>
-            index === session.currentIndex
-              ? { ...track, status: "scrobbled" as const, scrobbledAt: Date.now() }
-              : track
-          );
-          
-          if (nextIndex === session.currentIndex) {
-            return { ...session, state: "ended" as const, tracks: updatedTracks };
-          }
-          
-          return { ...session, currentIndex: nextIndex, tracks: updatedTracks };
-        }
-        if (action === "end") {
-          return { ...session, state: "ended" as const };
-        }
-        return session;
-      })();
-
-      if (optimisticSession !== session) {
-        onSessionUpdate(optimisticSession);
-      }
-
       try {
-        const raw = await mutate({ action });
-        if (!raw) { onSessionUpdate(previousSession); return false; }
+        const raw = await mutate({
+          action,
+          mutationId: crypto.randomUUID(),
+          expectedRevision: session.revision,
+          expectedTrackIndex: session.currentIndex,
+          ...(endMode ? { endMode } : {}),
+        });
+        if (!raw) { await recoverSession(); return false; }
         if (!isSessionActionResponse(raw)) {
           setLocalError("Invalid session response");
-          onSessionUpdate(previousSession);
+          await recoverSession();
           return false;
         }
         onSessionUpdate(raw.session);
         return true;
       } catch (caught) {
-        onSessionUpdate(previousSession);
+        await recoverSession();
         setLocalError(caught instanceof Error ? caught.message : "Session action failed");
         return false;
       } finally {
         actionInFlight.current = false;
       }
     },
-    [mutate, onSessionUpdate, session, sessionId]
+    [mutate, onSessionUpdate, recoverSession, session, sessionId]
   );
 
   const pause = useCallback(() => executeAction("pause"), [executeAction]);
   const resume = useCallback(() => executeAction("resume"), [executeAction]);
   const next = useCallback(() => executeAction("next"), [executeAction]);
-  const end = useCallback(() => executeAction("end"), [executeAction]);
+  const end = useCallback((endMode: SessionEndMode) => executeAction("end", endMode), [executeAction]);
 
   return {
     pause,

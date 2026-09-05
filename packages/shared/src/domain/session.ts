@@ -37,6 +37,10 @@ export interface Session {
   release: NormalizedRelease;
   /** Current playback state */
   state: SessionState;
+  /** Timestamp when the current pause began (epoch ms, absent in legacy sessions) */
+  pausedAt?: number | null;
+  /** Monotonically increasing version used to reject stale mutations */
+  revision: number;
   /** Index of currently playing track (0-based) */
   currentIndex: number;
   /** Timestamp when session started (epoch ms) */

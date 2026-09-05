@@ -43,6 +43,7 @@ export function syncSession(
 
   const scrobbleActions: SyncScrobbleAction[] = [];
   let currentSession = session;
+  let changed = false;
 
   while (currentSession.state === "running") {
     const { currentIndex } = currentSession;
@@ -64,12 +65,13 @@ export function syncSession(
       if (!isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent)) break;
       scrobbleActions.push({ trackIndex: currentIndex, elapsedMs, startedAt: track.startedAt });
       updatedTracks[currentIndex] = { ...track, status: "scrobbled", scrobbledAt: syncAt };
+      changed = true;
     }
 
     // Eligibility is not playback completion. Unknown-duration tracks require
     // an explicit user advance because there is no reliable completion time.
     if (durationMs === null || elapsedMs < durationMs) {
-      currentSession = { ...currentSession, tracks: updatedTracks };
+      if (changed) currentSession = { ...currentSession, tracks: updatedTracks };
       break;
     }
 
@@ -80,6 +82,7 @@ export function syncSession(
         tracks: updatedTracks,
         state: "ended",
       };
+      changed = true;
       break;
     }
 
@@ -92,7 +95,9 @@ export function syncSession(
           ...currentSession,
           tracks: updatedTracks,
           state: "paused",
+          pausedAt: syncAt,
         };
+        changed = true;
         break;
       }
     }
@@ -115,7 +120,8 @@ export function syncSession(
       tracks: updatedTracks,
       state: "running",
     };
+    changed = true;
   }
 
-  return { session: currentSession, scrobbleActions };
+  return { session: changed ? { ...currentSession, revision: session.revision + 1 } : session, scrobbleActions };
 }

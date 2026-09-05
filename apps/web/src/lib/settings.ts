@@ -23,7 +23,7 @@ function isLocalStorageAvailable(): boolean {
 
 /**
  * Get the scrobble delay percentage (when a track becomes eligible to scrobble)
- * @returns Percentage (0-100) of track duration required before scrobbling
+ * @returns Percentage (1-100) of track duration required before scrobbling
  */
 export function getScrobbleDelay(): number {
   if (!isLocalStorageAvailable()) {
@@ -35,7 +35,7 @@ export function getScrobbleDelay(): number {
     return DEFAULT_SCROBBLE_DELAY;
   }
   const parsed = parseInt(stored, 10);
-  if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+  if (isNaN(parsed) || parsed < 1 || parsed > 100) {
     return DEFAULT_SCROBBLE_DELAY;
   }
   return parsed;
@@ -43,11 +43,11 @@ export function getScrobbleDelay(): number {
 
 /**
  * Set the scrobble delay percentage
- * @param value - Percentage (0-100) of track duration required before scrobbling
+ * @param value - Percentage (1-100) of track duration required before scrobbling
  */
 export function setScrobbleDelay(value: number): void {
-  if (value < 0 || value > 100) {
-    throw new Error('Scrobble delay must be between 0 and 100');
+  if (value < 1 || value > 100) {
+    throw new Error('Scrobble delay must be between 1 and 100');
   }
   if (!isLocalStorageAvailable()) {
     return; // Silently fail in environments without localStorage

@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { createAPIError, ErrorCode } from "@repo/shared";
 import { generateRandomString } from "../../oauth.js";
 import {
@@ -57,6 +58,8 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.AUTH_DENIED, "Last.fm authorization was denied"), 403);
   }
 
+  const currentSessionId = getCookie(c, "now_spinning_session");
+
   // Verify CSRF state token
   const stateToken = c.req.query("state");
   if (!stateToken) {
@@ -68,8 +71,12 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.INVALID_STATE, "Invalid or expired OAuth state"), 400);
   }
 
-  const sessionId = stateData.sessionId ?? getOrCreateSessionId(c);
-  setSessionCookie(c, sessionId);
+  const initiatingSessionId = stateData.sessionId;
+  if (!currentSessionId || !initiatingSessionId || currentSessionId !== initiatingSessionId) {
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth session mismatch"), 400);
+  }
+
+  setSessionCookie(c, initiatingSessionId);
 
   const sessionResponse = await fetchLastFm<{ session: { key: string } }>(
     "auth.getSession",
@@ -86,9 +93,9 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Last.fm session key missing"), 502);
   }
 
-  const tokens = await loadStoredTokens(storage, sessionId);
+  const tokens = await loadStoredTokens(storage, initiatingSessionId);
   tokens.lastfm = { service: "lastfm", accessToken: sessionKey, storedAt: Date.now() };
-  await storeTokens(storage, sessionId, tokens);
+  await storeTokens(storage, initiatingSessionId, tokens);
 
   const appOrigin = c.env.publicAppOrigin;
   const redirectUrl = new URL("/settings?auth=lastfm", appOrigin).toString();

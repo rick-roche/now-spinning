@@ -20,6 +20,7 @@ export {
 export {
   isEligibleToScrobble,
   getScrobbleThresholdMs,
+  isScrobblableDuration,
 } from "./session/eligibility.js";
 export { syncSession } from "./session/sync.js";
 export type { SyncScrobbleAction, SyncSessionResult } from "./session/sync.js";
@@ -54,6 +55,8 @@ export type {
 } from "./contracts/discogs.js";
 export type {
   SessionActionResponse,
+  SessionEndMode,
+  SessionEndRequest,
   SessionCurrentResponse,
   SessionStartRequest,
   SessionStartResponse,
@@ -94,8 +97,11 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionMutationRequestSchema,
+  SessionEndRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
   type SessionScrobbleCurrentRequest,
+  type SessionMutationRequest,
 } from "./validation/index.js";

@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { createAPIError, ErrorCode } from "@repo/shared";
 import { generateRandomString, parseFormEncoded } from "../../oauth.js";
 import {
@@ -22,6 +23,7 @@ type HonoContext = Context<{ Bindings: AppEnvironment }>;
 const DISCOGS_REQUEST_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/request_token`;
 const DISCOGS_AUTHORIZE_URL = "https://www.discogs.com/oauth/authorize";
 const DISCOGS_ACCESS_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/access_token`;
+const DISCOGS_OAUTH_TIMEOUT_MS = 15_000;
 
 const router = new Hono<{ Bindings: AppEnvironment }>();
 
@@ -76,6 +78,7 @@ router.post("/start", async (c: HonoContext) => {
     const response = await fetch(`${DISCOGS_REQUEST_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
       headers: { "User-Agent": DISCOGS_USER_AGENT },
+      signal: AbortSignal.timeout(DISCOGS_OAUTH_TIMEOUT_MS),
     });
 
     console.log(
@@ -106,7 +109,7 @@ router.post("/start", async (c: HonoContext) => {
 
 router.get("/callback", async (c: HonoContext) => {
   const storage = c.env.NOW_SPINNING_STORAGE;
-  const sessionId = getOrCreateSessionId(c);
+  const currentSessionId = getCookie(c, "now_spinning_session");
 
   const oauthToken = c.req.query("oauth_token") ?? "";
   const oauthVerifier = c.req.query("oauth_verifier") ?? "";
@@ -120,7 +123,11 @@ router.get("/callback", async (c: HonoContext) => {
     return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth state token expired or invalid"), 403);
   }
 
-  const boundSessionId = storedState.sessionId ?? sessionId;
+  const boundSessionId = storedState.sessionId;
+  if (!currentSessionId || !boundSessionId || currentSessionId !== boundSessionId) {
+    return c.json(createAPIError(ErrorCode.INVALID_STATE, "OAuth session mismatch"), 400);
+  }
+
   setSessionCookie(c, boundSessionId);
 
   const consumerKey = c.env.discogsConsumerKey;
@@ -152,6 +159,7 @@ router.get("/callback", async (c: HonoContext) => {
     const response = await fetch(`${DISCOGS_ACCESS_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
       headers: { "User-Agent": DISCOGS_USER_AGENT },
+      signal: AbortSignal.timeout(DISCOGS_OAUTH_TIMEOUT_MS),
     });
 
     console.log(

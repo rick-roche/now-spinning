@@ -10,6 +10,11 @@
  */
 
 const MINIMUM_SCROBBLE_DURATION_MS = 30_000; // 30 seconds
+const MAXIMUM_SCROBBLE_DURATION_MS = 240_000; // 4 minutes
+
+export function isScrobblableDuration(durationMs: number | null): boolean {
+  return durationMs === null || durationMs <= 0 || durationMs >= MINIMUM_SCROBBLE_DURATION_MS;
+}
 
 /**
  * Check if a track is eligible to scrobble based on elapsed time
@@ -28,9 +33,14 @@ export function isEligibleToScrobble(
     return false;
   }
 
-  // If duration is known, use percentage threshold
+  if (!isScrobblableDuration(durationMs)) {
+    return false;
+  }
+
+  // If duration is known, use percentage threshold within provider bounds.
   if (durationMs !== null && durationMs > 0) {
-    const thresholdMs = (durationMs * thresholdPercent) / 100;
+    const thresholdMs = getScrobbleThresholdMs(durationMs, thresholdPercent);
+    if (thresholdMs === null) return false;
     return elapsedMs >= thresholdMs;
   }
 
@@ -50,7 +60,11 @@ export function getScrobbleThresholdMs(
   thresholdPercent: number
 ): number | null {
   if (durationMs !== null && durationMs > 0) {
-    return (durationMs * thresholdPercent) / 100;
+    if (!isScrobblableDuration(durationMs)) return null;
+    return Math.min(
+      MAXIMUM_SCROBBLE_DURATION_MS,
+      Math.max(MINIMUM_SCROBBLE_DURATION_MS, (durationMs * thresholdPercent) / 100)
+    );
   }
   // If duration unknown, use minimum threshold
   return MINIMUM_SCROBBLE_DURATION_MS;

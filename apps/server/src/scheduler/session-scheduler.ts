@@ -1,6 +1,6 @@
-import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, pauseSession, type Session } from "@repo/shared";
+import { advanceSession, getPhysicalMediaBoundary, getScrobbleThresholdMs, isScrobblableDuration, pauseSession, type Session } from "@repo/shared";
 import { randomUUID } from "node:crypto";
-import { scrobbleTrack, sendNowPlaying, storeSession } from "../session-helpers.js";
+import { deliverScrobble, sendNowPlaying, storeSession } from "../session-helpers.js";
 import type { AppEnvironment } from "../types.js";
 import type { SQLiteStorage } from "../storage/storage.js";
 
@@ -9,6 +9,7 @@ type Timer = ReturnType<typeof setTimeout>;
 export class SessionScheduler {
   private static readonly leaseDurationMs = 60_000;
   private static readonly leaseRenewalMs = 15_000;
+  private static readonly shutdownDrainMs = 5_000;
   private readonly timers = new Map<string, Timer>();
   private readonly locks = new Map<string, Promise<void>>();
   private readonly ownerId = randomUUID();
@@ -38,7 +39,9 @@ export class SessionScheduler {
       if (schedule.dueAt === null) {
         continue;
       }
-      if (schedule.dueAt <= Date.now()) void this.process(schedule.sessionId, schedule.dueAt);
+      if (schedule.dueAt <= Date.now()) void this.process(schedule.sessionId, schedule.dueAt).catch((error: unknown) => {
+        console.error("[SessionScheduler] Background work failed:", error instanceof Error ? error.message : "unknown error");
+      });
       else this.arm(schedule.sessionId, schedule.dueAt);
     }
   }
@@ -49,13 +52,19 @@ export class SessionScheduler {
     this.leaseTimer = undefined;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
-    await Promise.all(this.locks.values());
+    await new Promise<void>((resolve) => {
+      const drainTimer = setTimeout(resolve, SessionScheduler.shutdownDrainMs);
+      void Promise.allSettled(this.locks.values()).then(() => {
+        clearTimeout(drainTimer);
+        resolve();
+      });
+    });
     if (this.ownsLease) this.storage.releaseSchedulerLease(this.ownerId);
     this.ownsLease = false;
   }
 
   async startSession(session: Session, thresholdPercent: number, notifyOnSideCompletion: boolean): Promise<void> {
-    this.storage.saveSchedule({ sessionId: session.id, thresholdPercent, notifyOnSideCompletion, dueAt: null, updatedAt: Date.now() });
+    this.storage.startSession(session, thresholdPercent, notifyOnSideCompletion);
     await this.schedule(session.id, Date.now());
   }
 
@@ -117,7 +126,9 @@ export class SessionScheduler {
   private arm(sessionId: string, dueAt: number): void {
     if (this.stopped || !this.ownsLease) return;
     this.clear(sessionId);
-    const timer = setTimeout(() => void this.process(sessionId, dueAt), Math.max(1, dueAt - Date.now()));
+    const timer = setTimeout(() => void this.process(sessionId, dueAt).catch((error: unknown) => {
+      console.error("[SessionScheduler] Background work failed:", error instanceof Error ? error.message : "unknown error");
+    }), Math.max(1, dueAt - Date.now()));
     this.timers.set(sessionId, timer);
   }
 
@@ -129,6 +140,10 @@ export class SessionScheduler {
     const state = session.tracks[session.currentIndex];
     if (!track || !state || state.startedAt === null) return Promise.resolve();
     const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
+    if (!isScrobblableDuration(durationMs)) {
+      this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: Date.now() });
+      return Promise.resolve();
+    }
     const scrobbleDueAt = state.startedAt + (getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000);
     const dueAt = state.status === "pending" ? scrobbleDueAt : durationMs === null ? null : state.startedAt + durationMs;
     if (dueAt === null) {
@@ -157,17 +172,24 @@ export class SessionScheduler {
       if (!current || !track || current.startedAt === null) { this.clear(sessionId); return; }
       const now = Date.now();
       const durationMs = track.durationSec && track.durationSec > 0 ? track.durationSec * 1000 : null;
+      if (!isScrobblableDuration(durationMs)) {
+        this.clear(sessionId);
+        this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now });
+        return;
+      }
       const startedAt = current.startedAt;
       const thresholdMs = getScrobbleThresholdMs(durationMs, schedule.thresholdPercent) ?? 30_000;
       if (current.status === "pending") {
         if (now - startedAt < thresholdMs) { await this.schedule(sessionId, now); return; }
         const tokens = this.storage.loadTokens(session.userId);
         if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
-        const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
+        if (!this.storage.isCurrentSession(session.userId, session.id)) return;
+        const result = await deliverScrobble(this.storage, this.env, tokens.lastfm.accessToken, session.userId, session.release, session.currentIndex, startedAt);
+        if (this.stopped) return;
         if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: now };
-        await storeSession(this.storage, { ...session, tracks });
+        await storeSession(this.storage, { ...session, tracks, revision: session.revision + 1 });
         await this.schedule(sessionId, now);
         return;
       }
@@ -177,7 +199,7 @@ export class SessionScheduler {
       if (schedule.notifyOnSideCompletion && nextTrack && getPhysicalMediaBoundary(session.release, track, nextTrack)) {
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: current.scrobbledAt ?? now };
-        const paused = pauseSession({ ...session, tracks });
+        const paused = pauseSession({ ...session, tracks }, now);
         await storeSession(this.storage, paused); this.clear(sessionId); this.storage.saveSchedule({ ...schedule, dueAt: null, updatedAt: now }); return;
       }
       const tokens = this.storage.loadTokens(session.userId);
@@ -205,6 +227,7 @@ export class SessionScheduler {
       await storeSession(this.storage, updated);
       if (updated.state === "ended") { this.clear(sessionId); this.storage.deleteSchedule(sessionId); return; }
       const np = await sendNowPlaying(this.env, tokens.lastfm.accessToken, updated.release, updated.currentIndex);
+      if (this.stopped) return;
       if (!np.ok) console.error(`[SessionScheduler] Failed to send now playing:`, np.message);
       await this.schedule(sessionId, now);
     });

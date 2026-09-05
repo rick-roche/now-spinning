@@ -1,6 +1,6 @@
 # Coolify Deployment
 
-Production is a single Coolify **Application** built directly from GitHub with the repository root `Dockerfile`. Compose is retained only for local and provider-portable testing. GHCR is not required.
+Production is a single Coolify **Application** that deploys immutable images from GHCR. CI builds and publishes `ghcr.io/rick-roche/now-spinning:<git-sha>` only after validation. Compose and the root `Dockerfile` remain local and provider-portable testing artifacts.
 
 ## Production
 
@@ -9,18 +9,17 @@ Configure the Coolify resource as follows:
 | Setting | Value |
 | --- | --- |
 | Resource | Application |
-| Source | Coolify GitHub App |
-| Repository | `rick-roche/now-spinning` |
-| Branch | `main` |
-| Build pack | Dockerfile |
-| Dockerfile | `/Dockerfile` |
+| Source | Container registry |
+| Image | `ghcr.io/rick-roche/now-spinning` |
+| Image tag | Set by the Deploy workflow to the validated Git SHA |
+| Build pack | Docker Image |
 | Port | `3000` |
 | Domain | `https://now-spinning.rickroche.com` |
 | Health check | `/api/health` |
 | Persistent volume | `/data` |
 | Replicas | `1` |
 
-Disable Coolify automatic main-branch deployments. The GitHub Actions `Deploy` workflow triggers the Coolify webhook only after `CI` succeeds, preventing duplicate builds.
+Disable Coolify automatic source deployments. The GitHub Actions `Deploy` workflow updates the image tag and triggers Coolify's authenticated API only after `CI` succeeds. Because each tag is the workflow's full Git SHA and is never overwritten, a newer or failing `main` commit cannot change the image being deployed. The workflow summary and Coolify deployment record expose the validated SHA.
 
 The SQLite database must use `DATABASE_PATH=/data/now-spinning.sqlite`. Back up `/data` before upgrades. SQLite and the in-process scheduler currently require one production replica.
 
@@ -79,14 +78,17 @@ Cloudflare may provide DNS-only hosting. The application does not depend on Clou
 
 ```text
 Pull Request -> GitHub CI + Coolify Preview
-main merge   -> GitHub CI -> authenticated Coolify webhook -> Dockerfile build
+main merge   -> GitHub CI -> immutable GHCR image:<git-sha> -> authenticated Coolify API deploy
 ```
 
-CI runs `pnpm validate` and validates the Docker build. Coolify checks `/api/health`. The scheduler uses a SQLite lease so only one live container owns background work during replacement; keep production at one replica and preserve `/data`.
+CI runs `pnpm validate`, validates the Docker build, and publishes the SHA-tagged image. Coolify pulls that exact image and checks `/api/health`. The scheduler uses a SQLite lease so only one live container owns background work during replacement; keep production at one replica and preserve `/data`.
 
 ## GitHub Secrets
 
 ```text
-COOLIFY_WEBHOOK
+COOLIFY_API_URL
+COOLIFY_APPLICATION_UUID
 COOLIFY_TOKEN
 ```
+
+The Coolify application must have permission to pull the GHCR image. If the package is private, configure a read-only GHCR registry credential in Coolify.

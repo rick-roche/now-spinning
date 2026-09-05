@@ -89,4 +89,25 @@ describe("SQLiteStorage", () => {
     expect(storage.ownsSchedulerLease("owner", 1_149)).toBe(false);
     storage.close();
   });
+
+  it("claims each scrobble identity only once and releases failed claims", () => {
+    const storage = createStorage();
+
+    expect(storage.claimScrobble("scrobble-1", "user", 1_000)).toBe("claimed");
+    expect(storage.claimScrobble("scrobble-1", "user", 1_000)).toBe("in_flight");
+    storage.releaseScrobble("scrobble-1");
+    expect(storage.claimScrobble("scrobble-1", "user", 1_000)).toBe("claimed");
+    storage.completeScrobble("scrobble-1", 2_000);
+    expect(storage.claimScrobble("scrobble-1", "user", 1_000)).toBe("delivered");
+    storage.close();
+  });
+
+  it("expires delivery records after the deduplication window", () => {
+    const storage = createStorage();
+
+    expect(storage.claimScrobble("scrobble-1", "user", 1_000)).toBe("claimed");
+    storage.completeScrobble("scrobble-1", 2_000);
+    expect(storage.claimScrobble("scrobble-1", "user", 86_401_000)).toBe("claimed");
+    storage.close();
+  });
 });

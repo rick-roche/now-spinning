@@ -21,8 +21,25 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Trigger Coolify deployment
+      - name: Deploy the validated image
         env:
-          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_API_URL: ${{ secrets.COOLIFY_API_URL }}
+          COOLIFY_APPLICATION_UUID: ${{ secrets.COOLIFY_APPLICATION_UUID }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-        run: 'curl --fail-with-body --retry 3 --request POST --header "Authorization: Bearer ${COOLIFY_TOKEN}" "${COOLIFY_WEBHOOK}"'
+          VALIDATED_TAG: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          api_url="${COOLIFY_API_URL%/}/api/v1"
+          auth_header="Authorization: Bearer ${COOLIFY_TOKEN}"
+          application_url="${api_url}/applications/${COOLIFY_APPLICATION_UUID}"
+          deploy_url="${api_url}/deploy?uuid=${COOLIFY_APPLICATION_UUID}"
+
+          curl --fail-with-body --retry 3 --request PATCH \
+            --header "${auth_header}" \
+            --header 'Content-Type: application/json' \
+            --data "{\"docker_registry_image_tag\":\"${VALIDATED_TAG}\"}" \
+            "${application_url}"
+          curl --fail-with-body --retry 3 --request POST \
+            --header "${auth_header}" \
+            "${deploy_url}"
+          echo "Validated deployment SHA: ${VALIDATED_TAG}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedRelease } from "../domain/release.js";
 import type { Session } from "../domain/session.js";
-import { createSession, pauseSession, endSession } from "./engine.js";
+import { createSession, endSession, pauseSession, resumeSession } from "./engine.js";
 import { syncSession } from "./sync.js";
 
 const release: NormalizedRelease = {
@@ -66,6 +66,18 @@ describe("syncSession", () => {
     expect(result.session).toBe(session);
   });
 
+  it("excludes a long pause from active playback elapsed time", () => {
+    const session = makeSession({ startedAt: 1_000 });
+    const paused = pauseSession(session, 11_000);
+    const resumed = resumeSession(paused, 611_000);
+
+    const result = syncSession(resumed, 612_000, 50);
+
+    expect(result.scrobbleActions).toHaveLength(0);
+    expect(result.session.currentIndex).toBe(0);
+    expect(result.session.tracks[0]?.status).toBe("pending");
+  });
+
   it("returns no actions when current track has not reached threshold", () => {
     const session = makeSession({ startedAt: 1000 });
     const result = syncSession(session, 50_000, 50);
@@ -82,6 +94,7 @@ describe("syncSession", () => {
     const result = syncSession(session, 92_000, 50);
 
     expect(result.scrobbleActions).toHaveLength(1);
+    expect(result.session.revision).toBe(session.revision + 1);
     expect(result.scrobbleActions[0]).toEqual({
       trackIndex: 0,
       elapsedMs: 91_000,
@@ -307,6 +320,18 @@ describe("syncSession — pauseAtSideChange", () => {
     expect(result.session.currentIndex).toBe(1); // stayed on A2 (last of Side A)
     expect(result.session.tracks[1]?.status).toBe("scrobbled");
     expect(result.session.tracks[2]?.status).toBe("pending"); // B1 not touched
+  });
+
+  it("shifts the timeline after a pause at a side boundary", () => {
+    const session = makeSession({ startedAt: 1000 });
+    const syncAt = 401_000;
+
+    const paused = syncSession(session, syncAt, 50, true).session;
+    const resumed = resumeSession(paused, syncAt + 600_000);
+
+    expect(paused.pausedAt).toBe(syncAt);
+    expect(resumed.tracks[1]?.startedAt).toBe(781_000);
+    expect(resumed.pausedAt).toBeNull();
   });
 
   it("without pauseAtSideChange advances through side boundary normally", () => {

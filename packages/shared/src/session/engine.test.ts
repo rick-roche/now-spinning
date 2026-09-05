@@ -57,6 +57,20 @@ describe("session engine", () => {
     expect(resumed.state).toBe("running");
   });
 
+  it("does not count paused time in the current track", () => {
+    const session = createSession({
+      sessionId: "sess-paused-time",
+      userId: "user-paused-time",
+      release,
+      startedAt: 1_000,
+    });
+
+    const paused = { ...pauseSession(session), pausedAt: 11_000 };
+    const resumed = resumeSession(paused, 611_000);
+
+    expect(resumed.tracks[0]?.startedAt).toBe(601_000);
+  });
+
   it("advances and scrobbles the current track", () => {
     const session = createSession({
       sessionId: "sess-3",
@@ -71,6 +85,21 @@ describe("session engine", () => {
     expect(advanced.tracks[0]?.status).toBe("scrobbled");
     expect(advanced.tracks[0]?.scrobbledAt).toBe(1600);
     expect(advanced.tracks[1]?.startedAt).toBe(1600);
+  });
+
+  it("advances without scrobbling when the current track is skipped", () => {
+    const session = createSession({
+      sessionId: "sess-skip",
+      userId: "user-skip",
+      release,
+      startedAt: 1000,
+    });
+
+    const advanced = advanceSession(session, 1600, false);
+
+    expect(advanced.currentIndex).toBe(1);
+    expect(advanced.tracks[0]?.status).toBe("skipped");
+    expect(advanced.tracks[0]?.scrobbledAt).toBeNull();
   });
 
   it("ends the session after the last track", () => {

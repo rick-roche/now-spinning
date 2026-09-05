@@ -27,9 +27,12 @@ export {
   SessionStartRequestSchema,
   SessionIdSchema,
   SessionParamSchema,
+  SessionMutationRequestSchema,
+  SessionEndRequestSchema,
   SessionScrobbleCurrentRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
+  type SessionMutationRequest,
   type SessionScrobbleCurrentRequest,
 } from "./session.schema.js";

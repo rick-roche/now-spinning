@@ -17,8 +17,7 @@
     "lint:fix": "eslint . --fix",
     "knip": "knip",
     "outdated": "pnpm -r outdated",
-    "validate": "pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run test && pnpm run knip && pnpm run test:e2e",
-    "clean": "pnpm -r clean || true"
+    "validate": "pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run test && pnpm run knip && pnpm run test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

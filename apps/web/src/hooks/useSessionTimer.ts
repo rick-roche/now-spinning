@@ -8,7 +8,8 @@ import { formatDurationMs } from "../lib/format";
 export function useSessionTimer(
   sessionId: string | null,
   trackIndex: number,
-  isRunning: boolean
+  isRunning: boolean,
+  authoritativeStartedAt: number | null = null
 ) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -48,7 +49,7 @@ export function useSessionTimer(
 
       try {
         const stored = sessionStorage.getItem(storageKeyRef.current);
-        if (stored) {
+        if (stored && !(isRunning && Number.isFinite(authoritativeStartedAt))) {
           const data = JSON.parse(stored) as {
             elapsedMs: number;
             running: boolean;
@@ -70,11 +71,15 @@ export function useSessionTimer(
           }
         } else {
           localElapsedRef.current = 0;
-          localStartRef.current = isRunning ? Date.now() : null;
+          localStartRef.current = isRunning
+            ? (Number.isFinite(authoritativeStartedAt) ? authoritativeStartedAt : Date.now())
+            : null;
         }
       } catch {
         localElapsedRef.current = 0;
-        localStartRef.current = isRunning ? Date.now() : null;
+        localStartRef.current = isRunning
+          ? (Number.isFinite(authoritativeStartedAt) ? authoritativeStartedAt : Date.now())
+          : null;
       }
       
       // Update elapsedMs state immediately to reflect the new track's time
@@ -92,14 +97,16 @@ export function useSessionTimer(
     }
 
     if (isRunning && localStartRef.current === null) {
-      localStartRef.current = Date.now();
+      localStartRef.current = Number.isFinite(authoritativeStartedAt)
+        ? authoritativeStartedAt
+        : Date.now();
     }
 
     setElapsedMs(
       localElapsedRef.current +
         (localStartRef.current ? Date.now() - localStartRef.current : 0)
     );
-  }, [sessionId, trackIndex, isRunning]);
+  }, [sessionId, trackIndex, isRunning, authoritativeStartedAt]);
 
   useEffect(() => {
     setElapsedMs(

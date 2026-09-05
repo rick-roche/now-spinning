@@ -54,20 +54,27 @@ describe("isEligibleToScrobble", () => {
       expect(isEligibleToScrobble(240_000, durationMs, 100)).toBe(true);
     });
 
-    test("handles very short tracks", () => {
+    test("never makes tracks shorter than 30 seconds eligible", () => {
       const durationMs = 10_000; // 10 seconds
       const thresholdPercent = 50; // 50%
       
-      expect(isEligibleToScrobble(4_999, durationMs, thresholdPercent)).toBe(false);
-      expect(isEligibleToScrobble(5_000, durationMs, thresholdPercent)).toBe(true);
+      expect(isEligibleToScrobble(30_000, durationMs, thresholdPercent)).toBe(false);
     });
 
-    test("handles very long tracks", () => {
+    test("makes a 30-second track eligible only after its full duration", () => {
+      const durationMs = 30_000;
+      const thresholdPercent = 50;
+
+      expect(isEligibleToScrobble(29_999, durationMs, thresholdPercent)).toBe(false);
+      expect(isEligibleToScrobble(30_000, durationMs, thresholdPercent)).toBe(true);
+    });
+
+    test("caps long-track eligibility at four minutes", () => {
       const durationMs = 1_800_000; // 30 minutes
       const thresholdPercent = 50; // 50%
       
-      expect(isEligibleToScrobble(899_999, durationMs, thresholdPercent)).toBe(false);
-      expect(isEligibleToScrobble(900_000, durationMs, thresholdPercent)).toBe(true);
+      expect(isEligibleToScrobble(239_999, durationMs, thresholdPercent)).toBe(false);
+      expect(isEligibleToScrobble(240_000, durationMs, thresholdPercent)).toBe(true);
     });
   });
 
@@ -100,9 +107,9 @@ describe("isEligibleToScrobble", () => {
       expect(isEligibleToScrobble(-1000, null, 50)).toBe(false);
     });
 
-    test("handles 0% threshold (always eligible)", () => {
-      expect(isEligibleToScrobble(0, 180_000, 0)).toBe(true);
-      expect(isEligibleToScrobble(1, 180_000, 0)).toBe(true);
+    test("does not let 0% bypass the minimum", () => {
+      expect(isEligibleToScrobble(29_999, 180_000, 0)).toBe(false);
+      expect(isEligibleToScrobble(30_000, 180_000, 0)).toBe(true);
     });
   });
 });
@@ -112,7 +119,7 @@ describe("getScrobbleThresholdMs", () => {
     expect(getScrobbleThresholdMs(180_000, 50)).toBe(90_000); // 50% of 3 minutes
     expect(getScrobbleThresholdMs(240_000, 25)).toBe(60_000); // 25% of 4 minutes
     expect(getScrobbleThresholdMs(120_000, 75)).toBe(90_000); // 75% of 2 minutes
-    expect(getScrobbleThresholdMs(300_000, 100)).toBe(300_000); // 100% of 5 minutes
+    expect(getScrobbleThresholdMs(300_000, 100)).toBe(240_000); // capped at 4 minutes
   });
 
   test("returns 30 seconds when duration is null", () => {
@@ -125,10 +132,14 @@ describe("getScrobbleThresholdMs", () => {
     expect(getScrobbleThresholdMs(0, 50)).toBe(30_000);
   });
 
-  test("handles edge case percentages", () => {
+  test("clamps percentage thresholds to the provider bounds", () => {
     const durationMs = 200_000;
-    expect(getScrobbleThresholdMs(durationMs, 0)).toBe(0);
-    expect(getScrobbleThresholdMs(durationMs, 1)).toBe(2_000);
+    expect(getScrobbleThresholdMs(durationMs, 0)).toBe(30_000);
+    expect(getScrobbleThresholdMs(durationMs, 1)).toBe(30_000);
     expect(getScrobbleThresholdMs(durationMs, 99)).toBe(198_000);
+  });
+
+  test("returns null for tracks below the provider minimum", () => {
+    expect(getScrobbleThresholdMs(10_000, 50)).toBeNull();
   });
 });
