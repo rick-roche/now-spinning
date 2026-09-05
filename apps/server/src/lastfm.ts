@@ -12,6 +12,7 @@ const md5 = (input: string): string => {
 };
 
 const LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/";
+const LASTFM_REQUEST_TIMEOUT_MS = 15_000;
 
 function createLastFmSignature(
   params: Record<string, string>,
@@ -56,15 +57,29 @@ export async function fetchLastFm<T>(
 
   const body = new URLSearchParams(payload).toString();
   
-  const response = await fetch(LASTFM_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(LASTFM_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      signal: AbortSignal.timeout(LASTFM_REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, message: "Last.fm request failed" };
+  }
 
-  const raw: unknown = await response.json();
+  let raw: unknown;
+  try {
+    raw = await response.json();
+  } catch {
+    return { ok: false, message: "Last.fm returned an invalid response" };
+  }
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, message: "Last.fm returned an invalid response" };
+  }
   const data = raw as T & { error?: number; message?: string };
   
   if (!response.ok || data.error) {

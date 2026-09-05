@@ -9,6 +9,7 @@ type Timer = ReturnType<typeof setTimeout>;
 export class SessionScheduler {
   private static readonly leaseDurationMs = 60_000;
   private static readonly leaseRenewalMs = 15_000;
+  private static readonly shutdownDrainMs = 5_000;
   private readonly timers = new Map<string, Timer>();
   private readonly locks = new Map<string, Promise<void>>();
   private readonly ownerId = randomUUID();
@@ -38,7 +39,9 @@ export class SessionScheduler {
       if (schedule.dueAt === null) {
         continue;
       }
-      if (schedule.dueAt <= Date.now()) void this.process(schedule.sessionId, schedule.dueAt);
+      if (schedule.dueAt <= Date.now()) void this.process(schedule.sessionId, schedule.dueAt).catch((error: unknown) => {
+        console.error("[SessionScheduler] Background work failed:", error instanceof Error ? error.message : "unknown error");
+      });
       else this.arm(schedule.sessionId, schedule.dueAt);
     }
   }
@@ -49,7 +52,13 @@ export class SessionScheduler {
     this.leaseTimer = undefined;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
-    await Promise.all(this.locks.values());
+    await new Promise<void>((resolve) => {
+      const drainTimer = setTimeout(resolve, SessionScheduler.shutdownDrainMs);
+      void Promise.allSettled(this.locks.values()).then(() => {
+        clearTimeout(drainTimer);
+        resolve();
+      });
+    });
     if (this.ownsLease) this.storage.releaseSchedulerLease(this.ownerId);
     this.ownsLease = false;
   }
@@ -117,7 +126,9 @@ export class SessionScheduler {
   private arm(sessionId: string, dueAt: number): void {
     if (this.stopped || !this.ownsLease) return;
     this.clear(sessionId);
-    const timer = setTimeout(() => void this.process(sessionId, dueAt), Math.max(1, dueAt - Date.now()));
+    const timer = setTimeout(() => void this.process(sessionId, dueAt).catch((error: unknown) => {
+      console.error("[SessionScheduler] Background work failed:", error instanceof Error ? error.message : "unknown error");
+    }), Math.max(1, dueAt - Date.now()));
     this.timers.set(sessionId, timer);
   }
 
@@ -164,6 +175,7 @@ export class SessionScheduler {
         const tokens = this.storage.loadTokens(session.userId);
         if (!tokens.lastfm) { this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const result = await scrobbleTrack(this.env, tokens.lastfm.accessToken, session.release, session.currentIndex, Math.floor(startedAt / 1000));
+        if (this.stopped) return;
         if (!result.ok) { console.error(`[SessionScheduler] Failed to scrobble track ${session.currentIndex}:`, result.message); this.storage.saveSchedule({ ...schedule, dueAt: now + 30_000, updatedAt: now }); this.arm(sessionId, now + 30_000); return; }
         const tracks = [...session.tracks];
         tracks[session.currentIndex] = { ...current, status: "scrobbled", scrobbledAt: now };
@@ -205,6 +217,7 @@ export class SessionScheduler {
       await storeSession(this.storage, updated);
       if (updated.state === "ended") { this.clear(sessionId); this.storage.deleteSchedule(sessionId); return; }
       const np = await sendNowPlaying(this.env, tokens.lastfm.accessToken, updated.release, updated.currentIndex);
+      if (this.stopped) return;
       if (!np.ok) console.error(`[SessionScheduler] Failed to send now playing:`, np.message);
       await this.schedule(sessionId, now);
     });

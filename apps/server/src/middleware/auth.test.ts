@@ -225,4 +225,67 @@ describe("session cookies", () => {
       storage.close();
     }
   });
+
+  it("bounds stalled Discogs authorization requests", async () => {
+    const { app, environment, storage } = oauthApp();
+    const timeoutController = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      })
+    );
+    try {
+      const responsePromise = app.fetch(new Request("http://localhost/api/auth/discogs/start", { method: "POST" }), environment);
+      await vi.waitFor(() => expect(providerFetch).toHaveBeenCalledTimes(1));
+      timeoutController.abort();
+      const response = await responsePromise;
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toMatchObject({ error: { code: "DISCOGS_ERROR" } });
+      expect(timeout).toHaveBeenCalledWith(15_000);
+      expect(providerFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      providerFetch.mockRestore();
+      timeout.mockRestore();
+      storage.close();
+    }
+  });
+
+  it("bounds stalled Discogs callback requests", async () => {
+    const { app, environment, storage } = oauthApp();
+    const timeoutController = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      })
+    );
+    try {
+      storage.storeOAuthState("discogs", "stalled-callback", {
+        sessionId: "initiator-discogs-stalled",
+        oauth_token_secret: "oauth-secret",
+      });
+      const responsePromise = app.fetch(
+        new Request("http://localhost/api/auth/discogs/callback?oauth_token=stalled-callback&oauth_verifier=verifier", {
+          headers: { Cookie: "now_spinning_session=initiator-discogs-stalled" },
+        }),
+        environment
+      );
+      await vi.waitFor(() => expect(providerFetch).toHaveBeenCalledTimes(1));
+      timeoutController.abort();
+      const response = await responsePromise;
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toMatchObject({ error: { code: "DISCOGS_ERROR" } });
+      expect(timeout).toHaveBeenCalledWith(15_000);
+      expect(providerFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      providerFetch.mockRestore();
+      timeout.mockRestore();
+      storage.close();
+    }
+  });
 });

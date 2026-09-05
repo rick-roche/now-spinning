@@ -23,6 +23,7 @@ type HonoContext = Context<{ Bindings: AppEnvironment }>;
 const DISCOGS_REQUEST_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/request_token`;
 const DISCOGS_AUTHORIZE_URL = "https://www.discogs.com/oauth/authorize";
 const DISCOGS_ACCESS_TOKEN_URL = `${DISCOGS_API_BASE}/oauth/access_token`;
+const DISCOGS_OAUTH_TIMEOUT_MS = 15_000;
 
 const router = new Hono<{ Bindings: AppEnvironment }>();
 
@@ -77,6 +78,7 @@ router.post("/start", async (c: HonoContext) => {
     const response = await fetch(`${DISCOGS_REQUEST_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
       headers: { "User-Agent": DISCOGS_USER_AGENT },
+      signal: AbortSignal.timeout(DISCOGS_OAUTH_TIMEOUT_MS),
     });
 
     console.log(
@@ -157,6 +159,7 @@ router.get("/callback", async (c: HonoContext) => {
     const response = await fetch(`${DISCOGS_ACCESS_TOKEN_URL}?${reqParams.toString()}`, {
       method: "POST",
       headers: { "User-Agent": DISCOGS_USER_AGENT },
+      signal: AbortSignal.timeout(DISCOGS_OAUTH_TIMEOUT_MS),
     });
 
     console.log(

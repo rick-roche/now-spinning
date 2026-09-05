@@ -115,4 +115,60 @@ describe("SessionScheduler", () => {
     storage.close();
     vi.useRealTimers();
   });
+
+  it("retains a pending track when a Last.fm request rejects", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-fetch-failure", userId: "user-fetch-failure", release, startedAt: -240_000 });
+    storage.saveSession(session);
+    storage.storeTokens("user-fetch-failure", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: -1, updatedAt: 0 });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+
+    const scheduler = new SessionScheduler(storage, {
+      devMode: false,
+      lastfmApiKey: "api-key",
+      lastfmApiSecret: "api-secret",
+    } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("pending");
+    expect(storage.loadSchedule(session.id)?.dueAt).toBe(30_000);
+    await scheduler.stop();
+    storage.close();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("bounds shutdown while provider work is stalled", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-stalled-fetch", userId: "user-stalled-fetch", release, startedAt: -240_000 });
+    storage.saveSession(session);
+    storage.storeTokens("user-stalled-fetch", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: false, dueAt: -1, updatedAt: 0 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => undefined));
+
+    const scheduler = new SessionScheduler(storage, {
+      devMode: false,
+      lastfmApiKey: "api-key",
+      lastfmApiSecret: "api-secret",
+    } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    const stopped = scheduler.stop();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await stopped;
+    storage.close();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
 });
