@@ -55,6 +55,8 @@ export type {
 } from "./contracts/discogs.js";
 export type {
   SessionActionResponse,
+  SessionEndMode,
+  SessionEndRequest,
   SessionCurrentResponse,
   SessionStartRequest,
   SessionStartResponse,
@@ -96,6 +98,7 @@ export {
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
   SessionMutationRequestSchema,
+  SessionEndRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,

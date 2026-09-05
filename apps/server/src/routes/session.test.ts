@@ -142,7 +142,7 @@ describe("session routes", () => {
         { index: 1, position: "A2", title: "Second", artist: "Test Artist", durationSec: 180, side: "A" },
       ],
     };
-    const session = createSession({ sessionId: "session-1", userId: "user-1", release: twoTrackRelease, startedAt: Date.now() });
+    const session = createSession({ sessionId: "session-1", userId: "user-1", release: twoTrackRelease, startedAt: Date.now() - 180_000 });
     storage.saveSession(session);
     storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "session-key", storedAt: 1 }, discogs: null });
     const environment = {
@@ -249,11 +249,41 @@ describe("session routes", () => {
 
     const response = await app.fetch(new Request("http://localhost/api/session/session-1/end", {
       method: "POST", headers: { Cookie: "now_spinning_session=user-1", "Content-Type": "application/json" },
-      body: JSON.stringify({ mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2", expectedRevision: 0, expectedTrackIndex: 0 }),
+      body: JSON.stringify({ mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2", expectedRevision: 0, expectedTrackIndex: 0, endMode: "scrobble-current-and-remaining" }),
     }), environment);
 
     expect(response.status).toBe(200);
     expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("scrobbled");
+    storage.close();
+  });
+
+  it("skips an ineligible track on next without contacting Last.fm", async () => {
+    const path = `/tmp/now-spinning-route-${crypto.randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-1", userId: "user-1", release, startedAt: Date.now() });
+    storage.saveSession(session);
+    storage.storeTokens("user-1", { lastfm: { service: "lastfm", accessToken: "session-key", storedAt: 1 }, discogs: null });
+    const environment = {
+      port: 3000, databasePath: path, publicAppOrigin: "http://localhost:3000",
+      lastfmCallbackUrl: "http://localhost:3000/api/auth/lastfm/callback", discogsCallbackUrl: "http://localhost:3000/api/auth/discogs/callback",
+      allowedOrigins: [], devMode: false, lastfmApiKey: "key", lastfmApiSecret: "secret", staticRoot: "/nonexistent",
+      NOW_SPINNING_STORAGE: storage, scheduler: undefined,
+    } as unknown as AppEnvironment;
+    const scheduler = new SessionScheduler(storage, environment);
+    environment.scheduler = scheduler;
+    const app = createApp(environment);
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const response = await app.fetch(new Request("http://localhost/api/session/session-1/next", {
+      method: "POST",
+      headers: { Cookie: "now_spinning_session=user-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2", expectedRevision: 0, expectedTrackIndex: 0 }),
+    }), environment);
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("skipped");
     storage.close();
   });
 });

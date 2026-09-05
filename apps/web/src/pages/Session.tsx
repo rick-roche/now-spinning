@@ -319,7 +319,7 @@ export function SessionPage() {
                 onPlayPause={() => void handlePlayPause()}
                 onSkipBack={handleSkipBack}
                 onSkipForward={() => void handleNext()}
-                onEnd={() => void sessionActions.end()}
+                onEnd={(mode) => void sessionActions.end(mode)}
                 disabled={sessionActions.isLoading}
               />
             </div>

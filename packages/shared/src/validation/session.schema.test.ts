@@ -5,6 +5,7 @@ import {
   SessionIdSchema,
   SessionParamSchema,
   SessionMutationRequestSchema,
+  SessionEndRequestSchema,
 } from "./session.schema.js";
 
 describe("SessionStartRequestSchema", () => {
@@ -110,6 +111,15 @@ describe("SessionMutationRequestSchema", () => {
       expectedRevision: -1,
       expectedTrackIndex: 1,
     }).success).toBe(false);
+  });
+});
+
+describe("SessionEndRequestSchema", () => {
+  it("requires an explicit end mode", () => {
+    const base = { mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2", expectedRevision: 0, expectedTrackIndex: 0 };
+    expect(SessionEndRequestSchema.safeParse(base).success).toBe(false);
+    expect(SessionEndRequestSchema.safeParse({ ...base, endMode: "end-without-scrobbling" }).success).toBe(true);
+    expect(SessionEndRequestSchema.safeParse({ ...base, endMode: "unknown" }).success).toBe(false);
   });
 });
 

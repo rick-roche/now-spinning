@@ -52,6 +52,10 @@ export const SessionMutationRequestSchema = z.object({
 
 export type SessionMutationRequest = z.infer<typeof SessionMutationRequestSchema>;
 
+export const SessionEndRequestSchema = SessionMutationRequestSchema.extend({
+  endMode: z.enum(["end-without-scrobbling", "scrobble-current-and-remaining", "skip-remaining"]),
+}).strict();
+
 /**
  * Session scrobble-current request body.
  * Requires elapsed time to validate scrobble eligibility.

@@ -72,7 +72,7 @@ export function endSession(session: Session): Session {
   return { ...session, state: "ended", revision: session.revision + 1 };
 }
 
-export function advanceSession(session: Session, advancedAt: number): Session {
+export function advanceSession(session: Session, advancedAt: number, scrobbleCurrent = true): Session {
   if (session.tracks.length === 0) {
     return { ...session, state: "ended", revision: session.revision + 1 };
   }
@@ -81,12 +81,14 @@ export function advanceSession(session: Session, advancedAt: number): Session {
   const currentIndex = session.currentIndex;
   const current = tracks[currentIndex];
 
-  if (current && current.status === "pending") {
+  if (current && current.status === "pending" && scrobbleCurrent) {
     tracks[currentIndex] = {
       ...current,
       status: "scrobbled",
       scrobbledAt: advancedAt,
     };
+  } else if (current && current.status === "pending") {
+    tracks[currentIndex] = { ...current, status: "skipped", scrobbledAt: null };
   }
 
   const nextIndex = currentIndex + 1;

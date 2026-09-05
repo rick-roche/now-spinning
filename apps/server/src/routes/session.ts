@@ -14,6 +14,7 @@ import {
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
   SessionMutationRequestSchema,
+  SessionEndRequestSchema,
   SessionSyncRequestSchema,
   type SessionActionResponse,
   type SessionCurrentResponse,
@@ -369,15 +370,24 @@ router.post(
       const previousTrack = session.tracks[previousIndex];
       const previousStartedAt = previousTrack?.startedAt ?? now;
       const wasAlreadyScrobbled = previousTrack?.status === "scrobbled";
-      if (!wasAlreadyScrobbled) {
+      const releaseTrack = session.release.tracks[previousIndex];
+      const durationMs = releaseTrack?.durationSec ? releaseTrack.durationSec * 1000 : null;
+      const schedule = storage.loadSchedule(sessionId);
+      const eligible = previousStartedAt <= now && isEligibleToScrobble(
+        now - previousStartedAt,
+        durationMs,
+        schedule?.thresholdPercent ?? 50,
+      );
+      if (!wasAlreadyScrobbled && eligible) {
         const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, previousIndex, previousStartedAt);
         if (!scrobbleResult.ok) {
           console.error("[POST /:id/next] Failed to scrobble track:", scrobbleResult.message);
           return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
         }
       }
-      const updated = advanceSession(session, now);
+      const updated = advanceSession(session, now, wasAlreadyScrobbled || eligible);
       const response: SessionActionResponse = { session: updated };
+      await storeSession(storage, updated);
       storage.saveSessionMutation(updated, mutationId, "next", response);
 
       if (updated.state !== "ended") {
@@ -420,11 +430,11 @@ router.post(
     try { body = await c.req.json(); } catch {
       return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
     }
-    const bodyResult = SessionMutationRequestSchema.safeParse(body);
+    const bodyResult = SessionEndRequestSchema.safeParse(body);
     if (!bodyResult.success) {
       return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
     }
-    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
+    const { mutationId, expectedRevision, expectedTrackIndex, endMode } = bodyResult.data;
     return c.env.scheduler.runExclusive(sessionId, async () => {
       const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "end");
       if (replay) return c.json(replay);
@@ -436,25 +446,31 @@ router.post(
         return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
       }
 
-      const tokens = await loadStoredTokens(storage, userId);
       const now = Date.now();
       const currentIndex = session.currentIndex;
-      const currentTrack = session.tracks[currentIndex];
-      const currentStartedAt = currentTrack?.startedAt ?? now;
-      const wasAlreadyScrobbled = currentTrack?.status === "scrobbled";
-      if (session.state !== "ended" && !wasAlreadyScrobbled) {
-        const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, currentIndex, currentStartedAt);
-        if (!scrobbleResult.ok) {
-          console.error("[POST /:id/end] Failed to scrobble track:", scrobbleResult.message);
-          return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
-        }
-      }
       const tracks = [...session.tracks];
-      if (session.state !== "ended" && !wasAlreadyScrobbled && currentTrack) {
-        tracks[currentIndex] = { ...currentTrack, status: "scrobbled", scrobbledAt: now };
+      if (session.state !== "ended" && endMode === "skip-remaining") {
+        for (let index = currentIndex; index < tracks.length; index += 1) {
+          const track = tracks[index];
+          if (track?.status === "pending") tracks[index] = { ...track, status: "skipped", scrobbledAt: null };
+        }
+      } else if (session.state !== "ended" && endMode === "scrobble-current-and-remaining") {
+        const tokens = await loadStoredTokens(storage, userId);
+        for (let index = currentIndex; index < tracks.length; index += 1) {
+          const track = tracks[index];
+          if (!track || track.status !== "pending") continue;
+          const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, index, track.startedAt ?? now);
+          if (!scrobbleResult.ok) {
+            console.error(`[POST /:id/end] Failed to scrobble track ${index}:`, scrobbleResult.message);
+            await storeSession(storage, { ...session, tracks, revision: session.revision + 1 });
+            return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
+          }
+          tracks[index] = { ...track, status: "scrobbled", scrobbledAt: now };
+        }
       }
       const updated = endSession({ ...session, tracks });
       const response: SessionActionResponse = { session: updated };
+      await storeSession(storage, updated);
       storage.saveSessionMutation(updated, mutationId, "end", response);
       await c.env.scheduler.end(sessionId, true);
       return c.json(response);

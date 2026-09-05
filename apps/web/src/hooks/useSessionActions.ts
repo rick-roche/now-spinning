@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useApiMutation } from "./useApiMutation";
-import type { Session, SessionActionResponse } from "@repo/shared";
+import type { Session, SessionActionResponse, SessionEndMode } from "@repo/shared";
 
 function isSessionActionResponse(value: unknown): value is SessionActionResponse {
   if (!value || typeof value !== "object") return false;
@@ -20,11 +20,12 @@ export function useSessionActions(
   const sessionId = session?.id ?? "";
   const { mutate, loading, error, reset } = useApiMutation<SessionActionResponse, {
     action: "pause" | "resume" | "next" | "end";
+    endMode?: SessionEndMode;
     mutationId: string;
     expectedRevision: number;
     expectedTrackIndex: number;
   }>(
-    ({ action, mutationId, expectedRevision, expectedTrackIndex }) => ({
+    ({ action, endMode, mutationId, expectedRevision, expectedTrackIndex }) => ({
       url: `/api/session/${sessionId}/${action}`,
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,13 +33,14 @@ export function useSessionActions(
         mutationId,
         expectedRevision,
         expectedTrackIndex,
+        ...(action === "end" ? { endMode } : {}),
       }),
     }),
     { retry: 1 }
   );
 
   const executeAction = useCallback(
-    async (action: "pause" | "resume" | "next" | "end"): Promise<boolean> => {
+    async (action: "pause" | "resume" | "next" | "end", endMode?: SessionEndMode): Promise<boolean> => {
       if (!sessionId || !session || actionInFlight.current) return false;
       actionInFlight.current = true;
 
@@ -49,6 +51,7 @@ export function useSessionActions(
           mutationId: crypto.randomUUID(),
           expectedRevision: session.revision,
           expectedTrackIndex: session.currentIndex,
+          ...(endMode ? { endMode } : {}),
         });
         if (!raw) { await recoverSession(); return false; }
         if (!isSessionActionResponse(raw)) {
@@ -72,7 +75,7 @@ export function useSessionActions(
   const pause = useCallback(() => executeAction("pause"), [executeAction]);
   const resume = useCallback(() => executeAction("resume"), [executeAction]);
   const next = useCallback(() => executeAction("next"), [executeAction]);
-  const end = useCallback(() => executeAction("end"), [executeAction]);
+  const end = useCallback((endMode: SessionEndMode) => executeAction("end", endMode), [executeAction]);
 
   return {
     pause,

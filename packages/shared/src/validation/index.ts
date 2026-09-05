@@ -28,6 +28,7 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionMutationRequestSchema,
+  SessionEndRequestSchema,
   SessionScrobbleCurrentRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,

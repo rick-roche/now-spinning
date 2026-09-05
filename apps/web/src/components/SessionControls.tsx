@@ -1,4 +1,6 @@
 import { Icon } from "./Icon";
+import type { SessionEndMode } from "@repo/shared";
+import { useState } from "react";
 
 interface SessionControlsProps {
   isPaused: boolean;
@@ -7,7 +9,7 @@ interface SessionControlsProps {
   onPlayPause: () => void;
   onSkipBack: () => void;
   onSkipForward: () => void;
-  onEnd: () => void;
+  onEnd: (mode: SessionEndMode) => void;
   disabled?: boolean;
 }
 
@@ -21,6 +23,12 @@ export function SessionControls({
   onEnd,
   disabled = false,
 }: SessionControlsProps) {
+  const [showEndModes, setShowEndModes] = useState(false);
+  const endModes: Array<{ mode: SessionEndMode; label: string }> = [
+    { mode: "end-without-scrobbling", label: "End without scrobbling" },
+    { mode: "scrobble-current-and-remaining", label: "Scrobble current and remaining" },
+    { mode: "skip-remaining", label: "Mark remaining as skipped" },
+  ];
   return (
     <div className="space-y-4">
       {/* Primary Controls */}
@@ -55,13 +63,15 @@ export function SessionControls({
 
       {/* Secondary Controls */}
       <div className="flex items-center justify-center gap-2">
-        <button
-          onClick={onEnd}
-          disabled={disabled}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring"
-        >
-          End Session
-        </button>
+        {!showEndModes ? (
+          <button onClick={() => setShowEndModes(true)} disabled={disabled} className="px-4 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring">
+            End Session
+          </button>
+        ) : endModes.map(({ mode, label }) => (
+          <button key={mode} onClick={() => onEnd(mode)} disabled={disabled} className="px-4 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring">
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );
