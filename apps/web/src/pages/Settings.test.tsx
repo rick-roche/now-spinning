@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Settings } from "./Settings";
 import type { AuthStatusResponse } from "@repo/shared";
 import { createFetchMock } from "../test-utils";
+import packageJson from "../../../../package.json" with { type: "json" };
 
 const fetchMock = createFetchMock();
 
@@ -407,7 +408,7 @@ describe("Settings Page", () => {
     await waitFor(() => {
       expect(screen.getByText("About")).toBeInTheDocument();
       expect(screen.getByText("Version")).toBeInTheDocument();
-      expect(screen.getByText("1.2.0+development")).toBeInTheDocument();
+      expect(screen.getByText(`${packageJson.version}+development`)).toBeInTheDocument();
       expect(screen.getByText("View on GitHub")).toBeInTheDocument();
     });
   });
