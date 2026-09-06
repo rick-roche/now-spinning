@@ -1,6 +1,10 @@
 # Now Spinning — Play. Track. Collect.
 
-[![CI](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml) [![Deploy](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml)
+[![CI](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/ci.yml) 
+[![CD](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml/badge.svg)](https://github.com/rick-roche/now-spinning/actions/workflows/deploy.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/rick-roche/now-spinning)](https://github.com/rick-roche/now-spinning/releases)
+[![License](https://img.shields.io/github/license/rick-roche/now-spinning)](LICENSE)
+[![Live App](https://img.shields.io/badge/live-now--spinning.rickroche.com-success)](https://now-spinning.rickroche.com)
 
 <p align="center">
   <img src="apps/web/public/now-spinning-logo.svg" alt="Now Spinning logo" width="520" />
