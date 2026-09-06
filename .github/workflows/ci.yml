@@ -9,8 +9,20 @@ on:
 permissions:
   contents: read
   packages: write
+  pull-requests: read
 
 jobs:
+  semantic-pull-request:
+    name: Validate pull request title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate Conventional Commit title
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   quality:
     name: Quality checks
     runs-on: ubuntu-latest
@@ -53,7 +65,7 @@ jobs:
         run: pnpm validate
 
       - name: Validate production Docker build
-        run: docker build -t now-spinning:test .
+        run: docker build --build-arg GIT_SHA="${{ github.sha }}" -t now-spinning:test .
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push'

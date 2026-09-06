@@ -407,6 +407,7 @@ describe("Settings Page", () => {
     await waitFor(() => {
       expect(screen.getByText("About")).toBeInTheDocument();
       expect(screen.getByText("Version")).toBeInTheDocument();
+      expect(screen.getByText("1.2.0+development")).toBeInTheDocument();
       expect(screen.getByText("View on GitHub")).toBeInTheDocument();
     });
   });
