@@ -30,9 +30,17 @@ export {
   SessionMutationRequestSchema,
   SessionEndRequestSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionScrobbleNowRequestSchema,
   SessionSyncRequestSchema,
   type SessionId,
   type SessionParam,
   type SessionMutationRequest,
   type SessionScrobbleCurrentRequest,
 } from "./session.schema.js";
+
+export {
+  DirectScrobbleRequestSchema,
+  type DirectScrobbleRequestInput,
+} from "./scrobble.schema.js";
+
+export { RecentScrobblesQuerySchema, type RecentScrobblesQuery } from "./recent-scrobbles.schema.js";

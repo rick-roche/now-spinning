@@ -6,6 +6,7 @@ import {
   SessionParamSchema,
   SessionMutationRequestSchema,
   SessionEndRequestSchema,
+  SessionScrobbleNowRequestSchema,
 } from "./session.schema.js";
 
 describe("SessionStartRequestSchema", () => {
@@ -120,6 +121,16 @@ describe("SessionEndRequestSchema", () => {
     expect(SessionEndRequestSchema.safeParse(base).success).toBe(false);
     expect(SessionEndRequestSchema.safeParse({ ...base, endMode: "end-without-scrobbling" }).success).toBe(true);
     expect(SessionEndRequestSchema.safeParse({ ...base, endMode: "unknown" }).success).toBe(false);
+  });
+});
+
+describe("SessionScrobbleNowRequestSchema", () => {
+  it("accepts the session mutation preconditions", () => {
+    expect(SessionScrobbleNowRequestSchema.safeParse({
+      mutationId: "8a812d1b-7118-4a72-9680-852d68cbf2f2",
+      expectedRevision: 2,
+      expectedTrackIndex: 1,
+    }).success).toBe(true);
   });
 });
 

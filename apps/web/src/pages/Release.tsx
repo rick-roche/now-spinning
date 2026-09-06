@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { ErrorMessage } from "../components/ErrorMessage";
@@ -7,7 +7,8 @@ import { useApiMutation } from "../hooks/useApiMutation";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { formatDurationSec } from "../lib/format";
 import { getScrobbleDelay, getNotifyOnSideCompletion } from "../lib/settings";
-import type { DiscogsReleaseResponse, NormalizedRelease, SessionStartResponse } from "@repo/shared";
+import { enqueueDirectScrobble } from "../lib/direct-scrobble-queue";
+import type { DiscogsReleaseResponse, DirectScrobbleResponse, NormalizedRelease, SessionStartResponse } from "@repo/shared";
 import { DiscogsReleaseIdSchema } from "@repo/shared";
 
 export function Release() {
@@ -26,6 +27,8 @@ export function Release() {
   );
 
   const release = data?.release ?? null;
+  const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
+  const [directOperationId, setDirectOperationId] = useState(() => crypto.randomUUID());
 
   const {
     mutate: startSession,
@@ -45,6 +48,29 @@ export function Release() {
       },
     }
   );
+
+  const {
+    mutate: directScrobble,
+    loading: directScrobbling,
+    data: directResult,
+    error: directError,
+    reset: resetDirectResult,
+  } = useApiMutation<DirectScrobbleResponse, { operationId: string; releaseId: string; trackIndices: number[] }>(
+    (vars) => ({
+      url: "/api/scrobbles",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vars),
+    }),
+  );
+
+  useEffect(() => {
+    // Reset release-local selection when React Router reuses this page instance.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedTracks([]);
+    setDirectOperationId(crypto.randomUUID());
+    resetDirectResult();
+  }, [releaseId, resetDirectResult]);
 
   const groupedTracks = useMemo(() => {
     if (!release) return [];
@@ -74,7 +100,32 @@ export function Release() {
     await startSession({ releaseId: release.id, thresholdPercent: getScrobbleDelay(), notifyOnSideCompletion: getNotifyOnSideCompletion() });
   };
 
-  const errorMessage = error ?? startError;
+  const handleDirectScrobble = async () => {
+    if (!release || selectedTracks.length === 0) return;
+    const request = { operationId: directOperationId, releaseId: release.id, trackIndices: selectedTracks };
+    const result = await directScrobble(request);
+    if (!result && !navigator.onLine) enqueueDirectScrobble(request);
+  };
+
+  const handleDirectAlbumScrobble = async () => {
+    if (!release || release.tracks.length === 0) return;
+    const indices = release.tracks.map((track) => track.index);
+    const operationId = crypto.randomUUID();
+    setSelectedTracks(indices);
+    setDirectOperationId(operationId);
+    resetDirectResult();
+    const request = { operationId, releaseId: release.id, trackIndices: indices };
+    const result = await directScrobble(request);
+    if (!result && !navigator.onLine) enqueueDirectScrobble(request);
+  };
+
+  const toggleTrack = (index: number) => {
+    setSelectedTracks((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index].sort((a, b) => a - b));
+    setDirectOperationId(crypto.randomUUID());
+    resetDirectResult();
+  };
+
+  const errorMessage = error ?? startError ?? directError;
   const releaseIdError = releaseIdResult.success
     ? null
     : releaseIdResult.error.issues[0]?.message ?? "Release id is required.";
@@ -107,6 +158,8 @@ export function Release() {
 
   if (!release) return null;
   const hasTracks = release.tracks.length > 0;
+  const hasCompleteTimings = hasTracks && release.tracks.every((track) => track.durationSec !== null);
+  const directTracks = directResult?.operation.tracks ?? [];
 
   return (
     <>
@@ -162,16 +215,65 @@ export function Release() {
           </a>
         </div>
 
-        {/* Start Session Button */}
-        <div className="mt-6">
+        {hasCompleteTimings ? (
+          <div className="mt-6">
+            <button
+              onClick={() => void handleStartSession()}
+              disabled={starting || !hasTracks}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-primary text-white font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
+            >
+              <Icon name={starting ? "sync" : "play_arrow"} className={starting ? "animate-spin" : ""} />
+              {starting ? "Starting..." : "Start Scrobbling"}
+            </button>
+          </div>
+        ) : hasTracks ? (
+          <div className="mt-6 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
+            <p className="text-sm font-semibold">Timed playback unavailable</p>
+            <p className="mt-1 text-xs text-text-muted">Some track durations are unavailable, so use direct scrobbling instead.</p>
+            <button
+              type="button"
+              onClick={() => void handleDirectAlbumScrobble()}
+              disabled={directScrobbling}
+              className="mt-3 w-full min-h-11 rounded-lg bg-primary px-3 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {directScrobbling ? "Scrobbling..." : "Scrobble album"}
+            </button>
+          </div>
+        ) : null}
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-sm font-semibold">Direct scrobble</p>
+          <p className="mt-1 text-xs text-text-muted">Explicitly scrobbles tracks now. This does not start or change a listening session. If one is active, it will continue unchanged.</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+               onClick={() => { setSelectedTracks(release.tracks.map((track) => track.index)); setDirectOperationId(crypto.randomUUID()); resetDirectResult(); }}
+              className="min-h-11 flex-1 rounded-lg border border-white/20 px-3 text-sm font-semibold"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+               onClick={() => { setSelectedTracks([]); setDirectOperationId(crypto.randomUUID()); resetDirectResult(); }}
+              className="min-h-11 flex-1 rounded-lg border border-white/20 px-3 text-sm font-semibold"
+            >
+              Clear
+            </button>
+          </div>
           <button
-            onClick={() => void handleStartSession()}
-            disabled={starting || !hasTracks}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-primary text-white font-bold text-sm tracking-widest uppercase shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
+            onClick={() => void handleDirectScrobble()}
+            disabled={directScrobbling || selectedTracks.length === 0}
+            className="mt-3 w-full min-h-11 rounded-lg border border-primary/60 px-3 text-sm font-bold text-primary disabled:opacity-40"
           >
-            <Icon name={starting ? "sync" : "play_arrow"} className={starting ? "animate-spin" : ""} />
-            {starting ? "Starting..." : hasTracks ? "Start Scrobbling" : "No playable tracks"}
+            {directScrobbling ? "Scrobbling..." : `Scrobble ${selectedTracks.length} selected`}
           </button>
+          {directResult?.operation.activeSessionWarning && <p className="mt-2 text-xs text-amber-300">An active session is running. Direct scrobbling is allowed and will not change it.</p>}
+          {directTracks.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs" aria-label="Direct scrobble results">
+              {directTracks.map((track) => <li key={track.trackIndex} className="flex justify-between gap-2"><span>{track.title}</span><span className="text-text-muted">{track.status}</span></li>)}
+            </ul>
+          )}
+          {directResult?.operation.status === "pending" && <button className="mt-3 min-h-11 text-sm font-semibold text-primary underline" onClick={() => void handleDirectScrobble()}>Retry transient failures</button>}
+          {directResult && directResult.operation.status === "completed" && <p className="mt-2 text-xs text-emerald-300">Direct scrobble complete.</p>}
         </div>
         </div>{/* end left column */}
 
@@ -191,6 +293,13 @@ export function Release() {
                     key={`${group.key}-${track.index}`}
                     className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-colors"
                   >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${track.title}`}
+                      checked={selectedTracks.includes(track.index)}
+                      onChange={() => toggleTrack(track.index)}
+                      className="size-5 shrink-0 accent-primary"
+                    />
                     <span className="text-xs font-bold opacity-30 w-6 shrink-0">
                       {track.position}
                     </span>

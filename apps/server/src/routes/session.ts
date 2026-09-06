@@ -13,6 +13,7 @@ import {
   SessionStartRequestSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionScrobbleNowRequestSchema,
   SessionMutationRequestSchema,
   SessionEndRequestSchema,
   SessionSyncRequestSchema,
@@ -319,6 +320,71 @@ router.post(
 );
 
 router.post(
+  "/:id/scrobble-now",
+  requireLastFm,
+  async (c: HonoContext) => {
+    const storage = c.env.NOW_SPINNING_STORAGE;
+    const userId = getOrCreateSessionId(c);
+    setSessionCookie(c, userId);
+    const paramResult = SessionParamSchema.safeParse(c.req.param());
+    if (!paramResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Path parameters validation failed", formatZodErrors(paramResult.error)), 400);
+    }
+
+    let body: unknown;
+    try { body = await c.req.json(); } catch {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Invalid or malformed JSON body"), 400);
+    }
+    const bodyResult = SessionScrobbleNowRequestSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return c.json(createAPIError(ErrorCode.VALIDATION_ERROR, "Request body validation failed", formatZodErrors(bodyResult.error)), 400);
+    }
+
+    const { id: sessionId } = paramResult.data;
+    const { mutationId, expectedRevision, expectedTrackIndex } = bodyResult.data;
+    return c.env.scheduler.runExclusive(sessionId, async () => {
+      const replay = storage.loadSessionMutation<SessionActionResponse>(userId, sessionId, mutationId, "scrobble-now");
+      if (replay) return c.json(replay);
+      const session = await loadSession(storage, sessionId);
+      if (!session || session.userId !== userId) {
+        return c.json(createAPIError(ErrorCode.SESSION_NOT_FOUND, "Session not found"), 404);
+      }
+      if (session.revision !== expectedRevision || session.currentIndex !== expectedTrackIndex) {
+        return c.json(createAPIError(ErrorCode.SESSION_MUTATION_CONFLICT, "Session changed; reload the current session", { session }), 409);
+      }
+
+      const currentIndex = session.currentIndex;
+      const currentTrack = session.tracks[currentIndex];
+      if (currentIndex < 0 || currentIndex >= session.tracks.length || !currentTrack) {
+        return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track index is invalid"), 500);
+      }
+      if (currentTrack.status === "scrobbled") {
+        const response: SessionActionResponse = { session };
+        storage.saveSessionMutation(session, mutationId, "scrobble-now", response);
+        return c.json(response);
+      }
+      if (currentTrack.startedAt === null) {
+        return c.json(createAPIError(ErrorCode.INVALID_TRACK_INDEX, "Current track has no start timestamp"), 500);
+      }
+
+      const tokens = await loadStoredTokens(storage, userId);
+      const scrobbleResult = await deliverScrobble(storage, c.env, tokens.lastfm!.accessToken, userId, session.release, currentIndex, currentTrack.startedAt);
+      if (!scrobbleResult.ok) {
+        console.error("[POST /:id/scrobble-now] Failed to scrobble track:", scrobbleResult.message);
+        return c.json(createAPIError(ErrorCode.LASTFM_ERROR, "Failed to scrobble track to Last.fm"), 502);
+      }
+
+      const updatedTracks = [...session.tracks];
+      updatedTracks[currentIndex] = { ...currentTrack, status: "scrobbled", scrobbledAt: Date.now() };
+      const updated = { ...session, tracks: updatedTracks, revision: session.revision + 1 };
+      const response: SessionActionResponse = { session: updated };
+      storage.saveSessionMutation(updated, mutationId, "scrobble-now", response);
+      return c.json(response);
+    });
+  }
+);
+
+router.post(
   "/:id/next",
   requireLastFm,
   async (c: HonoContext) => {
@@ -480,7 +546,6 @@ router.post(
 
 router.post(
   "/:id/sync",
-  requireLastFm,
   async (c: HonoContext) => {
     const storage = c.env.NOW_SPINNING_STORAGE;
     const userId = getOrCreateSessionId(c);
@@ -532,8 +597,15 @@ router.post(
       let deliveredCount = 0;
       let persisted = synced;
       for (const [actionIndex, action] of scrobbleActions.entries()) {
+        if (!tokens.lastfm) {
+          const tracks = persisted.tracks.map((track, index) =>
+            index === action.trackIndex ? { ...track, status: "pending" as const, scrobbledAt: null } : track
+          );
+          persisted = { ...persisted, tracks };
+          break;
+        }
         const scrobbleResult = await deliverScrobble(
-          storage, c.env, tokens.lastfm!.accessToken, userId, synced.release, action.trackIndex, action.startedAt
+          storage, c.env, tokens.lastfm.accessToken, userId, synced.release, action.trackIndex, action.startedAt
         );
         if (!scrobbleResult.ok) {
           console.error(`[POST /:id/sync] Failed to scrobble track ${action.trackIndex}:`, scrobbleResult.message);
@@ -542,7 +614,12 @@ router.post(
             if (index >= action.trackIndex) return { ...track, status: "pending" as const, scrobbledAt: null };
             return confirmed.has(index) ? { ...track, status: "scrobbled" as const, scrobbledAt: now } : track;
           });
-          persisted = { ...session, currentIndex: action.trackIndex, state: "running", tracks, revision: session.revision + 1 };
+          persisted = {
+            ...persisted,
+            currentIndex: action.trackIndex,
+            tracks,
+            revision: session.revision + 1,
+          };
           break;
         }
         deliveredCount += 1;

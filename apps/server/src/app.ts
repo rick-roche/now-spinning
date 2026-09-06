@@ -8,6 +8,7 @@ import { health } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { discogsRoutes } from "./routes/discogs.js";
 import { sessionRoutes } from "./routes/session.js";
+import { scrobbleRoutes } from "./routes/scrobbles.js";
 import { StorageCryptoError } from "./storage/crypto.js";
 
 const contentTypes: Record<string, string> = {
@@ -51,6 +52,7 @@ export function createApp(environment: AppEnvironment): Hono<{ Bindings: AppEnvi
   app.route("/api/auth", authRoutes);
   app.route("/api/discogs", discogsRoutes);
   app.route("/api/session", sessionRoutes);
+  app.route("/api/scrobbles", scrobbleRoutes);
   app.get("*", async (c) => {
     if (isApiPath(c.req.path) || c.req.method !== "GET") return c.json(createAPIError(ErrorCode.NOT_FOUND, "Not found"), 404);
     let requestedPath: string;

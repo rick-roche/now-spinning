@@ -23,6 +23,11 @@ export const navItems: NavItem[] = [
     match: (p) => p.startsWith("/session"),
   },
   {
+    label: "Scrobbles",
+    icon: "history",
+    to: "/scrobbles",
+  },
+  {
     label: "Settings",
     icon: "settings",
     to: "/settings",

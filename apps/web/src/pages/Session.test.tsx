@@ -140,6 +140,24 @@ describe("SessionPage", () => {
     });
   });
 
+  it("shows the physical boundary prompt from initial paused session hydration", async () => {
+    const pausedSession: Session = {
+      ...mockSession,
+      state: "paused",
+      currentIndex: 0,
+      tracks: [
+        { ...mockSession.tracks[0]!, status: "scrobbled", startedAt: Date.now() - 240_000, scrobbledAt: Date.now() - 60_000 },
+        mockSession.tracks[1]!,
+      ],
+      release: { ...mockSession.release, mediaType: "vinyl", tracks: mockSession.release.tracks.map((track, index) => ({ ...track, side: index === 0 ? "A" as const : "B" as const })) },
+    };
+    fetchMock.mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ session: pausedSession } satisfies SessionCurrentResponse) }));
+
+    renderSessionPage();
+
+    await waitFor(() => expect(screen.getByText("Time to flip")).toBeInTheDocument());
+  });
+
   it("exits loading state after session loads", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
@@ -437,6 +455,30 @@ describe("SessionPage", () => {
     });
   });
 
+  it("handles the manual scrobble-now override separately from next", async () => {
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ session: mockSession } satisfies SessionCurrentResponse),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ session: { ...mockSession, revision: 1, tracks: [{ ...mockSession.tracks[0]!, status: "scrobbled" }, mockSession.tracks[1]!] } }),
+      }));
+
+    renderSessionPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scrobble now (manual override)" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Scrobble now (manual override)" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/session/sess-123/scrobble-now", {
+        credentials: "include", method: "POST", headers: { "Content-Type": "application/json" },
+        body: expect.stringContaining('"expectedTrackIndex":0'),
+      });
+    });
+  });
+
   it("displays error message when action fails", async () => {
     fetchMock
       .mockImplementationOnce(() =>
@@ -447,11 +489,17 @@ describe("SessionPage", () => {
       )
       .mockImplementationOnce(() =>
         Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ session: mockSession, scrobbledCount: 0 }),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
           ok: false,
           json: () =>
             Promise.resolve({
               error: { message: "Action failed" },
-            }),
+          }),
         })
       );
 

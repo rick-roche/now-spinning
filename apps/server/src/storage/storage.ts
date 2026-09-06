@@ -1,4 +1,4 @@
-import { endSession, type Session, type StoredToken } from "@repo/shared";
+import { endSession, type DirectScrobbleOperation, type Session, type StoredToken } from "@repo/shared";
 import type { SqliteDatabase } from "./database.js";
 import { decryptJson, encryptJson, StorageCryptoError } from "./crypto.js";
 
@@ -18,6 +18,13 @@ export interface ScheduleRecord {
 const SCHEDULER_LEASE_NAME = "session-scheduler";
 const SCROBBLE_DEDUPLICATION_TTL_MS = 86_400_000;
 const SESSION_MUTATION_TTL_MS = 86_400_000;
+const DIRECT_SCROBBLE_OPERATION_TTL_MS = 7 * 86_400_000;
+
+export interface DirectScrobbleOperationRecord {
+  operation: DirectScrobbleOperation | null;
+  fingerprint: string;
+  tombstone: boolean;
+}
 
 export class SQLiteStorage {
   constructor(private readonly db: SqliteDatabase, private readonly encryptionKey: Buffer) {}
@@ -197,6 +204,47 @@ export class SQLiteStorage {
 
   releaseScrobble(scrobbleId: string): void {
     this.db.prepare("DELETE FROM scrobble_deliveries WHERE scrobble_id = ? AND status = 'in_flight'").run(scrobbleId);
+  }
+
+  saveDirectScrobbleOperation(userId: string, operation: DirectScrobbleOperation, now = Date.now(), fingerprint = ""): void {
+    this.db.prepare(`
+      INSERT INTO direct_scrobble_operations(operation_id,user_id,fingerprint,operation_json,created_at,updated_at,expires_at)
+      VALUES(?,?,?,?,?,?,?)
+      ON CONFLICT(operation_id) DO UPDATE SET operation_json=excluded.operation_json, updated_at=excluded.updated_at
+        WHERE direct_scrobble_operations.user_id = excluded.user_id
+    `).run(operation.operationId, userId, fingerprint, JSON.stringify(operation), operation.createdAt, now, now + DIRECT_SCROBBLE_OPERATION_TTL_MS);
+  }
+
+  loadDirectScrobbleOperationOwner(operationId: string): string | null {
+    const operation = this.db.prepare("SELECT user_id FROM direct_scrobble_operations WHERE operation_id = ?").get(operationId) as { user_id: string } | undefined;
+    if (operation) return operation.user_id;
+    const tombstone = this.db.prepare("SELECT user_id FROM direct_scrobble_tombstones WHERE operation_id = ?").get(operationId) as { user_id: string } | undefined;
+    return tombstone?.user_id ?? null;
+  }
+
+  loadDirectScrobbleOperation(userId: string, operationId: string, now = Date.now()): DirectScrobbleOperationRecord | null {
+    const expired = this.db.prepare("SELECT operation_id,user_id,fingerprint,operation_json,created_at,expires_at FROM direct_scrobble_operations WHERE expires_at <= ?").all(now) as Array<{
+      operation_id: string; user_id: string; fingerprint: string; operation_json: string; created_at: number; expires_at: number;
+    }>;
+    const moveExpired = this.db.transaction(() => {
+      for (const row of expired) {
+        let status = "failed";
+        try { status = (JSON.parse(row.operation_json) as DirectScrobbleOperation).status; } catch { /* preserve a terminal tombstone */ }
+        this.db.prepare("INSERT OR IGNORE INTO direct_scrobble_tombstones(operation_id,user_id,fingerprint,status,created_at) VALUES(?,?,?,?,?)")
+          .run(row.operation_id, row.user_id, row.fingerprint, status, row.created_at);
+        this.db.prepare("DELETE FROM direct_scrobble_operations WHERE operation_id = ?").run(row.operation_id);
+      }
+    });
+    moveExpired();
+
+    const row = this.db.prepare("SELECT fingerprint,operation_json FROM direct_scrobble_operations WHERE operation_id = ? AND user_id = ?")
+      .get(operationId, userId) as { fingerprint: string; operation_json: string } | undefined;
+    if (row) {
+      try { return { operation: JSON.parse(row.operation_json) as DirectScrobbleOperation, fingerprint: row.fingerprint, tombstone: false }; } catch { return null; }
+    }
+    const tombstone = this.db.prepare("SELECT fingerprint,status,created_at FROM direct_scrobble_tombstones WHERE operation_id = ? AND user_id = ?")
+      .get(operationId, userId) as { fingerprint: string; status: string; created_at: number } | undefined;
+    return tombstone ? { operation: null, fingerprint: tombstone.fingerprint, tombstone: true } : null;
   }
 
   getCache<T>(key: string): T | null {

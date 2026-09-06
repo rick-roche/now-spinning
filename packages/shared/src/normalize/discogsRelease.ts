@@ -95,20 +95,27 @@ function resolveCoverUrl(images?: Array<{ uri?: string; type?: string }>): strin
 export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): NormalizedRelease {
   const releaseArtist = stripDiscogsDisambiguation(data.artists?.[0]?.name ?? "Unknown Artist");
   const formats = formatDiscogsFormats(data.formats);
-  const tracks = (data.tracklist ?? [])
-    .filter((track) => track.type_ !== "heading")
-    .map((track, index) => {
-      const position = track.position?.trim() || `${index + 1}`;
-      return {
+  let headingDiscNumber: number | null = null;
+  let trackIndex = 0;
+  const tracks = (data.tracklist ?? []).flatMap((track) => {
+    if (track.type_ === "heading") {
+      const heading = `${track.position ?? ""} ${track.title ?? ""}`;
+      const headingMatch = heading.match(/(?:disc|cd)\s*(\d+)/i);
+      headingDiscNumber = headingMatch?.[1] ? Number.parseInt(headingMatch[1], 10) : (deriveDiscNumber(heading) ?? headingDiscNumber);
+      return [];
+    }
+    const index = trackIndex++;
+    const position = track.position?.trim() || `${index + 1}`;
+    return [{
         position,
         title: track.title ?? "Untitled",
         artist: stripDiscogsDisambiguation(track.artists?.[0]?.name ?? releaseArtist),
         durationSec: parseDiscogsDuration(track.duration),
         side: deriveSide(position),
-        discNumber: deriveDiscNumber(position),
+        discNumber: deriveDiscNumber(position) ?? headingDiscNumber,
         index,
-      };
-    });
+      }];
+  });
 
   return {
     id: String(data.id ?? ""),
@@ -125,30 +132,39 @@ export function normalizeDiscogsRelease(data: DiscogsReleaseApiResponse): Normal
 
 /**
  * Fills only missing concrete-release durations from its master. Exact track
- * title plus position wins; a same-index title match is a conservative fallback.
+ * title plus position wins; a same-index title/artist match is a conservative
+ * fallback even when editions use different position notation.
  */
 export function mergeMissingTrackDurations(
   release: NormalizedRelease,
   master: Pick<NormalizedRelease, "tracks">
 ): NormalizedRelease {
+  const matchText = (value: string): string => value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+(?:ft\.?|feat\.?)(?:\s+.*)?$/i, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
   const masterTracksByMatch = new Map<string, NormalizedTrack>();
   for (const masterTrack of master.tracks) {
     if (masterTrack.durationSec === null) continue;
-    const key = `${masterTrack.position}\u0000${masterTrack.title.trim().toLowerCase()}\u0000${masterTrack.artist.trim().toLowerCase()}`;
+    const key = `${masterTrack.position}\u0000${matchText(masterTrack.title)}\u0000${matchText(masterTrack.artist)}`;
     if (!masterTracksByMatch.has(key)) masterTracksByMatch.set(key, masterTrack);
   }
 
   const tracks = release.tracks.map((track) => {
     if (track.durationSec !== null) return track;
 
-    const title = track.title.trim().toLowerCase();
-    const artist = track.artist.trim().toLowerCase();
+    const title = matchText(track.title);
+    const artist = matchText(track.artist);
     const exactPosition = masterTracksByMatch.get(`${track.position}\u0000${title}\u0000${artist}`);
     const sameIndex = master.tracks[track.index];
     const fallback =
-      sameIndex?.title.trim().toLowerCase() === title &&
-      sameIndex.artist.trim().toLowerCase() === artist &&
-      sameIndex.position === track.position &&
+      release.tracks.length === master.tracks.length &&
+      sameIndex !== undefined &&
+      matchText(sameIndex.title) === title &&
+      matchText(sameIndex.artist) === artist &&
       sameIndex.durationSec !== null
         ? sameIndex
         : undefined;

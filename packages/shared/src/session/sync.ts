@@ -61,16 +61,24 @@ export function syncSession(
         : null;
 
     const updatedTracks: SessionTrackState[] = [...currentSession.tracks];
+    const completed = durationMs !== null && elapsedMs >= durationMs;
     if (track.status === "pending") {
-      if (!isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent)) break;
-      scrobbleActions.push({ trackIndex: currentIndex, elapsedMs, startedAt: track.startedAt });
-      updatedTracks[currentIndex] = { ...track, status: "scrobbled", scrobbledAt: syncAt };
-      changed = true;
+      const eligible = isEligibleToScrobble(elapsedMs, durationMs, thresholdPercent);
+      if (eligible) {
+        scrobbleActions.push({ trackIndex: currentIndex, elapsedMs, startedAt: track.startedAt });
+        updatedTracks[currentIndex] = { ...track, status: "scrobbled", scrobbledAt: completed ? track.startedAt + durationMs : syncAt };
+        changed = true;
+      } else if (completed) {
+        updatedTracks[currentIndex] = { ...track, status: "skipped", scrobbledAt: null };
+        changed = true;
+      } else {
+        break;
+      }
     }
 
     // Eligibility is not playback completion. Unknown-duration tracks require
     // an explicit user advance because there is no reliable completion time.
-    if (durationMs === null || elapsedMs < durationMs) {
+    if (durationMs === null || !completed) {
       if (changed) currentSession = { ...currentSession, tracks: updatedTracks };
       break;
     }
@@ -95,7 +103,7 @@ export function syncSession(
           ...currentSession,
           tracks: updatedTracks,
           state: "paused",
-          pausedAt: syncAt,
+          pausedAt: track.startedAt + durationMs,
         };
         changed = true;
         break;

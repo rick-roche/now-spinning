@@ -19,7 +19,7 @@ export function useSessionActions(
   const actionInFlight = useRef(false);
   const sessionId = session?.id ?? "";
   const { mutate, loading, error, reset } = useApiMutation<SessionActionResponse, {
-    action: "pause" | "resume" | "next" | "end";
+    action: "pause" | "resume" | "next" | "scrobble-now" | "end";
     endMode?: SessionEndMode;
     mutationId: string;
     expectedRevision: number;
@@ -40,7 +40,7 @@ export function useSessionActions(
   );
 
   const executeAction = useCallback(
-    async (action: "pause" | "resume" | "next" | "end", endMode?: SessionEndMode): Promise<boolean> => {
+    async (action: "pause" | "resume" | "next" | "scrobble-now" | "end", endMode?: SessionEndMode): Promise<boolean> => {
       if (!sessionId || !session || actionInFlight.current) return false;
       actionInFlight.current = true;
 
@@ -75,12 +75,14 @@ export function useSessionActions(
   const pause = useCallback(() => executeAction("pause"), [executeAction]);
   const resume = useCallback(() => executeAction("resume"), [executeAction]);
   const next = useCallback(() => executeAction("next"), [executeAction]);
+  const scrobbleNow = useCallback(() => executeAction("scrobble-now"), [executeAction]);
   const end = useCallback((endMode: SessionEndMode) => executeAction("end", endMode), [executeAction]);
 
   return {
     pause,
     resume,
     next,
+    scrobbleNow,
     end,
     isLoading: loading,
     error: localError ?? error,

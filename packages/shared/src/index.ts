@@ -55,6 +55,8 @@ export type {
 } from "./contracts/discogs.js";
 export type {
   SessionActionResponse,
+  SessionScrobbleNowRequest,
+  SessionScrobbleNowResponse,
   SessionEndMode,
   SessionEndRequest,
   SessionCurrentResponse,
@@ -62,6 +64,16 @@ export type {
   SessionStartResponse,
   SessionSyncResponse,
 } from "./contracts/session.js";
+export type {
+  DirectScrobbleRequest,
+  DirectScrobbleTrackStatus,
+  DirectScrobbleTrackResult,
+  DirectScrobbleOperationStatus,
+  DirectScrobbleOperation,
+  DirectScrobbleResponse,
+} from "./contracts/scrobble.js";
+export { createDirectScrobbleTimestamps } from "./contracts/scrobble.js";
+export type { RecentScrobble, RecentScrobblesResponse } from "./contracts/recent-scrobbles.js";
 
 export type { DiscogsReleaseApiResponse } from "./normalize/discogsRelease.js";
 export {
@@ -97,6 +109,7 @@ export {
   SessionIdSchema,
   SessionParamSchema,
   SessionScrobbleCurrentRequestSchema,
+  SessionScrobbleNowRequestSchema,
   SessionMutationRequestSchema,
   SessionEndRequestSchema,
   SessionSyncRequestSchema,
@@ -105,3 +118,8 @@ export {
   type SessionScrobbleCurrentRequest,
   type SessionMutationRequest,
 } from "./validation/index.js";
+export {
+  DirectScrobbleRequestSchema,
+  type DirectScrobbleRequestInput,
+} from "./validation/index.js";
+export { RecentScrobblesQuerySchema, type RecentScrobblesQuery } from "./validation/index.js";

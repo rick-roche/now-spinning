@@ -48,7 +48,7 @@ export async function loadNormalizedDiscogsRelease(
   storage: SQLiteStorage,
   releaseId: string
 ): Promise<DiscogsReleaseLoadResult> {
-  const cacheKey = `discogs:release:enriched:${releaseId}`;
+  const cacheKey = `discogs:release:enriched:v2:${releaseId}`;
   const cached = storage.getCache<NormalizedRelease>(cacheKey);
   if (cached) return { ok: true, release: cached };
 

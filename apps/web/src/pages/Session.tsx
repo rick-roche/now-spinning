@@ -43,6 +43,24 @@ export function SessionPage() {
     retry: 0,
   });
 
+  const getBoundaryPrompt = useCallback((nextSession: Session | null) => {
+    if (!nextSession || nextSession.state !== "paused") return null;
+    const currentIdx = nextSession.currentIndex;
+    const currentTrackState = nextSession.tracks[currentIdx];
+    const currentReleaseTrack = nextSession.release.tracks[currentIdx];
+    const nextReleaseTrack = nextSession.release.tracks[currentIdx + 1];
+    if (!currentReleaseTrack || !nextReleaseTrack || currentTrackState?.status !== "scrobbled") return null;
+    const boundary = getPhysicalMediaBoundary(nextSession.release, currentReleaseTrack, nextReleaseTrack);
+    if (!boundary) return null;
+    return {
+      boundary,
+      currentUnit: boundary === "flip" ? getSideFromTrack(currentReleaseTrack) ?? "" : String(currentReleaseTrack.discNumber),
+      nextUnit: boundary === "flip" ? getSideFromTrack(nextReleaseTrack) ?? "" : String(nextReleaseTrack.discNumber),
+      currentTitle: currentReleaseTrack.title || "Unknown",
+      nextTitle: nextReleaseTrack.title || "Unknown",
+    };
+  }, []);
+
   const applySession = useCallback((nextSession: Session | null) => {
     setSession((currentSession) => {
       if (!currentSession || !nextSession || currentSession.id !== nextSession.id) return nextSession;
@@ -75,8 +93,14 @@ export function SessionPage() {
       return;
     }
 
-    applySession(currentResponse.session ?? null);
-  }, [applySession, currentResponse]);
+    const hydrated = currentResponse.session ?? null;
+    applySession(hydrated);
+    const prompt = getBoundaryPrompt(hydrated);
+    if (prompt) {
+      setSideCompletionInfo(prompt);
+      setShowSideCompletionModal(true);
+    }
+  }, [applySession, currentResponse, getBoundaryPrompt]);
 
   const currentTrack = useMemo(() => {
     if (!session) return null;
@@ -113,29 +137,14 @@ export function SessionPage() {
       // Don't gate this on the local preference: the server already decided to
       // pause (based on the preference stored at session-start), so the user
       // needs the modal to resume regardless of their current local setting.
-      if (syncedSession.state === "paused") {
-        const currentIdx = syncedSession.currentIndex;
-        const currentTrackState = syncedSession.tracks[currentIdx];
-        const currentReleaseTrack = syncedSession.release.tracks[currentIdx];
-        const nextReleaseTrack = syncedSession.release.tracks[currentIdx + 1];
-
-        if (currentReleaseTrack && nextReleaseTrack && currentTrackState?.status === "scrobbled") {
-          const boundary = getPhysicalMediaBoundary(syncedSession.release, currentReleaseTrack, nextReleaseTrack);
-          if (boundary) {
-            setSideCompletionInfo({
-              boundary,
-              currentUnit: boundary === "flip" ? getSideFromTrack(currentReleaseTrack) ?? "" : String(currentReleaseTrack.discNumber),
-              nextUnit: boundary === "flip" ? getSideFromTrack(nextReleaseTrack) ?? "" : String(nextReleaseTrack.discNumber),
-              currentTitle: currentReleaseTrack.title || "Unknown",
-              nextTitle: nextReleaseTrack.title || "Unknown",
-            });
-            setShowSideCompletionModal(true);
-          }
-        }
-      }
-    },
-    [applySession]
-  );
+       const prompt = getBoundaryPrompt(syncedSession);
+       if (prompt) {
+         setSideCompletionInfo(prompt);
+         setShowSideCompletionModal(true);
+       }
+     },
+     [applySession, getBoundaryPrompt]
+   );
 
   useVisibilityResume(session?.id ?? null, isRunning, {
     onSync: handleVisibilitySync,
@@ -319,6 +328,7 @@ export function SessionPage() {
                 onPlayPause={() => void handlePlayPause()}
                 onSkipBack={handleSkipBack}
                 onSkipForward={() => void handleNext()}
+                onScrobbleNow={() => void sessionActions.scrobbleNow()}
                 onEnd={(mode) => void sessionActions.end(mode)}
                 disabled={sessionActions.isLoading}
               />

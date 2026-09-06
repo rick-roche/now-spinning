@@ -68,6 +68,22 @@ export function openDatabase(path: string): SqliteDatabase {
       json TEXT NOT NULL,
       expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS direct_scrobble_operations (
+      operation_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      operation_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS direct_scrobble_tombstones (
+      operation_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
   const deliveryColumns = database.prepare("PRAGMA table_info(scrobble_deliveries)").all() as Array<{ name: string }>;
   if (!deliveryColumns.some((column) => column.name === "expires_at")) {

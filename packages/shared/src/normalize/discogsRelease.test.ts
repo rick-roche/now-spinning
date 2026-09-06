@@ -322,6 +322,82 @@ describe("normalizeDiscogsRelease", () => {
     ]);
   });
 
+  it("fills missing duration for a same-index track with compatible position notation", () => {
+    const release = normalizeDiscogsRelease({
+      id: 18,
+      tracklist: [{ position: "A1", title: "Opening Track", duration: "" }],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 19,
+      tracklist: [{ position: "1", title: "Opening Track", duration: "3:00" }],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBe(180);
+  });
+
+  it("normalizes punctuation and trailing feature credits for same-index fallback", () => {
+    const release = normalizeDiscogsRelease({
+      id: 22,
+      tracklist: [{ position: "A1", title: "Don't Make It Weird ft. Wednesday" }],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 23,
+      tracklist: [{ position: "1", title: "Don’t Make It Weird", duration: "2:49" }],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBe(169);
+  });
+
+  it("does not use same-index fallback for unequal track counts", () => {
+    const release = normalizeDiscogsRelease({
+      id: 24,
+      tracklist: [{ position: "A1", title: "Opening Track" }],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 25,
+      tracklist: [
+        { position: "1", title: "Opening Track", duration: "3:00" },
+        { position: "2", title: "Extra Track", duration: "4:00" },
+      ],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks[0]?.durationSec).toBeNull();
+  });
+
+  it("propagates disc numbers from heading entries", () => {
+    const release = normalizeDiscogsRelease({
+      id: 26,
+      formats: [{ name: "CD" }],
+      tracklist: [
+        { type_: "heading", position: "", title: "Disc 1" },
+        { position: "1", title: "First" },
+        { type_: "heading", position: "", title: "Disc 2" },
+        { position: "2", title: "Second" },
+      ],
+    });
+
+    expect(release.tracks.map((track) => track.discNumber)).toEqual([1, 2]);
+  });
+
+  it("does not fill duration when same-index tracks are reordered", () => {
+    const release = normalizeDiscogsRelease({
+      id: 20,
+      tracklist: [
+        { position: "A1", title: "Opening Track" },
+        { position: "A2", title: "Closing Track" },
+      ],
+    });
+    const master = normalizeDiscogsRelease({
+      id: 21,
+      tracklist: [
+        { position: "1", title: "Closing Track", duration: "3:00" },
+        { position: "2", title: "Opening Track", duration: "4:00" },
+      ],
+    });
+
+    expect(mergeMissingTrackDurations(release, master).tracks.map((track) => track.durationSec)).toEqual([null, null]);
+  });
+
   it("never fills a timing from a different title sharing the same position", () => {
     const release = normalizeDiscogsRelease({ id: 1, tracklist: [{ position: "A1", title: "Single Edit" }] });
     const master = normalizeDiscogsRelease({ id: 2, tracklist: [{ position: "A1", title: "Album Version", duration: "5:00" }] });

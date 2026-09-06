@@ -18,6 +18,14 @@ export interface SessionActionResponse {
   session: Session;
 }
 
+export interface SessionScrobbleNowRequest {
+  mutationId: string;
+  expectedRevision: number;
+  expectedTrackIndex: number;
+}
+
+export type SessionScrobbleNowResponse = SessionActionResponse;
+
 export type SessionEndMode =
   | "end-without-scrobbling"
   | "scrobble-current-and-remaining"

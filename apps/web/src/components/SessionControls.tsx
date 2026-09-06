@@ -9,6 +9,7 @@ interface SessionControlsProps {
   onPlayPause: () => void;
   onSkipBack: () => void;
   onSkipForward: () => void;
+  onScrobbleNow: () => void;
   onEnd: (mode: SessionEndMode) => void;
   disabled?: boolean;
 }
@@ -20,6 +21,7 @@ export function SessionControls({
   onPlayPause,
   onSkipBack,
   onSkipForward,
+  onScrobbleNow,
   onEnd,
   disabled = false,
 }: SessionControlsProps) {
@@ -62,6 +64,11 @@ export function SessionControls({
       </div>
 
       {/* Secondary Controls */}
+      <div className="flex items-center justify-center gap-2">
+        <button onClick={onScrobbleNow} disabled={disabled} className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 active:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring">
+          Scrobble now (manual override)
+        </button>
+      </div>
       <div className="flex items-center justify-center gap-2">
         {!showEndModes ? (
           <button onClick={() => setShowEndModes(true)} disabled={disabled} className="px-4 py-2 text-sm font-medium rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring">
