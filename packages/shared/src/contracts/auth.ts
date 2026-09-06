@@ -13,6 +13,8 @@ export interface StoredToken {
   accessTokenSecret?: string;
   /** When the token was stored (epoch ms) */
   storedAt: number;
+  /** Last.fm username, captured during OAuth or lazily resolved for legacy tokens. */
+  username?: string;
   /** When token expires, if applicable (epoch ms) */
   expiresAt?: number;
 }

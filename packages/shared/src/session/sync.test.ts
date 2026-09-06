@@ -239,6 +239,20 @@ describe("syncSession", () => {
     expect(result.session.state).toBe("ended");
   });
 
+  it("advances a known short track as skipped when it completes", () => {
+    const shortRelease: NormalizedRelease = {
+      ...release,
+      tracks: release.tracks.map((track, index) => ({ ...track, durationSec: index === 0 ? 10 : track.durationSec })),
+    };
+    const session = createSession({ sessionId: "sess-short", userId: "user-short", release: shortRelease, startedAt: 1000 });
+
+    const result = syncSession(session, 12_000, 50);
+
+    expect(result.scrobbleActions).toHaveLength(0);
+    expect(result.session.currentIndex).toBe(1);
+    expect(result.session.tracks[0]?.status).toBe("skipped");
+  });
+
   it("preserves release data through sync", () => {
     const session = makeSession({ startedAt: 1000 });
     const result = syncSession(session, 500_000, 50);
@@ -320,6 +334,7 @@ describe("syncSession — pauseAtSideChange", () => {
     expect(result.session.currentIndex).toBe(1); // stayed on A2 (last of Side A)
     expect(result.session.tracks[1]?.status).toBe("scrobbled");
     expect(result.session.tracks[2]?.status).toBe("pending"); // B1 not touched
+    expect(result.session.pausedAt).toBe(381_000);
   });
 
   it("shifts the timeline after a pause at a side boundary", () => {
@@ -329,8 +344,8 @@ describe("syncSession — pauseAtSideChange", () => {
     const paused = syncSession(session, syncAt, 50, true).session;
     const resumed = resumeSession(paused, syncAt + 600_000);
 
-    expect(paused.pausedAt).toBe(syncAt);
-    expect(resumed.tracks[1]?.startedAt).toBe(781_000);
+    expect(paused.pausedAt).toBe(381_000);
+    expect(resumed.tracks[1]?.startedAt).toBe(801_000);
     expect(resumed.pausedAt).toBeNull();
   });
 

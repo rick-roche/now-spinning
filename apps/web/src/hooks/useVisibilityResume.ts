@@ -24,12 +24,11 @@ interface UseVisibilityResumeOptions {
  */
 export function useVisibilityResume(
   sessionId: string | null,
-  isRunning: boolean,
+  _isRunning: boolean,
   options: UseVisibilityResumeOptions
 ) {
   const syncingRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
-  const isRunningRef = useRef(isRunning);
   const optionsRef = useRef(options);
 
   useEffect(() => {
@@ -37,16 +36,12 @@ export function useVisibilityResume(
   }, [sessionId]);
 
   useEffect(() => {
-    isRunningRef.current = isRunning;
-  }, [isRunning]);
-
-  useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
   const sync = useCallback(async () => {
     const id = sessionIdRef.current;
-    if (!id || !isRunningRef.current || syncingRef.current) return;
+    if (!id || syncingRef.current) return;
 
     syncingRef.current = true;
 
@@ -83,14 +78,24 @@ export function useVisibilityResume(
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void sync();
-      }
+      void sync();
+    };
+    const handlePageShow = () => {
+      void sync();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pageshow", handlePageShow);
+    void sync();
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pageshow", handlePageShow);
     };
   }, [sync]);
+
+  useEffect(() => {
+    if (sessionId && document.visibilityState === "visible") {
+      void sync();
+    }
+  }, [sessionId, sync]);
 }

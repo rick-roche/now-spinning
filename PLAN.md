@@ -294,7 +294,15 @@ The M0-M4 entries below are historical implementation notes from the former Clou
 - [ ] 7. Wire auto-advance toggle
   - Make Settings toggle control the client timer
 - [ ] 8. Manual scrobble action
-  - Add UI control for scrobble-current
+   - Add UI control for scrobble-current
+
+## M6: Workflow improvements
+
+- [x] Master-release duration fallback for differing position notation, safe title normalization, and heading-derived CD disc context
+- [x] Mobile foreground restoration and authoritative physical-media boundary pauses
+- [x] Direct album and selected-track scrobbling with durable idempotent operations
+- [x] Recent Last.fm scrobbles page with pagination
+- [ ] Offline direct-scrobble queue replay
 
 ### Definition of Done for M4
 

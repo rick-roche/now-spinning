@@ -119,7 +119,7 @@ describe("SessionScheduler", () => {
 
     const paused = storage.loadSession(session.id);
     expect(paused?.state).toBe("paused");
-    expect(paused?.pausedAt).toBe(600_000);
+    expect(paused?.pausedAt).toBe(180_000);
 
     await scheduler.stop();
     storage.close();
@@ -145,13 +145,38 @@ describe("SessionScheduler", () => {
     await scheduler.start();
     await vi.advanceTimersByTimeAsync(1);
 
-    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("pending");
-    expect(storage.loadSchedule(session.id)?.dueAt).toBeNull();
+    expect(storage.loadSession(session.id)?.state).toBe("ended");
+    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("skipped");
+    expect(storage.loadSchedule(session.id)?.dueAt ?? null).toBeNull();
     expect(providerFetch).not.toHaveBeenCalled();
 
     await scheduler.stop();
     providerFetch.mockRestore();
     storage.close();
+    vi.useRealTimers();
+  });
+
+  it("pauses at the logical side boundary even when delivery fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(180_000);
+    const path = `/tmp/now-spinning-scheduler-${randomUUID()}.sqlite`;
+    paths.push(path);
+    const storage = new SQLiteStorage(openDatabase(path), Buffer.alloc(32, 7));
+    const session = createSession({ sessionId: "session-boundary-failure", userId: "user-boundary-failure", release: multiSideRelease, startedAt: 0 });
+    storage.startSession(session, 50, true);
+    storage.storeTokens("user-boundary-failure", { lastfm: { service: "lastfm", accessToken: "dev-key", storedAt: 1 }, discogs: null });
+    storage.saveSchedule({ sessionId: session.id, thresholdPercent: 50, notifyOnSideCompletion: true, dueAt: 1, updatedAt: 1 });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+
+    const scheduler = new SessionScheduler(storage, { devMode: false, lastfmApiKey: "key", lastfmApiSecret: "secret" } as AppEnvironment);
+    await scheduler.start();
+    await vi.advanceTimersByTimeAsync(1_100);
+
+    expect(storage.loadSession(session.id)).toMatchObject({ state: "paused", pausedAt: 180_000 });
+    expect(storage.loadSession(session.id)?.tracks[0]?.status).toBe("pending");
+    await scheduler.stop();
+    storage.close();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 

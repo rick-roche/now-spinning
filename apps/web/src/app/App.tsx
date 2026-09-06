@@ -6,6 +6,7 @@ import { Collection } from "../pages/Collection";
 import { Release } from "../pages/Release";
 import { Master } from "../pages/Master";
 import { SessionPage } from "../pages/Session";
+import { Scrobbles } from "../pages/Scrobbles";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { BottomNav } from "../components/BottomNav";
 import { OfflineBanner } from "../components/OfflineBanner";
@@ -69,6 +70,7 @@ export function App() {
               <Route path="/release/:id" element={<ErrorBoundary><Release /></ErrorBoundary>} />
               <Route path="/master/:id" element={<ErrorBoundary><Master /></ErrorBoundary>} />
               <Route path="/session" element={<ErrorBoundary><SessionPage /></ErrorBoundary>} />
+              <Route path="/scrobbles" element={<ErrorBoundary><Scrobbles /></ErrorBoundary>} />
               <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             </Routes>
           </main>

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Release } from "./Release";
-import type { DiscogsReleaseResponse, NormalizedRelease } from "@repo/shared";
+import type { DiscogsReleaseResponse, DirectScrobbleResponse, NormalizedRelease } from "@repo/shared";
 import { createFetchMock } from "../test-utils";
 
 const fetchMock = createFetchMock();
@@ -254,6 +254,22 @@ describe("Release Page", () => {
     });
   });
 
+  it("offers direct album scrobbling instead of timed playback when a duration is missing", async () => {
+    const untimedRelease = {
+      ...mockRelease,
+      tracks: mockRelease.tracks.map((track, index) => index === 1 ? { ...track, durationSec: null } : track),
+    };
+    fetchMock.mockImplementationOnce(() => Promise.resolve({
+      ok: true,
+      json: () => ({ release: untimedRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+    }));
+
+    renderWithRouter();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scrobble album" })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Start Scrobbling/i })).not.toBeInTheDocument();
+  });
+
   it("displays error message on fetch failure", async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.resolve({
@@ -293,6 +309,61 @@ describe("Release Page", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Start Scrobbling/i })).toBeInTheDocument();
     });
+  });
+
+  it("reviews selected tracks and posts a direct scrobble operation", async () => {
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => ({
+          release: { id: mockRelease.id, title: mockRelease.title, artist: mockRelease.artist },
+          operation: {
+            operationId: "operation-1", releaseId: mockRelease.id, trackIndices: [0], createdAt: 1, updatedAt: 1,
+            status: "completed", activeSessionWarning: false,
+            tracks: [{ trackIndex: 0, title: "Speak to Me", timestamp: 10, status: "delivered" }],
+          },
+        } satisfies DirectScrobbleResponse),
+      }));
+
+    renderWithRouter();
+    const checkbox = await screen.findByRole("checkbox", { name: "Select Speak to Me" });
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "Scrobble 1 selected" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/scrobbles"));
+    expect(screen.getByText("delivered")).toBeInTheDocument();
+  });
+
+  it("resets the direct operation result when Select all or Clear changes selection", async () => {
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => ({ release: mockRelease } satisfies DiscogsReleaseResponse<NormalizedRelease>),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => ({
+          release: { id: mockRelease.id, title: mockRelease.title, artist: mockRelease.artist },
+          operation: {
+            operationId: "operation-1", releaseId: mockRelease.id, trackIndices: [0], createdAt: 1, updatedAt: 1,
+            status: "completed", activeSessionWarning: false,
+            tracks: [{ trackIndex: 0, title: "Speak to Me", timestamp: 10, status: "delivered" }],
+          },
+        } satisfies DirectScrobbleResponse),
+      }));
+
+    renderWithRouter();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select Speak to Me" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scrobble 1 selected" }));
+    await waitFor(() => expect(screen.getByText("delivered")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    expect(screen.queryByText("delivered")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.queryByText("delivered")).not.toBeInTheDocument();
   });
 
   it("calls session start endpoint when Start Session button clicked", async () => {

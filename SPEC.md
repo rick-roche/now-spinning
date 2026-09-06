@@ -227,6 +227,8 @@ Records are messy (no durations, wrong durations, hidden tracks).
   * “Scrobble current track now”
   * “Edit track duration (this session only)”
 
+* Timed playback is unavailable when any playable track still has no duration after master-release enrichment. The app never estimates missing durations; users can directly scrobble the full release or selected tracks instead.
+
 ### Auto-scrobble rules
 
 A track becomes eligible to scrobble when:
@@ -343,6 +345,10 @@ Base: `/api`
 * `POST /lastfm/now-playing` body: { sessionId, trackIndex }
 * `POST /lastfm/scrobble` body: { sessionId, trackIndex } (usually internal-only via session engine)
 
+* `POST /scrobbles` body: { operationId, releaseId, trackIndices } for explicit direct album or selected-track scrobbling. Direct submissions use one-second ordered timestamps ending at submission time and are chunked into Last.fm batches of up to 50 tracks.
+
+* `GET /scrobbles/recent?page=&limit=` returns the authenticated user's completed recent Last.fm scrobbles, excluding the currently playing row.
+
 **Note:** In MVP you can keep `/lastfm/*` internal and trigger scrobbles from session endpoints to reduce surface area.
 
 ---
@@ -381,6 +387,8 @@ You have two viable options:
 
   * mark as “pending retry”
   * retry on next interaction (pause/resume/next) and on app load
+
+* Physical side/disc boundary pauses are independent of Last.fm delivery. A boundary pause remains authoritative when delivery is pending or fails.
 
 ---
 

@@ -52,6 +52,12 @@ export const SessionMutationRequestSchema = z.object({
 
 export type SessionMutationRequest = z.infer<typeof SessionMutationRequestSchema>;
 
+export const SessionScrobbleNowRequestSchema = z.object({
+  mutationId: z.uuid("Mutation ID must be a UUID"),
+  expectedRevision: z.number().int().min(0),
+  expectedTrackIndex: z.number().int().min(0),
+}).strict();
+
 export const SessionEndRequestSchema = SessionMutationRequestSchema.extend({
   endMode: z.enum(["end-without-scrobbling", "scrobble-current-and-remaining", "skip-remaining"]),
 }).strict();

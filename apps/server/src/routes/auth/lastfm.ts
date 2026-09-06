@@ -78,7 +78,7 @@ router.get("/callback", async (c: HonoContext) => {
 
   setSessionCookie(c, initiatingSessionId);
 
-  const sessionResponse = await fetchLastFm<{ session: { key: string } }>(
+  const sessionResponse = await fetchLastFm<{ session: { key: string; name?: string } }>(
     "auth.getSession",
     { token },
     c.env
@@ -94,7 +94,8 @@ router.get("/callback", async (c: HonoContext) => {
   }
 
   const tokens = await loadStoredTokens(storage, initiatingSessionId);
-  tokens.lastfm = { service: "lastfm", accessToken: sessionKey, storedAt: Date.now() };
+  const username = sessionResponse.data.session?.name?.trim();
+  tokens.lastfm = { service: "lastfm", accessToken: sessionKey, storedAt: Date.now(), ...(username ? { username } : {}) };
   await storeTokens(storage, initiatingSessionId, tokens);
 
   const appOrigin = c.env.publicAppOrigin;
