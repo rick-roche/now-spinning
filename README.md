@@ -132,6 +132,26 @@ pnpm -C apps/server build
 pnpm -C packages/shared test
 ```
 
+## Releases
+
+The root `package.json` is the single source of the application version. Do not update it or
+the displayed version manually.
+
+On every merge to `main`, Release Please reads the squash-merge commit title and maintains a
+release pull request. Merge that generated pull request when ready to publish a release. It
+updates the root version and `CHANGELOG.md`, then creates a `vX.Y.Z` GitHub tag and release.
+There is no npm publication.
+
+Use [Conventional Commit](https://www.conventionalcommits.org/) pull request titles:
+
+- `fix:` increments the patch version.
+- `feat:` increments the minor version.
+- `type!:` or a `BREAKING CHANGE:` footer increments the major version.
+- `chore:`, `docs:`, `refactor:`, and `test:` do not create a release by themselves.
+
+The Settings screen shows the released SemVer and the deployed build identifier, such as
+`1.3.0+a72d99a`. Local builds show `+development`.
+
 ## Project structure
 
 ```

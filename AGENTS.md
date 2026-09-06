@@ -31,7 +31,14 @@ Now Spinning is a mobile-first app that lets users pick a Discogs release, start
 - `vitest` for tests.
 - `knip` must remain clean.
 
-5. Mobile UX first
+5. Releases
+- The root `package.json` is the single application version source. Do not manually edit its
+  `version` field or add versions to private workspace manifests.
+- Use Conventional Commit PR titles: `fix:` for patch, `feat:` for minor, and `type!:` or a
+  `BREAKING CHANGE:` footer for major releases. Release Please owns version bumps, changelog,
+  Git tags, and GitHub releases.
+
+6. Mobile UX first
 - UI changes must be verified on narrow viewport and touch targets.
 
 ## 3) Instruction Hierarchy And Scope

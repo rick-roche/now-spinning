@@ -14,6 +14,8 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
+ARG GIT_SHA
+ENV GIT_SHA=$GIT_SHA
 RUN pnpm build
 RUN pnpm --filter @repo/server deploy --prod /prod --legacy
 

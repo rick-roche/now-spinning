@@ -1,5 +1,6 @@
 {
   "name": "now-spinning",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.1.2",
